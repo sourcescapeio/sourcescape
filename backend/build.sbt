@@ -8,9 +8,6 @@ version := "1.0-SNAPSHOT"
 lazy val silvousplay = Project("silvousplay", file("modules/silvousplay")).
   settings(APIBuild.libSettings: _*)
 
-/**
-  * Shared systems
-  */
 lazy val rambutanShared = Project("rambutan-shared", file("modules/rambutan-shared")).
   dependsOn(silvousplay).
   settings(APIBuild.rambutanSettings: _*).
@@ -22,14 +19,6 @@ lazy val rambutanShared = Project("rambutan-shared", file("modules/rambutan-shar
       scalapb.gen() -> (sourceManaged in Compile).value / "scalapb"
     )
   )
-
-// lazy val rambutanIndexerShared = Project("rambutan-indexer-shared", file("modules/rambutan-indexer-shared")).
-//   dependsOn(rambutanShared).
-//   settings(APIBuild.rambutanSettings: _*)
-
-// lazy val rambutanAPIShared = Project("rambutan-api-shared", file("modules/rambutan-api-shared")).
-//   dependsOn(rambutanShared).
-//   settings(APIBuild.rambutanSettings: _*)
 
 /**
  * Scripts
@@ -72,44 +61,16 @@ lazy val rambutanLocal = (project in file("apps/rambutan-local")).
   dependsOn(rambutanShared).
   dependsOn(silvousplay)
 
-// lazy val rambutanIndexer = (project in file("apps/rambutan-indexer")).
-//   enablePlugins(PlayScala).
-//   settings(APIBuild.rambutanSettings: _*).
-//   settings(
-//     name := "rambutan-indexer",
-//     parallelExecution in Test := false,
-//     PlayKeys.devSettings := Seq("play.server.http.port" -> "9002")    
-//   ).
-//   dependsOn(rambutanIndexerShared).
-//   dependsOn(rambutanLocalShared).
-//   dependsOn(silvousplay)
-
-/**
- * Web
- */
-// lazy val rambutanWeb = (project in file("apps/rambutan-web")).
-//   enablePlugins(PlayScala).
-//   settings(APIBuild.rambutanSettings: _*).
-//   settings(
-//     name := "rambutan-web",
-//     parallelExecution in Test := false,
-//     PlayKeys.devSettings := Seq("play.server.http.port" -> "9003")    
-//   ).
-//   dependsOn(rambutanAPIShared).
-//   dependsOn(rambutanWebShared).
-//   dependsOn(silvousplay)
-
-// lazy val rambutanWebIndexer = (project in file("apps/rambutan-web-indexer")).
-//   enablePlugins(PlayScala).
-//   settings(APIBuild.rambutanSettings: _*).
-//   settings(
-//     name := "rambutan-web-indexer",
-//     parallelExecution in Test := false,
-//     PlayKeys.devSettings := Seq("play.server.http.port" -> "9002")    
-//   ).
-//   dependsOn(rambutanIndexerShared).
-//   dependsOn(rambutanWebShared).
-//   dependsOn(silvousplay)
+lazy val rambutanIndexer = (project in file("apps/rambutan-indexer")).
+  enablePlugins(PlayScala).
+  settings(APIBuild.rambutanSettings: _*).
+  settings(
+    name := "rambutan-indexer",
+    parallelExecution in Test := false,
+    PlayKeys.devSettings := Seq("play.server.http.port" -> "9002")    
+  ).
+  dependsOn(rambutanShared).
+  dependsOn(silvousplay)
 
 // /**
 //  * End to end tests

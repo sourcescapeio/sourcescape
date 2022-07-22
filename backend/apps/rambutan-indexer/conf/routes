@@ -1,0 +1,8 @@
+
+##############
+# ADMIN APIS #
+##############
+
+GET     /                                           controllers.IndexerHealthController.health()
+GET     /health                                     controllers.IndexerHealthController.health()
+GET     /queues                                     controllers.IndexerHealthController.listQueues()
