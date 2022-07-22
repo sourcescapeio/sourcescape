@@ -9,9 +9,9 @@ object APIBuild {
   import Dependencies._
 
   val libDependencies = Seq(
-    Core.akkaHttp,
-    Core.akkaSprayJson,
-    Core.akkaStreams,
+    // Core.akkaHttp,
+    // Core.akkaSprayJson,
+    // Core.akkaStreams,
     play.sbt.PlayImport.evolutions,
     play.sbt.PlayImport.jdbc,
     play.sbt.PlayImport.ws,
@@ -20,34 +20,34 @@ object APIBuild {
     Persist.postgresSlick,
     Persist.postgresSlickJson,
     Instrumentation.sentry,
-    Instrumentation.prometheus,
+    // Instrumentation.prometheus,
     // Instrumentation.zipkin,
     Misc.joda,
     Misc.scalaz,
-    Misc.jwt,
+    // Misc.jwt,
     Misc.bouncyCastleProv,
-    Misc.bouncyCastleKix,
-    Misc.scalaPbJson
+    // Misc.bouncyCastleKix,
   )
 
   val rambutanDependencies = Seq(
-    Instrumentation.logging,
-    Kube.skuber,
+    // Instrumentation.logging,
+    // Kube.skuber,
     Parse.fastParse,
-    Parse.scalaMeta,
+    // Parse.scalaMeta,
     Persist.redis,
-    Persist.s3,
+    // Persist.s3,
     // Persist.pubsub,
     // Persist.gcs,
-    Misc.pprint,
-    Misc.sendgrid,
+    // Misc.pprint,
+    // Misc.sendgrid,
     Misc.jgit,
+    Misc.scalaPbJson    
     //
-    TestDeps.scalaTestPlay,
-    TestDeps.mockito,
-    TestDeps.testContainers,
-    TestDeps.testContainersPostgres,
-    TestDeps.testContainersElasticSearch
+    // TestDeps.scalaTestPlay,
+    // TestDeps.mockito,
+    // TestDeps.testContainers,
+    // TestDeps.testContainersPostgres,
+    // TestDeps.testContainersElasticSearch
   )
 
   // Conservative. Should match with .bash_profile settings

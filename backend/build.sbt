@@ -11,17 +11,17 @@ lazy val silvousplay = Project("silvousplay", file("modules/silvousplay")).
 /**
   * Shared systems
   */
-// lazy val rambutanShared = Project("rambutan-shared", file("modules/rambutan-shared")).
-//   dependsOn(silvousplay).
-//   settings(APIBuild.rambutanSettings: _*).
-//   settings(
-//     libraryDependencies ++= Seq(
-//       "com.thesamet.scalapb" %% "scalapb-runtime" % scalapb.compiler.Version.scalapbVersion % "protobuf"
-//     ),
-//     PB.targets in Compile := Seq(
-//       scalapb.gen() -> (sourceManaged in Compile).value / "scalapb"
-//     )
-//   )
+lazy val rambutanShared = Project("rambutan-shared", file("modules/rambutan-shared")).
+  dependsOn(silvousplay).
+  settings(APIBuild.rambutanSettings: _*).
+  settings(
+    libraryDependencies ++= Seq(
+      "com.thesamet.scalapb" %% "scalapb-runtime" % scalapb.compiler.Version.scalapbVersion % "protobuf"
+    ),
+    PB.targets in Compile := Seq(
+      scalapb.gen() -> (sourceManaged in Compile).value / "scalapb"
+    )
+  )
 
 // lazy val rambutanLocalShared = Project("rambutan-local-shared", file("modules/rambutan-local-shared")).
 //   dependsOn(rambutanShared).
@@ -42,13 +42,13 @@ lazy val silvousplay = Project("silvousplay", file("modules/silvousplay")).
 /**
  * Scripts
  */
-lazy val rambutanInitializer = (project in file("apps/rambutan-initializer")).
-  enablePlugins(JavaAppPackaging).
-  dependsOn(rambutanShared).
-  settings(APIBuild.rambutanSettings: _*).
-  settings(
-    mainClass := Some("scripts.Initializer")
-  )
+// lazy val rambutanInitializer = (project in file("apps/rambutan-initializer")).
+//   enablePlugins(JavaAppPackaging).
+//   dependsOn(rambutanShared).
+//   settings(APIBuild.rambutanSettings: _*).
+//   settings(
+//     mainClass := Some("scripts.Initializer")
+//   )
 
 // lazy val rambutanWebInitializer = (project in file("apps/rambutan-web-initializer")).
 //   enablePlugins(JavaAppPackaging).
@@ -69,17 +69,17 @@ lazy val rambutanInitializer = (project in file("apps/rambutan-initializer")).
 /**
  * Local
  */
-lazy val rambutanLocal = (project in file("apps/rambutan-local")).
-  enablePlugins(PlayScala).
-  settings(APIBuild.rambutanSettings: _*).
-  settings(
-    name := "rambutan-local",
-    parallelExecution in Test := false,
-    PlayKeys.devSettings := Seq("play.server.http.port" -> "9003")
-  ).
+// lazy val rambutanLocal = (project in file("apps/rambutan-local")).
+//   enablePlugins(PlayScala).
+//   settings(APIBuild.rambutanSettings: _*).
+//   settings(
+//     name := "rambutan-local",
+//     parallelExecution in Test := false,
+//     PlayKeys.devSettings := Seq("play.server.http.port" -> "9003")
+//   ).
 //   dependsOn(rambutanAPIShared).
 //   dependsOn(rambutanLocalShared).
-  dependsOn(silvousplay)
+//   dependsOn(silvousplay)
 
 // lazy val rambutanIndexer = (project in file("apps/rambutan-indexer")).
 //   enablePlugins(PlayScala).
