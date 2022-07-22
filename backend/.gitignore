@@ -1,0 +1,15 @@
+/logs
+target
+data
+service-account.json
+/.idea
+/.idea_modules
+/.classpath
+/.project
+/.settings
+/RUNNING_PID
+/tunnel.pid
+
+.metals
+.bloop
+metals.sbt
