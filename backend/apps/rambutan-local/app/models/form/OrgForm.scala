@@ -19,3 +19,11 @@ case class UpdateOrgSettingsForm(
 object UpdateOrgSettingsForm {
   val form = Form(FormsMacro.mapping[UpdateOrgSettingsForm])
 }
+
+case class CreatePrivateOrgForm(
+  name:   String,
+  devKey: String)
+
+object CreatePrivateOrgForm {
+  val form = Form(FormsMacro.mapping[CreatePrivateOrgForm])
+}

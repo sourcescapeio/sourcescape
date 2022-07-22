@@ -23,14 +23,6 @@ lazy val rambutanShared = Project("rambutan-shared", file("modules/rambutan-shar
     )
   )
 
-// lazy val rambutanLocalShared = Project("rambutan-local-shared", file("modules/rambutan-local-shared")).
-//   dependsOn(rambutanShared).
-//   settings(APIBuild.rambutanSettings: _*)
-
-// lazy val rambutanWebShared = Project("rambutan-web-shared", file("modules/rambutan-web-shared")).
-//   dependsOn(rambutanShared).
-//   settings(APIBuild.rambutanSettings: _*)  
-
 // lazy val rambutanIndexerShared = Project("rambutan-indexer-shared", file("modules/rambutan-indexer-shared")).
 //   dependsOn(rambutanShared).
 //   settings(APIBuild.rambutanSettings: _*)
@@ -69,17 +61,16 @@ lazy val rambutanShared = Project("rambutan-shared", file("modules/rambutan-shar
 /**
  * Local
  */
-// lazy val rambutanLocal = (project in file("apps/rambutan-local")).
-//   enablePlugins(PlayScala).
-//   settings(APIBuild.rambutanSettings: _*).
-//   settings(
-//     name := "rambutan-local",
-//     parallelExecution in Test := false,
-//     PlayKeys.devSettings := Seq("play.server.http.port" -> "9003")
-//   ).
-//   dependsOn(rambutanAPIShared).
-//   dependsOn(rambutanLocalShared).
-//   dependsOn(silvousplay)
+lazy val rambutanLocal = (project in file("apps/rambutan-local")).
+  enablePlugins(PlayScala).
+  settings(APIBuild.rambutanSettings: _*).
+  settings(
+    name := "rambutan-local",
+    parallelExecution in Test := false,
+    PlayKeys.devSettings := Seq("play.server.http.port" -> "9003")
+  ).
+  dependsOn(rambutanShared).
+  dependsOn(silvousplay)
 
 // lazy val rambutanIndexer = (project in file("apps/rambutan-indexer")).
 //   enablePlugins(PlayScala).
