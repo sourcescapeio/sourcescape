@@ -4,11 +4,15 @@ object Dependencies {
   object Vsn {
     val Scala = "2.13.8"
 
-    val Play = "2.8.15"
+    // TODO: Cannot upgrade to 2.8.15 until we fix form binding issue in API.scala
+    // could not find implicit value for parameter formBinding: play.api.data.FormBinding
+    val Play = "2.8.1"
+
     val PlaySlick = "5.0.2"
     val PostgresSlick = "0.20.3"
 
-    val Akka = "2.6.19"
+    // 2.6.19 once we upgrade Play
+    val Akka = "2.5.31"
     // val AkkaHttp = "10.1.11"
     // val Alpakka = "2.0.2"
 
@@ -24,6 +28,8 @@ object Dependencies {
     val akkaStreams = "com.typesafe.akka" %% "akka-stream" % Vsn.Akka
     // val akkaHttp = "com.typesafe.akka" %% "akka-http" % Vsn.AkkaHttp
     // val akkaSprayJson = "com.typesafe.akka" %% "akka-http-spray-json" % Vsn.AkkaHttp
+
+    val apacheCommons = "commons-io" % "commons-io" % "2.6"
   }
 
   object Persist {
@@ -38,13 +44,9 @@ object Dependencies {
     // val s3 = "com.lightbend.akka" %% "akka-stream-alpakka-s3" % Vsn.Alpakka
   }
 
-  object Kube {
-    // val skuber = "io.skuber" %% "skuber" % "2.4.0"
-  }
-
   object Parse {
     val fastParse = "com.lihaoyi" %% "fastparse" % "2.3.3"
-    val scalaMeta = "org.scalameta" %% "scalameta" % "4.4.0"
+    val scalaMeta = "org.scalameta" %% "scalameta" % "4.5.9"
   }
 
   object Instrumentation {
@@ -59,7 +61,7 @@ object Dependencies {
   object Misc {
     val scalaz = "org.scalaz" %% "scalaz-core" % "7.3.6"
 
-    // val pprint = "com.lihaoyi" %% "pprint" % "0.5.6"
+    val pprint = "com.lihaoyi" %% "pprint" % "0.7.3"
     val scalaPbJson = "com.thesamet.scalapb" %% "scalapb-json4s" % "0.12.0"
 
     // val sprayJson = "io.spray" %%  "spray-json" % "1.3.3"

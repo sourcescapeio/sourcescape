@@ -11,7 +11,7 @@ object APIBuild {
   val libDependencies = Seq(
     // Core.akkaHttp,
     // Core.akkaSprayJson,
-    // Core.akkaStreams,
+    Core.akkaStreams,
     play.sbt.PlayImport.evolutions,
     play.sbt.PlayImport.jdbc,
     play.sbt.PlayImport.ws,
@@ -30,16 +30,14 @@ object APIBuild {
   )
 
   val rambutanDependencies = Seq(
-    // Instrumentation.logging,
-    // Kube.skuber,
+    Core.apacheCommons,
     Parse.fastParse,
-    // Parse.scalaMeta,
+    Parse.scalaMeta,
     Persist.redis,
     // Persist.s3,
     // Persist.pubsub,
     // Persist.gcs,
-    // Misc.pprint,
-    // Misc.sendgrid,
+    Misc.pprint,
     Misc.jgit,
     Misc.scalaPbJson    
     //
