@@ -1,0 +1,4 @@
+{
+  "react-hooks/exhaustive-deps": true,
+  "extends": ["react-app", "react-app/jest"]
+}

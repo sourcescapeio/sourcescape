@@ -9,9 +9,11 @@ object Dependencies {
     val Play = "2.8.1"
 
     val PlaySlick = "5.0.2"
-    val PostgresSlick = "0.20.3"
 
-    // 2.6.19 once we upgrade Play
+    // TODO: some issues in upgrading due to Jackson dependencies
+    val PostgresSlick = "0.19.7"
+
+    // TODO: 2.6.19 once we upgrade Play
     val Akka = "2.5.31"
     // val AkkaHttp = "10.1.11"
     // val Alpakka = "2.0.2"
@@ -46,6 +48,8 @@ object Dependencies {
 
   object Parse {
     val fastParse = "com.lihaoyi" %% "fastparse" % "2.3.3"
+
+    // TODO: upgrade to 4.5 concurrent with pbjson upgrade to 0.11
     val scalaMeta = "org.scalameta" %% "scalameta" % "4.5.9"
   }
 
@@ -62,7 +66,7 @@ object Dependencies {
     val scalaz = "org.scalaz" %% "scalaz-core" % "7.3.6"
 
     val pprint = "com.lihaoyi" %% "pprint" % "0.7.3"
-    val scalaPbJson = "com.thesamet.scalapb" %% "scalapb-json4s" % "0.12.0"
+    val scalaPbJson = "com.thesamet.scalapb" %% "scalapb-json4s" % "0.11.1"
 
     // val sprayJson = "io.spray" %%  "spray-json" % "1.3.3"
     // val jwt = "com.github.jwt-scala" %% "jwt-play-json" % "6.0.0"

@@ -56,6 +56,7 @@ import 'bootstrap/dist/css/bootstrap-grid.min.css';
 // import 'prismjs/themes/prism-twilight.css';
 import { Loading } from 'components/shared/Loading';
 import { LocalViewWrapper } from 'components/dash';
+import { LocalOnboardingContainer } from 'components/user/Onboarding';
 // import { Card, H3 } from '@blueprintjs/core';
 
 /**
@@ -88,7 +89,7 @@ const ws = new Sockette(`${protocol}://${window.location.host}/api/socket`, {
 function LocalAppBase() {
   return <Router>
     <Routes>
-      <Route path="/onboarding" element={<div>test</div>} />
+      <Route path="/onboarding" element={<LocalOnboardingContainer />} />
       <Route path="*" element={<div>Not Found</div>} />
       <Route path="/" element={<InitialRedirectComponent />} />
       {

@@ -10,15 +10,7 @@ lazy val silvousplay = Project("silvousplay", file("modules/silvousplay")).
 
 lazy val rambutanShared = Project("rambutan-shared", file("modules/rambutan-shared")).
   dependsOn(silvousplay).
-  settings(APIBuild.rambutanSettings: _*).
-  settings(
-    libraryDependencies ++= Seq(
-      "com.thesamet.scalapb" %% "scalapb-runtime" % scalapb.compiler.Version.scalapbVersion % "protobuf"
-    ),
-    PB.targets in Compile := Seq(
-      scalapb.gen() -> (sourceManaged in Compile).value / "scalapb"
-    )
-  )
+  settings(APIBuild.rambutanSettings: _*)
 
 /**
  * Scripts

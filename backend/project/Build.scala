@@ -39,7 +39,7 @@ object APIBuild {
     // Persist.gcs,
     Misc.pprint,
     Misc.jgit,
-    Misc.scalaPbJson    
+    Misc.scalaPbJson
     //
     // TestDeps.scalaTestPlay,
     // TestDeps.mockito,

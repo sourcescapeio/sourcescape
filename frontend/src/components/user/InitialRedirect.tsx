@@ -1,58 +1,37 @@
 import React, { useEffect, useState } from 'react';
-// import { Redirect } from 'react-router-dom';
+import { Navigate } from 'react-router-dom';
 // import { mapStateToProps, mapDispatchToProps, mergeProps, initialRefresh } from 'store';
 import { connect } from 'react-redux';
 import { Loading } from 'components/shared/Loading';
+import axios from 'axios';
 
-// function InitialRedirectComponentBase() {
-//   const [loading, setLoading] = useState();
-//   const [completed, setCompleted] = useState();
+function InitialRedirectComponentBase() {
+  const [loading, setLoading] = useState(true);
+  const [completed, setCompleted] = useState<boolean | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-//   useEffect(() => {
+  useEffect(() => {
+    axios({
+      method: 'GET',
+      url: '/api/orgs/-1/nux'
+    }).then((resp) => {
+      setLoading(false);
+      setCompleted(resp.data.completed);
+    }).catch((e) => {
+      setLoading(false);
+      setError(e.message);
+      return Promise.reject(e);
+    });
+  }, []);
 
-//   })
-// }
-
-
-class InitialRedirectComponentBase extends React.Component {
-  state = {
-    loading: true,
-    completed: undefined,
-  }
-
-  // checkNux = () => {
-  //   this.props.curl({
-  //     method: 'GET',
-  //     url: '/api/orgs/-1/nux'
-  //   }).then((resp) => {
-  //     this.setState({
-  //       loading: false,
-  //       completed: resp.data.completed
-  //     });
-  //   }).catch((e) => {
-  //     this.setState({
-  //       error: e.message,
-  //       loading: false,
-  //     });
-  //     return Promise.reject(e);
-  //   });
-  // }
-
-  // componentDidMount() {
-  //   this.checkNux();
-  // }
-
-  render() {
-    return <div>Error</div>
-    // if(this.state.loading) {
-    //   return <Loading loading={true} />
-    // } else if (this.state.completed) {
-    //   return <Redirect to="/console"/>
-    // } else if (this.state.completed === false){
-    //   return <Redirect to="/onboarding"/>
-    // } else {
-    //   return <div>Error</div>
-    // }
+  if(loading) {
+    return <Loading loading={true} />
+  } else if (completed) {
+    return <Navigate to="/console" />
+  } else if (completed === false) {
+    return <Navigate to="/onboarding" />
+  } else {
+    return <div>{error}</div>
   }
 }
 
