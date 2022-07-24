@@ -34,6 +34,7 @@ object Dependencies {
     val apacheCommons = "commons-io" % "commons-io" % "2.6"
 
     val sangria = "org.sangria-graphql" %% "sangria" % "2.0.1"
+    val sangriaSlowLog = "org.sangria-graphql" %% "sangria-slowlog" % "2.0.1"
     val sangriaPlayJson = "org.sangria-graphql" %% "sangria-play-json" % "2.0.1"
   }
 

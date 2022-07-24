@@ -33,6 +33,7 @@ object APIBuild {
     Core.apacheCommons,
     Core.sangria,
     Core.sangriaPlayJson,
+    Core.sangriaSlowLog,
     Parse.fastParse,
     Parse.scalaMeta,
     Persist.redis,

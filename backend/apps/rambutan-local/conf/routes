@@ -10,7 +10,7 @@ GET     /all-tables/create.html                     controllers.HealthController
 GET     /all-tables/deletes.html                    controllers.HealthController.deletes()
 
 POST    /graphql                                    controllers.GraphQLController.graphqlBody()
-
+GET     /render-schema                              controllers.GraphQLController.renderSchema
 
 
 POST    /cycle-indexes/:it                          controllers.HealthController.cycleIndexes(it: models.IndexType)
