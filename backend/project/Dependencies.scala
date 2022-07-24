@@ -32,6 +32,9 @@ object Dependencies {
     // val akkaSprayJson = "com.typesafe.akka" %% "akka-http-spray-json" % Vsn.AkkaHttp
 
     val apacheCommons = "commons-io" % "commons-io" % "2.6"
+
+    val sangria = "org.sangria-graphql" %% "sangria" % "2.0.1"
+    val sangriaPlayJson = "org.sangria-graphql" %% "sangria-play-json" % "2.0.1"
   }
 
   object Persist {

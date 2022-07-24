@@ -31,6 +31,8 @@ object APIBuild {
 
   val rambutanDependencies = Seq(
     Core.apacheCommons,
+    Core.sangria,
+    Core.sangriaPlayJson,
     Parse.fastParse,
     Parse.scalaMeta,
     Persist.redis,

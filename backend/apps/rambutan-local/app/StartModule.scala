@@ -10,18 +10,18 @@ class ApplicationStart @Inject() (
   scanService:     LocalScanService,
   configuration:   play.api.Configuration)(implicit ec: ExecutionContext) {
 
-  for {
-    // initial scan
-    _ <- withFlag(repoSyncService.UseWatcher) {
-      scanService.initialScan(orgId = -1)
-    }
-    _ <- withFlag(repoSyncService.UseWatcher) {
-      repoSyncService.syncAllWatches()
-    }
-    // do consume
-  } yield {
-    println("QUEUE INITIALIZATION COMPLETE")
-  }
+  // for {
+  //   // initial scan
+  //   _ <- withFlag(repoSyncService.UseWatcher) {
+  //     scanService.initialScan(orgId = -1)
+  //   }
+  //   _ <- withFlag(repoSyncService.UseWatcher) {
+  //     repoSyncService.syncAllWatches()
+  //   }
+  //   // do consume
+  // } yield {
+  //   println("QUEUE INITIALIZATION COMPLETE")
+  // }
 }
 
 class StartModule extends AbstractModule {
