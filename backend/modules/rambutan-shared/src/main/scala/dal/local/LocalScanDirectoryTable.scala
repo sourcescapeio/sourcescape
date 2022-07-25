@@ -13,13 +13,13 @@ trait LocalScanDirectoryTableComponent {
 
   class LocalScanDirectoryTable(tag: Tag) extends Table[LocalScanDirectory](tag, "local_scan_directory") with SafeIndex[LocalScanDirectory] {
     def orgId = column[Int]("org_id")
-    def scanId = column[Int]("scan_id", O.PrimaryKey, O.AutoInc)
+    def id = column[Int]("id", O.PrimaryKey, O.AutoInc)
     def path = column[String]("path")
 
-    def * = (orgId, scanId, path) <> (LocalScanDirectory.tupled, LocalScanDirectory.unapply)
+    def * = (orgId, id, path) <> (LocalScanDirectory.tupled, LocalScanDirectory.unapply)
   }
 
-  object LocalScanDirectoryTable extends SlickDataService[LocalScanDirectoryTable, LocalScanDirectory](TableQuery[LocalScanDirectoryTable]) {
+  object LocalScanDirectoryTable extends SlickIdDataService[LocalScanDirectoryTable, LocalScanDirectory](TableQuery[LocalScanDirectoryTable]) {
 
   }
 }

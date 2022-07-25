@@ -1,6 +1,6 @@
 package models
 
 case class LocalScanDirectory(
-  orgId:  Int,
-  scanId: Int,
-  path:   String)
+  orgId: Int,
+  id:    Int,
+  path:  String)

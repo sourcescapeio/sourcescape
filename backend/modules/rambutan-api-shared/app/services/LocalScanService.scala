@@ -19,11 +19,21 @@ class LocalScanService @Inject() (
   repoDataService:        LocalRepoDataService,
   repoSyncService:        RepoSyncService,
   gitTreeIndexingService: GitTreeIndexingService,
-  gitService:             LocalGitService)(implicit val ec: ExecutionContext, mat: akka.stream.Materializer) extends ScanService {
+  gitService:             LocalGitService,
+  localDao:               dal.LocalDataAccessLayer)(implicit val ec: ExecutionContext, mat: akka.stream.Materializer) extends ScanService {
 
   lazy val BaseDirectory = configuration.get[String]("external.directory")
 
   // add directory (should trigger scan)
+
+  def getScanById(id: Int): Future[Option[LocalScanDirectory]] = {
+    localDao.LocalScanDirectoryTable.byId.lookup(id)
+  }
+
+  // def getScanByIds(ids: List[Long]) =
+  def listScans(): Future[List[LocalScanDirectory]] = {
+    localDao.LocalScanDirectoryTable.all
+  }
 
   def initialScan(orgId: Int): Future[Unit] = {
     def progressCalc(idx: Long): Int = {

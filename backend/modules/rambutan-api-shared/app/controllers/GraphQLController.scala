@@ -253,7 +253,8 @@ class GraphQLController @Inject() (
         Executor.execute(SchemaDefinition.StarWarsSchema, queryAst, new CharacterRepo,
           operationName = operation,
           variables = variables getOrElse Json.obj(),
-          deferredResolver = DeferredResolver.fetchers(SchemaDefinition.characters),
+          deferredResolver = DeferredResolver.fetchers(
+            SchemaDefinition.characters),
           exceptionHandler = exceptionHandler,
           queryReducers = List(
             QueryReducer.rejectMaxDepth[CharacterRepo](15),
@@ -278,7 +279,11 @@ class GraphQLController @Inject() (
     }
   }
 
-  def renderSchema = Action {
+  def renderSchema2 = Action {
     Ok(SchemaRenderer.renderSchema(SchemaDefinition.StarWarsSchema))
+  }
+
+  def renderSchema = Action {
+    Ok(SchemaRenderer.renderSchema(graphql.SchemaDefinition.RambutanSchema))
   }
 }

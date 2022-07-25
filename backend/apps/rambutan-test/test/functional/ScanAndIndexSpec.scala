@@ -29,6 +29,7 @@ import org.scalatest.matchers.should.Matchers
 
 import scala.concurrent.{ ExecutionContext, Future }
 import javax.inject._
+import sangria.macros._
 
 abstract class RambutanSpec extends PlaySpec
   with GuiceOneAppPerSuite
@@ -37,7 +38,31 @@ abstract class RambutanSpec extends PlaySpec
   with QueryHelpers
   with IndexHelpers
   with MockitoSugar
-  with ArgumentMatchersSugar
+  with ArgumentMatchersSugar {
+
+  object curl {
+    def get(url: String, expectedStatus: Int = 200) = {
+      val Some(result) = route(app, FakeRequest(GET, url))
+
+      if (status(result) =/= expectedStatus) {
+        throw new Exception(contentAsString(result))
+      } else {
+        contentAsJson(result)
+      }
+    }
+
+    def getString(url: String, expectedStatus: Int = 200) = {
+      val Some(result) = route(app, FakeRequest(GET, url))
+
+      if (status(result) =/= expectedStatus) {
+        throw new Exception(contentAsString(result))
+      } else {
+        contentAsString(result)
+      }
+    }
+  }
+
+}
 
 abstract class ScanAndIndexSpec extends RambutanSpec {
   // to override. not using val cuz we want to force laziness for testcontainers
@@ -98,9 +123,38 @@ abstract class ScanAndIndexSpec extends RambutanSpec {
   "Scanning directories" should {
     "work" taggedAs (Tag("single")) in {
       // Add a scan directory
-      val Some(result) = route(app, FakeRequest(GET, "/health"))
 
-      println(contentAsJson(result))
+      val res = curl.getString("/render-schema")
+
+      println(res)
+
+      // val query = graphqlInput"""
+      //   {
+      //     name
+      //     friends {
+      //       id
+      //       name
+      //     }
+      //   }
+      // """
+      val query = graphql"""
+        {
+          scans
+        }
+      """
+
+      println(query.renderPretty)
+
+      // val Some(result) = route(app, FakeRequest(GET, "/health"))
+
+      // // we actually want to set a timeout at each level?
+      // for {
+      //   test <- curl.graphql(s"""
+
+      //   """)
+      // } yield {
+
+      // }
 
       // Index repo
 
