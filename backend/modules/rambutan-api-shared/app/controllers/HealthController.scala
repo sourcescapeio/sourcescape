@@ -30,6 +30,8 @@ class HealthController @Inject() (
   }
 
   def healthView(diff: DatabaseDiff) = {
-    views.html.dbhealth(diff)
+    Json.obj(
+      "run" -> diff.beforeDeploy)
+    // views.html.dbhealth(diff)
   }
 }

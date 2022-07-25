@@ -1,0 +1,151 @@
+
+##############
+# ADMIN APIS #
+##############
+GET     /health                                     controllers.HealthController.health()
+GET     /all-tables/diff.html                       controllers.HealthController.diff()
+GET     /all-tables/create.html                     controllers.HealthController.create()
+GET     /all-tables/deletes.html                    controllers.HealthController.deletes()
+
+POST    /graphql                                    controllers.GraphQLController.graphqlBody()
+GET     /render-schema                              controllers.GraphQLController.renderSchema
+
+
+POST    /cycle-indexes/:it                          controllers.HealthController.cycleIndexes(it: models.IndexType)
+
+
+GET     /me                                         controllers.UserController.getUserProfile()
+POST    /orgs                                       controllers.UserController.createOrg()
+
+GET     /index-summary                              controllers.AdminController.indexSummary()
+GET     /socket                                     controllers.AdminController.updateSocket()
+
+
+###########
+# PROJECT #
+###########
+
+GET     /orgs/:orgId/nux                            controllers.UserController.getNuxState(orgId: Int)
+PUT     /orgs/:orgId/nux                            controllers.UserController.setNuxCompleted(orgId: Int)
+
+# GET     /orgs/:orgId/settings                       controllers.UserController.getOrgSettings(orgId: Int)
+# POST    /orgs/:orgId/settings                       controllers.UserController.updateOrgSettings(orgId: Int)
+
+#############
+# TARGETING #
+#############
+
+POST    /orgs/:o/targeting                          controllers.TargetingController.checkTargeting(o: Int)
+
+########
+# REPO #
+########
+
+POST    /orgs/:o/repos/scan                         controllers.RepoController.scanRepos(o: Int)
+POST    /orgs/:o/repos/open                         controllers.LocalRepoController.openItem(o: Int)
+
+GET     /orgs/:o/repos                              controllers.RepoController.getRepoSummary(o: Int)
+PUT     /orgs/:o/repos/:r/intent/:s                 controllers.RepoController.setRepoIntent(o: Int, r: Int, s: models.RepoCollectionIntent)
+GET     /orgs/:o/repos/:r/branches/:b               controllers.RepoController.getBranchSummary(o: Int, r: Int, b: String)
+
+GET     /orgs/:o/repos/:r/shas                      controllers.RepoController.getRepoSHAs(o: Int, r: Int)
+
+# Hard refresh
+# POST    /orgs/:o/repos/:r/refresh                   controllers.GithubRepoController.refreshRepo(o: Int, r: Int)
+
+# Webhook events
+POST    /orgs/:o/repos/:r/watcher                   controllers.LocalRepoController.watcherUpdate(o: Int, r: Int)
+POST    /orgs/:o/repos/:r/finish-watch              controllers.LocalRepoController.finishedWatcherStart(o: Int, r: Int)
+
+
+
+
+# Onboarding stuff. TODO: better url
+PUT     /orgs/:o/select-repos                       controllers.RepoController.batchSelect(o: Int)
+
+
+
+###########
+# INDEXES #
+###########
+
+# Should just do this
+GET     /orgs/:o/indexes/:i/tree                      controllers.IndexController.getTreeForIndex(o: Int, i: Int)
+GET     /orgs/:o/indexes/:i/file                      controllers.IndexController.getFile(o: Int, i: Int, file: String)
+GET     /orgs/:o/indexes/:i/analysis                  controllers.IndexController.getAnalysis(o: Int, i: Int, file: String)
+
+DELETE  /orgs/:o/indexes                              controllers.IndexController.deleteAllIndexes(o: Int)
+
+POST    /orgs/:o/repos/:r/shas/:s/index               controllers.IndexController.runIndexForSHA(o: Int, r: Int, s: String, forceRoot: Boolean)
+DELETE  /orgs/:o/repos/:r/shas/:s/index/:i            controllers.IndexController.deleteIndexForSHA(o: Int, r: Int, s: String, i: Int)
+POST    /orgs/:o/repos/:r/shas/:s/index/:i/reindex    controllers.IndexController.reindex(o: Int, r: Int, s: String, i: Int)
+
+# Need revising
+POST    /orgs/:o/test-index/:it                       controllers.IndexController.testIndex(o: Int, it: models.IndexType)
+
+
+############
+# QUERYING #
+############
+
+GET     /grammars                                   controllers.QueryController.getGrammars()
+GET     /grammars/:it/:t/grammar                    controllers.QueryController.getGrammar(it: models.IndexType, t: String)
+GET     /grammars/:it/:t/incomplete                 controllers.QueryController.getIncomplete(it: models.IndexType, t: String)
+
+POST    /orgs/:o/parse                              controllers.QueryController.parseQuery(o: Int)
+
+POST    /orgs/:o/query/builder                      controllers.QueryController.builderQuery(o: Int)
+POST    /orgs/:o/query/grouped                      controllers.QueryController.groupedBuilderQuery(o: Int)
+
+POST    /orgs/:o/parse/srclog/:it                   controllers.QueryController.parseSrcLog(o: Int, it: models.IndexType)
+POST    /orgs/:o/query/graph/:it                    controllers.QueryController.graphQuery(o: Int, it: models.IndexType)
+POST    /orgs/:o/query/relational/:it               controllers.QueryController.relationalQuery(o: Int, it: models.IndexType)
+
+
+#################
+# SAVED QUERIES #
+#################
+
+POST    /orgs/:orgId/saved-queries                  controllers.SavedQueryController.createSavedQuery(orgId: Int)
+GET     /orgs/:orgId/saved-queries                  controllers.SavedQueryController.listSavedQueries(orgId: Int)
+DELETE  /orgs/:orgId/saved-queries/:id              controllers.SavedQueryController.deleteSavedQuery(orgId: Int, id: Int)
+
+# Don't think we really use this anymore
+GET     /orgs/:orgId/saved-queries/:id              controllers.SavedQueryController.getSavedQuery(orgId: Int, id: Int)
+
+
+###################
+# SAVED TARGETING #
+###################
+
+POST    /orgs/:orgId/saved-targeting                controllers.SavedTargetingController.createSavedTargeting(orgId: Int)
+GET     /orgs/:orgId/saved-targeting                controllers.SavedTargetingController.listSavedTargeting(orgId: Int)
+# DELETE
+
+
+#########
+# CACHE #
+#########
+
+POST    /orgs/:orgId/cache                          controllers.CacheController.createCache(orgId: Int)
+GET     /orgs/:orgId/cache/:id                      controllers.CacheController.getCache(orgId: Int, id: Int, keys: List[String])
+GET     /orgs/:orgId/cache/:id/data                 controllers.CacheController.getCacheData(orgId: Int, id: Int, start: Int, end: Int, keys: List[String])
+GET     /orgs/:orgId/cache/:id/plan                 controllers.CacheController.getQueryPlan(orgId: Int, id: Int, start: Int, end: Int, keys: List[String])
+
+
+################
+# Logging APIs #
+################
+
+GET     /orgs/:oId/work                       controllers.LogController.listWork(oId: Int)
+GET     /orgs/:oId/work/summary               controllers.LogController.getWorkSummary(oId: Int, status: Option[models.WorkStatus])
+GET     /orgs/:oId/work/:wId                  controllers.LogController.getWorkTree(oId: Int, wId: String)
+GET     /orgs/:oId/work/:wId/logs             controllers.LogController.getLogs(oId: Int, wId: String, parentOnly: Option[Boolean], errorOnly: Option[Boolean])
+GET     /orgs/:oId/work/:wId/logs/:lId        controllers.LogController.getLogItem(oId: Int, wId: String, lId: String)
+
+POST    /orgs/:oId/work/clean                 controllers.LogController.cleanWork(oId: Int)
+DELETE  /orgs/:oId/work/:wId                  controllers.LogController.deleteWork(oId: Int, wId: String)
+
+# Collection logs
+POST    /orgs/:oId/logs/es-index              controllers.LogController.cycleLogIndex(oId: Int)
+GET     /orgs/:oId/logs/es-index              controllers.LogController.getLogIndex(oId: Int)

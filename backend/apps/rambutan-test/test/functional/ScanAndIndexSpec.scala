@@ -51,7 +51,10 @@ abstract class ScanAndIndexSpec extends RambutanSpec {
 
     new GuiceApplicationBuilder()
       .configure(
-        renderedConfig: _*)
+        "application.router" -> "api.Routes",
+        "use.watcher" -> false // should already be set, but just to be sure
+      ).configure(
+          renderedConfig: _*)
       .overrides(bind[FileService].toInstance(mockFileService))
       .build()
   }
@@ -95,7 +98,9 @@ abstract class ScanAndIndexSpec extends RambutanSpec {
   "Scanning directories" should {
     "work" taggedAs (Tag("single")) in {
       // Add a scan directory
-      println("test")
+      val Some(result) = route(app, FakeRequest(GET, "/health"))
+
+      println(contentAsJson(result))
 
       // Index repo
 
@@ -139,7 +144,6 @@ class ScanAndIndexSpecContainers
 
   def config() = {
     Map(
-      "use.watcher" -> false, // should already be set, but just to be sure
       "primadonna.server" -> s"http://localhost:${primadonna.mappedPort(3001)}",
       "dorothy.server" -> s"http://localhost:${dorothy.mappedPort(3004)}",
       "redis.port" -> s"${redis.mappedPort(6379)}",
@@ -164,7 +168,6 @@ class ScanAndIndexSpecCompose
 
   def config() = {
     Map(
-      "use.watcher" -> false, // should already be set, but just to be sure
       "primadonna.server" -> s"http://localhost:${3001}",
       "dorothy.server" -> s"http://localhost:${3004}",
       "redis.port" -> s"${6380}",

@@ -46,9 +46,14 @@ lazy val rambutanIndexerShared = Project("rambutan-indexer-shared", file("module
   dependsOn(rambutanShared).
   settings(APIBuild.rambutanSettings: _*)
 
-lazy val rambutanAPIShared = Project("rambutan-api-shared", file("modules/rambutan-api-shared")).
-  dependsOn(rambutanShared).
-  settings(APIBuild.rambutanSettings: _*)  
+lazy val rambutanAPIShared = (project in file("modules/rambutan-api-shared")).
+  enablePlugins(PlayScala).
+  settings(APIBuild.rambutanSettings: _*).
+  settings(
+    name := "rambutan-api-shared"
+  ).
+  dependsOn(rambutanShared)
+
 
 /**
  * Apps
