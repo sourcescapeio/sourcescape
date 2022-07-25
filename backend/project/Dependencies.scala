@@ -18,7 +18,8 @@ object Dependencies {
     // val AkkaHttp = "10.1.11"
     // val Alpakka = "2.0.2"
 
-    // val TestContainersScala = "0.39.1"
+    // TODO: could use an upgrade
+    val TestContainersScala = "0.40.9"
   }
 
   object Play {
@@ -85,10 +86,10 @@ object Dependencies {
   }
 
   object TestDeps {
-    // val scalaTestPlay = "org.scalatestplus.play" %% "scalatestplus-play" % "5.1.0" % Test
-    // val mockito = "org.mockito" %% "mockito-scala-scalatest" % "1.16.29" % Test
-    // val testContainers = "com.dimafeng" %% "testcontainers-scala-scalatest" % Vsn.TestContainersScala % Test
-    // val testContainersPostgres = "com.dimafeng" %% "testcontainers-scala-postgresql" % Vsn.TestContainersScala % Test
-    // val testContainersElasticSearch = "com.dimafeng" %% "testcontainers-scala-elasticsearch" % Vsn.TestContainersScala % Test
+    val scalaTestPlay = "org.scalatestplus.play" %% "scalatestplus-play" % "5.1.0" % Test
+    val mockito = "org.mockito" %% "mockito-scala-scalatest" % "1.16.29" % Test
+    val testContainers = "com.dimafeng" %% "testcontainers-scala-scalatest" % Vsn.TestContainersScala % Test
+    val testContainersPostgres = "com.dimafeng" %% "testcontainers-scala-postgresql" % Vsn.TestContainersScala % Test
+    val testContainersElasticSearch = "com.dimafeng" %% "testcontainers-scala-elasticsearch" % Vsn.TestContainersScala % Test
   }
 }

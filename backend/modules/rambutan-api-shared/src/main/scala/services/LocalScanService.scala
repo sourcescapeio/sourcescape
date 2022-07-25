@@ -23,6 +23,8 @@ class LocalScanService @Inject() (
 
   lazy val BaseDirectory = configuration.get[String]("external.directory")
 
+  // add directory (should trigger scan)
+
   def initialScan(orgId: Int): Future[Unit] = {
     def progressCalc(idx: Long): Int = {
       val base = if (idx < 20) {

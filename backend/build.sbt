@@ -40,7 +40,18 @@ lazy val rambutanShared = Project("rambutan-shared", file("modules/rambutan-shar
 //   )
 
 /**
- * Local
+  * Core application logic
+  */
+lazy val rambutanIndexerShared = Project("rambutan-indexer-shared", file("modules/rambutan-indexer-shared")).
+  dependsOn(rambutanShared).
+  settings(APIBuild.rambutanSettings: _*)
+
+lazy val rambutanAPIShared = Project("rambutan-api-shared", file("modules/rambutan-api-shared")).
+  dependsOn(rambutanShared).
+  settings(APIBuild.rambutanSettings: _*)  
+
+/**
+ * Apps
  */
 lazy val rambutanLocal = (project in file("apps/rambutan-local")).
   enablePlugins(PlayScala).
@@ -49,9 +60,7 @@ lazy val rambutanLocal = (project in file("apps/rambutan-local")).
     name := "rambutan-local",
     parallelExecution in Test := false,
     PlayKeys.devSettings := Seq("play.server.http.port" -> "9003")
-  ).
-  dependsOn(rambutanShared).
-  dependsOn(silvousplay)
+  ).dependsOn(rambutanAPIShared)
 
 lazy val rambutanIndexer = (project in file("apps/rambutan-indexer")).
   enablePlugins(PlayScala).
@@ -60,22 +69,24 @@ lazy val rambutanIndexer = (project in file("apps/rambutan-indexer")).
     name := "rambutan-indexer",
     parallelExecution in Test := false,
     PlayKeys.devSettings := Seq("play.server.http.port" -> "9002")    
-  ).
-  dependsOn(rambutanShared).
-  dependsOn(silvousplay)
+  ).dependsOn(rambutanIndexerShared)
 
-// /**
-//  * End to end tests
-//  */
-// lazy val rambutanTest = (project in file("apps/rambutan-test")).
-//   enablePlugins(PlayScala).
-//   settings(APIBuild.rambutanSettings: _*).
-//   settings(
-//     name := "rambutan-test",
-//     parallelExecution in Test := false
-//   ).
-//   dependsOn(rambutanAPIShared).
-//   dependsOn(rambutanIndexerShared).
-//   dependsOn(rambutanWebShared).
-//   // dependsOn(rambutanLocalShared)
-//   dependsOn(silvousplay)
+/**
+ * End to end tests
+ */
+lazy val rambutanTest = (project in file("apps/rambutan-test")).
+  enablePlugins(PlayScala).
+  settings(APIBuild.rambutanSettings: _*).
+  settings(
+    name := "rambutan-test",
+    parallelExecution in Test := false
+  ).
+    dependsOn(rambutanAPIShared).
+    dependsOn(rambutanIndexerShared)
+  // dependsOn(rambutanLocal).
+  // dependsOn(rambutanIndexer)
+  // dependsOn(rambutanAPIShared).
+  
+  // dependsOn(rambutanWebShared).
+  // dependsOn(rambutanLocalShared)
+  // dependsOn(silvousplay)

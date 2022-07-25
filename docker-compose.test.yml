@@ -1,0 +1,46 @@
+version: "3.8"
+services:
+  sourcescape_postgres_test:
+    container_name: sourcescape_postgres_test
+    image: postgres:12.4
+    environment:
+      - POSTGRES_PASSWORD=sourcescape
+      - POSTGRES_DB=sourcescape
+      - POSTGRES_USER=sourcescape
+    ports:
+      - "5433:5432"
+    networks:
+      - sourcescape
+  sourcescape_elasticsearch_test:
+    container_name: sourcescape_elasticsearch_test
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.10.2
+    environment:
+      - discovery.type=single-node
+    ports:
+      - "9201:9200"
+    networks:
+      - sourcescape
+  sourcescape_redis_test:
+    container_name: sourcescape_redis_test
+    image: redis:5.0.10
+    ports:
+      - "6380:6379"
+    networks:
+      - sourcescape
+  sourcescape_primadonna_test:
+    container_name: sourcescape_primadonna_test
+    image: gcr.io/lychee-ai/sourcescape-cli-primadonna:0.2
+    ports:
+      - "3001:3001"
+    networks:
+      - sourcescape
+  sourcescape_dorothy_test:
+    container_name: sourcescape_dorothy_test
+    image: gcr.io/lychee-ai/sourcescape-cli-dorothy:0.2
+    ports:
+      - "3004:3004"
+    networks:
+      - sourcescape  
+networks:
+  sourcescape:
+    name: sourcescape

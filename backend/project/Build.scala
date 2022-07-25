@@ -42,13 +42,13 @@ object APIBuild {
     // Persist.gcs,
     Misc.pprint,
     Misc.jgit,
-    Misc.scalaPbJson
+    Misc.scalaPbJson,
     //
-    // TestDeps.scalaTestPlay,
-    // TestDeps.mockito,
-    // TestDeps.testContainers,
-    // TestDeps.testContainersPostgres,
-    // TestDeps.testContainersElasticSearch
+    TestDeps.scalaTestPlay,
+    TestDeps.mockito,
+    TestDeps.testContainers,
+    TestDeps.testContainersPostgres,
+    TestDeps.testContainersElasticSearch
   )
 
   // Conservative. Should match with .bash_profile settings
