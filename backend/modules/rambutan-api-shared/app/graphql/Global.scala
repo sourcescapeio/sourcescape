@@ -28,12 +28,15 @@ object SchemaDefinition {
     "A directory to scan",
     // interfaces[RambutanContext, LocalScanDirectory](Character), << I don't think we extend anything
     fields[RambutanContext, LocalScanDirectory](
+      Field("id", IntType,
+        Some("the id of the scan"),
+        resolve = _.value.id),
       Field("path", StringType,
         Some("the path we're scanning"),
         resolve = _.value.path)))
 
   val Query = ObjectType(
-    "Query", fields[RambutanContext, LocalScanDirectory](
+    "Query", fields[RambutanContext, Unit](
       // need to list all objects
       Field("scan", OptionType(Scan),
         arguments = ScanID :: Nil,
@@ -42,7 +45,17 @@ object SchemaDefinition {
         arguments = Nil,
         resolve = ctx => ctx.ctx.localScanService.listScans())))
 
-  val RambutanSchema = sangria.schema.Schema(Query)
+  val Mutation = {
+    val PathArg = Argument("path", StringType, description = "path of the scan")
+
+    ObjectType(
+      "Mutation", fields[RambutanContext, Unit](
+        Field("createScan", Scan,
+          arguments = PathArg :: Nil,
+          resolve = ctx => ctx.ctx.localScanService.createScan(ctx.arg(PathArg)))))
+  }
+
+  val RambutanSchema = sangria.schema.Schema(Query, Some(Mutation))
 
   // also define fetchers here
 }

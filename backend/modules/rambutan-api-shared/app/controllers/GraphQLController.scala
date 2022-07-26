@@ -23,6 +23,7 @@ import sangria.slowlog.SlowLog
 import sangria.execution.deferred.{ Fetcher, HasId }
 import sangria.schema._
 import scala.util.{ Failure, Success }
+import graphql.RambutanContext
 
 object Episode extends Enumeration {
   val NEWHOPE, EMPIRE, JEDI = Value
@@ -220,7 +221,8 @@ object SchemaDefinition {
 
 @Singleton
 class GraphQLController @Inject() (
-  configuration: play.api.Configuration)(implicit ec: ExecutionContext, as: ActorSystem) extends API {
+  configuration:   play.api.Configuration,
+  rambutanContext: RambutanContext)(implicit ec: ExecutionContext, as: ActorSystem) extends API {
 
   def graphqlBody() = Action.async(parse.json) { request =>
     val query = (request.body \ "query").as[String]
@@ -250,15 +252,15 @@ class GraphQLController @Inject() (
 
       // query parsed successfully, time to execute it!
       case Success(queryAst) =>
-        Executor.execute(SchemaDefinition.StarWarsSchema, queryAst, new CharacterRepo,
+        Executor.execute(graphql.SchemaDefinition.RambutanSchema, queryAst, rambutanContext,
           operationName = operation,
           variables = variables getOrElse Json.obj(),
-          deferredResolver = DeferredResolver.fetchers(
-            SchemaDefinition.characters),
+          // deferredResolver = DeferredResolver.fetchers(
+          //   SchemaDefinition.characters),
           exceptionHandler = exceptionHandler,
           queryReducers = List(
-            QueryReducer.rejectMaxDepth[CharacterRepo](15),
-            QueryReducer.rejectComplexQueries[CharacterRepo](4000, (_, _) => TooComplexQueryError)),
+            QueryReducer.rejectMaxDepth[RambutanContext](15),
+            QueryReducer.rejectComplexQueries[RambutanContext](4000, (_, _) => TooComplexQueryError)),
           middleware = if (tracing) SlowLog.apolloTracing :: Nil else Nil)
           .map(Ok(_))
           .recover {

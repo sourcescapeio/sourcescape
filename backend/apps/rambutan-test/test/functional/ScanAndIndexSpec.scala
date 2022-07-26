@@ -11,7 +11,7 @@ import org.scalatest.{ BeforeAndAfterEach, BeforeAndAfterAll, Tag }
 import com.dimafeng.testcontainers._
 import org.testcontainers.containers.wait.strategy.Wait
 import org.testcontainers.utility.DockerImageName
-import dal.SharedDataAccessLayer
+import dal.{ SharedDataAccessLayer, LocalDataAccessLayer }
 
 import scala.concurrent.ExecutionContext.Implicits.global
 import models.index._
@@ -30,6 +30,7 @@ import org.scalatest.matchers.should.Matchers
 import scala.concurrent.{ ExecutionContext, Future }
 import javax.inject._
 import sangria.macros._
+import sangria.ast.Document
 
 abstract class RambutanSpec extends PlaySpec
   with GuiceOneAppPerSuite
@@ -41,6 +42,21 @@ abstract class RambutanSpec extends PlaySpec
   with ArgumentMatchersSugar {
 
   object curl {
+    private val GraphQLEndpoint = "/graphql"
+    def graphql(query: Document, expectedStatus: Int = 200) = {
+      println(query.renderPretty)
+      val req = FakeRequest(POST, GraphQLEndpoint).withBody(
+        Json.obj(
+          "query" -> query.renderCompact))
+      val Some(result) = route(app, req)
+
+      if (status(result) =/= expectedStatus) {
+        throw new Exception(contentAsString(result))
+      } else {
+        contentAsJson(result)
+      }
+    }
+
     def get(url: String, expectedStatus: Int = 200) = {
       val Some(result) = route(app, FakeRequest(GET, url))
 
@@ -90,12 +106,15 @@ abstract class ScanAndIndexSpec extends RambutanSpec {
 
   override def beforeAll() = {
     val dal = app.injector.instanceOf[SharedDataAccessLayer]
+    val localDal = app.injector.instanceOf[LocalDataAccessLayer]
     val elasticSearchService = app.injector.instanceOf[ElasticSearchService]
     implicit val materializer = app.materializer
     val work1 = for {
-      // _ <- dal.dropDatabase()
+      _ <- dal.dropDatabase()
+      _ <- localDal.dropDatabase()
       // Let's see if we can add columns to tables safely
       _ <- dal.ensureDatabase()
+      _ <- localDal.ensureDatabase()
       _ <- Source(IndexType.all).mapAsync(1) { it =>
         for {
           _ <- elasticSearchService.ensureIndex(it.nodeIndexName, GraphNode.mappings)
@@ -137,13 +156,43 @@ abstract class ScanAndIndexSpec extends RambutanSpec {
       //     }
       //   }
       // """
-      val query = graphql"""
+      val res2 = curl.graphql(graphql"""
         {
-          scans
+          scans {
+            path
+          }
         }
-      """
+      """)
 
-      println(query.renderPretty)
+      println(res2)
+
+      val res3 = curl.graphql(graphql"""
+        mutation addScan {
+          path1: createScan(path: "/Users/test") {
+            id
+            path
+          },
+          path2: createScan(path: "/Users/test2") {
+            id
+            path
+          }
+        }
+      """)
+
+      // open socket
+
+      println(res3)
+
+      val res4 = curl.graphql(graphql"""
+        {
+          scans {
+            id
+            path
+          }
+        }
+      """)
+
+      println(Json.stringify(res4))
 
       // val Some(result) = route(app, FakeRequest(GET, "/health"))
 

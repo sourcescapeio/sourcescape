@@ -35,6 +35,13 @@ class LocalScanService @Inject() (
     localDao.LocalScanDirectoryTable.all
   }
 
+  def createScan(path: String): Future[LocalScanDirectory] = {
+    val obj = LocalScanDirectory(-1, 0, path)
+    localDao.LocalScanDirectoryTable.insert(obj).map { id =>
+      obj.copy(id = id)
+    }
+  }
+
   def initialScan(orgId: Int): Future[Unit] = {
     def progressCalc(idx: Long): Int = {
       val base = if (idx < 20) {

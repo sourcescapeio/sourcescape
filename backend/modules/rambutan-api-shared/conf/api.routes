@@ -8,6 +8,8 @@ GET     /all-tables/create.html                     controllers.HealthController
 GET     /all-tables/deletes.html                    controllers.HealthController.deletes()
 
 POST    /graphql                                    controllers.GraphQLController.graphqlBody()
+# Websocket
+GET     /graphql                                    controllers.GraphQLController.socket()
 GET     /render-schema                              controllers.GraphQLController.renderSchema
 
 
