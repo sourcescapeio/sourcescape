@@ -20,7 +20,7 @@ GET     /me                                         controllers.UserController.g
 POST    /orgs                                       controllers.UserController.createOrg()
 
 GET     /index-summary                              controllers.AdminController.indexSummary()
-GET     /socket                                     controllers.AdminController.updateSocket()
+# GET     /socket                                     controllers.AdminController.updateSocket()
 
 
 ###########

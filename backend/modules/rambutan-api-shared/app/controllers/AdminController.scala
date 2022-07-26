@@ -18,13 +18,13 @@ class AdminController @Inject() (
   /**
    * Real-time updates
    */
-  def updateSocket() = {
-    websocket { implicit request =>
-      authService.orgsAuthenticatedFor { orgIds =>
-        socketService.openSocket(orgIds)
-      }
-    }
-  }
+  // def updateSocket() = {
+  //   websocket { implicit request =>
+  //     authService.orgsAuthenticatedFor { orgIds =>
+  //       socketService.openSocket(orgIds)
+  //     }
+  //   }
+  // }
 
   def indexSummary() = {
     api { implicit request =>

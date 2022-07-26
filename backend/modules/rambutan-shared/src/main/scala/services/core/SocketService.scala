@@ -64,7 +64,7 @@ object SocketEventType extends Plenumeration[SocketEventType] {
   case object CompilationFinished extends SocketEventType("compilation-finished")
 }
 
-private case class EventMessage(orgId: Int, additionalOrgIds: List[Int], eventType: SocketEventType, id: String, persist: Boolean, data: JsObject) {
+case class EventMessage(orgId: Int, additionalOrgIds: List[Int], eventType: SocketEventType, id: String, persist: Boolean, data: JsObject) {
 
   val allOrgIds = (orgId :: additionalOrgIds).toSet
 
@@ -75,15 +75,15 @@ private case class EventMessage(orgId: Int, additionalOrgIds: List[Int], eventTy
     "persist" -> persist) ++ data
 }
 
-private object EventMessage {
+object EventMessage {
   implicit val format = Json.format[EventMessage]
 }
 
-private case class AddSourceQueue(orgIds: List[Int], q: SourceQueue[JsValue])
+private case class AddSourceQueue(orgIds: List[Int], q: SourceQueue[EventMessage])
 private case class DropSourceQueue(queueKey: String)
 
-class Wrapper(implicit ec: ExecutionContext) extends Actor {
-  val map = scala.collection.mutable.HashMap.empty[String, (SourceQueue[JsValue], Set[Int])]
+private class Wrapper(implicit ec: ExecutionContext) extends Actor {
+  val map = scala.collection.mutable.HashMap.empty[String, (SourceQueue[EventMessage], Set[Int])]
 
   def receive = {
     case item => {
@@ -102,7 +102,7 @@ class Wrapper(implicit ec: ExecutionContext) extends Actor {
           Json.parse(message.data.utf8String).asOpt[EventMessage].foreach { eventMessage =>
             map.foreach {
               case (queueKey, (queue, orgIds)) if orgIds.intersect(eventMessage.allOrgIds).nonEmpty => {
-                queue.offer(eventMessage.toJson) map {
+                queue.offer(eventMessage) map {
                   case QueueOfferResult.QueueClosed => {
                     self ! DropSourceQueue(queueKey)
                   }
@@ -279,10 +279,10 @@ class SocketService @Inject() (
   }
 
   // controller level
-  def openSocket(orgIds: List[Int]): Future[Source[JsValue, Any]] = {
+  def openSocket(orgIds: List[Int]): Future[Source[EventMessage, Any]] = {
     // get initial
     val queue = Source
-      .queue[JsValue](1000, OverflowStrategy.dropHead)
+      .queue[EventMessage](1000, OverflowStrategy.dropHead)
 
     val source = queue.mapMaterializedValue { q =>
       subscriber ! AddSourceQueue(orgIds, q)
@@ -292,13 +292,13 @@ class SocketService @Inject() (
       buffer <- if (members.nonEmpty) {
         redisClient.mget(members.map(_.utf8String): _*).map { items =>
           val parsed = items.flatMap {
-            case Some(item) => Json.parse(item.utf8String).asOpt[EventMessage].map(_.toJson)
+            case Some(item) => Json.parse(item.utf8String).asOpt[EventMessage]
             case _          => None
           }
           Source(parsed)
         }
       } else {
-        Future.successful(Source.empty[JsObject])
+        Future.successful(Source.empty[EventMessage])
       }
     } yield {
       buffer.concat(source)

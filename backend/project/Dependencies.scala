@@ -91,5 +91,12 @@ object Dependencies {
     val testContainers = "com.dimafeng" %% "testcontainers-scala-scalatest" % Vsn.TestContainersScala % Test
     val testContainersPostgres = "com.dimafeng" %% "testcontainers-scala-postgresql" % Vsn.TestContainersScala % Test
     val testContainersElasticSearch = "com.dimafeng" %% "testcontainers-scala-elasticsearch" % Vsn.TestContainersScala % Test
+
+    private val nettyVersion = "4.1.77.Final"
+    val nettyStreams = "com.typesafe.netty" % "netty-reactive-streams-http" % "2.0.6"
+    // val netty = 
+    //     ("io.netty" % "netty-transport-native-epoll" % nettyVersion).classifier("linux-x86_64")
+    //   )
+      // ++ specs2Deps.map(_ % Test)
   }
 }

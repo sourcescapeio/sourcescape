@@ -27,10 +27,71 @@ import silvousplay.imports._
 import org.mockito.{ MockitoSugar, ArgumentMatchersSugar }
 import org.scalatest.matchers.should.Matchers
 
-import scala.concurrent.{ ExecutionContext, Future }
+import scala.concurrent.{ ExecutionContext, Future, Promise }
 import javax.inject._
 import sangria.macros._
 import sangria.ast.Document
+
+import play.api.mvc.WebSocket
+import akka.stream.scaladsl.Flow
+import akka.stream.OverflowStrategy
+import akka.stream.scaladsl.SourceQueue
+import akka.stream.scaladsl.Keep
+import akka.stream.scaladsl.SourceQueueWithComplete
+import akka.actor.PoisonPill
+import akka.actor.ActorRef
+import akka.pattern.ask
+import akka.actor.Props
+import akka.actor.Actor
+import play.api.http.websocket.TextMessage
+import play.api.http.websocket.BinaryMessage
+
+case class WebSocketResponse(
+  queue: SourceQueue[WebSocketClient.ExtendedMessage],
+  // sink
+  sinkActor:        ActorRef,
+  disconnectFuture: Future[Unit],
+  client:           WebSocketClient) {
+
+  def push(items: List[WebSocketClient.ExtendedMessage]) = {
+    sinkActor ! WebSocketClientActor.Push(items)
+  }
+
+  def pull() = {
+    (sinkActor ? WebSocketClientActor.Pull).map { i =>
+      i.asInstanceOf[List[WebSocketClient.ExtendedMessage]]
+    }
+  }
+
+  def shutdown() = {
+    // client.shutdown()
+    disconnectFuture
+  }
+}
+
+object WebSocketClientActor {
+  case class Push(items: List[WebSocketClient.ExtendedMessage])
+  case object Pull
+  case class Received(item: WebSocketClient.ExtendedMessage)
+}
+
+class WebSocketClientActor() extends Actor {
+
+  var items = List.empty[WebSocketClient.ExtendedMessage]
+
+  def receive = {
+    // client facing
+    case WebSocketClientActor.Pull => {
+      sender() ! items
+      items = List.empty[WebSocketClient.ExtendedMessage]
+    }
+    // internal
+    case WebSocketClientActor.Received(item) => {
+      println(item)
+      items = items.appended(item)
+    }
+  }
+}
 
 abstract class RambutanSpec extends PlaySpec
   with GuiceOneAppPerSuite
@@ -43,6 +104,34 @@ abstract class RambutanSpec extends PlaySpec
 
   object curl {
     private val GraphQLEndpoint = "/graphql"
+
+    // use a subscribe actor I suppose
+    //Source.actorRef
+    //Sink.actorRef
+    def subscribe() = {
+      // create actor
+      val source = Source.queue[WebSocketClient.ExtendedMessage](10, OverflowStrategy.dropHead)
+
+      import app.materializer
+      val relay = source.toMat(Sink.ignore)(Keep.left).run()
+      val sinkActor = app.actorSystem.actorOf(Props(classOf[WebSocketClientActor]))
+      val sink = Flow[WebSocketClient.ExtendedMessage].map { item =>
+        WebSocketClientActor.Received(item)
+      }.to(Sink.actorRef(sinkActor, PoisonPill)) // separate
+
+      val (disconnectFuture, client) = WebSocketClient { client =>
+        val url = java.net.URI.create("ws://localhost:" + testServerPort + GraphQLEndpoint)
+        val dF = client.connect(url, subprotocol = None) { (headers, flow) =>
+
+          source.via(flow).runWith(sink)
+        }
+
+        (dF, client)
+      }
+
+      WebSocketResponse(relay, sinkActor, disconnectFuture, client)
+    }
+
     def graphql(query: Document, expectedStatus: Int = 200) = {
       println(query.renderPretty)
       val req = FakeRequest(POST, GraphQLEndpoint).withBody(
@@ -143,71 +232,67 @@ abstract class ScanAndIndexSpec extends RambutanSpec {
     "work" taggedAs (Tag("single")) in {
       // Add a scan directory
 
-      val res = curl.getString("/render-schema")
+      // val res = curl.getString("/render-schema")
 
-      println(res)
+      // println(res)
 
-      // val query = graphqlInput"""
+      val socket = curl.subscribe()
+      socket.push(WebSocketClient.SimpleMessage(
+        TextMessage(Json.stringify(Json.obj("a" -> "b"))),
+        false) :: Nil)
+      // needs to return an object that contains both the sourcequeue and sink that you can control when to close
+      // you close the source, not the
+
+      // socket.push(
+
+      // )
+      // await(socket.pull())
+
+      // create a socket
+      // new WebSocketClient
+
+      // val res2 = curl.graphql(graphql"""
       //   {
-      //     name
-      //     friends {
-      //       id
-      //       name
+      //     scans {
+      //       path
       //     }
       //   }
-      // """
-      val res2 = curl.graphql(graphql"""
-        {
-          scans {
-            path
-          }
-        }
-      """)
+      // """)
 
-      println(res2)
+      // println(res2)
 
-      val res3 = curl.graphql(graphql"""
-        mutation addScan {
-          path1: createScan(path: "/Users/test") {
-            id
-            path
-          },
-          path2: createScan(path: "/Users/test2") {
-            id
-            path
-          }
-        }
-      """)
+      // val res3 = curl.graphql(graphql"""
+      //   mutation addScan {
+      //     path1: createScan(path: "/Users/test") {
+      //       id
+      //       path
+      //     },
+      //     path2: createScan(path: "/Users/test2") {
+      //       id
+      //       path
+      //     }
+      //   }
+      // """)
 
-      // open socket
+      // // open socket
 
-      println(res3)
+      // println(res3)
 
-      val res4 = curl.graphql(graphql"""
-        {
-          scans {
-            id
-            path
-          }
-        }
-      """)
+      // // await(socket.shutdown())
 
-      println(Json.stringify(res4))
+      // val res4 = curl.graphql(graphql"""
+      //   {
+      //     scans {
+      //       id
+      //       path
+      //     }
+      //   }
+      // """)
 
-      // val Some(result) = route(app, FakeRequest(GET, "/health"))
+      // println(Json.stringify(res4))
+      // // HOW TO DISCONNECT?
 
-      // // we actually want to set a timeout at each level?
-      // for {
-      //   test <- curl.graphql(s"""
-
-      //   """)
-      // } yield {
-
-      // }
-
-      // Index repo
-
-      // Run search and have it work
+      Thread.sleep(10000)
     }
   }
 }

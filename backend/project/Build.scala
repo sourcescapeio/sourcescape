@@ -44,11 +44,13 @@ object APIBuild {
     Misc.jgit,
     Misc.scalaPbJson,
     //
+    // These can be moved to test only
     TestDeps.scalaTestPlay,
     TestDeps.mockito,
     TestDeps.testContainers,
     TestDeps.testContainersPostgres,
-    TestDeps.testContainersElasticSearch
+    TestDeps.testContainersElasticSearch,
+    TestDeps.nettyStreams // for websocket testing
   )
 
   // Conservative. Should match with .bash_profile settings
