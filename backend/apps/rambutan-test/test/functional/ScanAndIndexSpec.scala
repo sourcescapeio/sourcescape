@@ -45,6 +45,7 @@ import akka.actor.Props
 import akka.actor.Actor
 import play.api.http.websocket.TextMessage
 import play.api.http.websocket.BinaryMessage
+import play.api.http.websocket.CloseMessage
 
 case class WebSocketResponse(
   queue: SourceQueue[WebSocketClient.ExtendedMessage],
@@ -53,14 +54,19 @@ case class WebSocketResponse(
   disconnectFuture: Future[Unit],
   client:           WebSocketClient) {
 
-  def push(items: List[WebSocketClient.ExtendedMessage]) = {
-    sinkActor ! WebSocketClientActor.Push(items)
+  def push(item: WebSocketClient.ExtendedMessage) = {
+    await(queue.offer(item))
+    // sinkActor ! WebSocketClientActor.Push(items)
   }
 
   def pull() = {
     (sinkActor ? WebSocketClientActor.Pull).map { i =>
       i.asInstanceOf[List[WebSocketClient.ExtendedMessage]]
     }
+  }
+
+  def isShutDown = {
+    client.isShutDown()
   }
 
   def shutdown() = {
@@ -70,7 +76,6 @@ case class WebSocketResponse(
 }
 
 object WebSocketClientActor {
-  case class Push(items: List[WebSocketClient.ExtendedMessage])
   case object Pull
   case class Received(item: WebSocketClient.ExtendedMessage)
 }
@@ -113,18 +118,27 @@ abstract class RambutanSpec extends PlaySpec
       val source = Source.queue[WebSocketClient.ExtendedMessage](10, OverflowStrategy.dropHead)
 
       import app.materializer
-      val relay = source.toMat(Sink.ignore)(Keep.left).run()
+      val relay = source.map { i =>
+        println(i)
+        i
+      }.toMat(Sink.ignore)(Keep.left).run()
       val sinkActor = app.actorSystem.actorOf(Props(classOf[WebSocketClientActor]))
       val sink = Flow[WebSocketClient.ExtendedMessage].map { item =>
         WebSocketClientActor.Received(item)
       }.to(Sink.actorRef(sinkActor, PoisonPill)) // separate
 
       val (disconnectFuture, client) = WebSocketClient { client =>
+        println(testServerPort)
+        val innerResult = Promise[Unit]()
         val url = java.net.URI.create("ws://localhost:" + testServerPort + GraphQLEndpoint)
         val dF = client.connect(url, subprotocol = None) { (headers, flow) =>
 
+          println("CONNECTED")
+          innerResult.success(())
           source.via(flow).runWith(sink)
         }
+
+        await(innerResult.future)
 
         (dF, client)
       }
@@ -236,10 +250,18 @@ abstract class ScanAndIndexSpec extends RambutanSpec {
 
       // println(res)
 
-      val socket = curl.subscribe()
-      socket.push(WebSocketClient.SimpleMessage(
-        TextMessage(Json.stringify(Json.obj("a" -> "b"))),
-        false) :: Nil)
+      running(TestServer(testServerPort, app)) {
+        val socket = curl.subscribe()
+
+        socket.push(
+          WebSocketClient.SimpleMessage(
+            TextMessage(Json.stringify(Json.obj("a" -> "b"))),
+            false))
+
+        await(socket.disconnectFuture)
+
+        println("STOPPED")
+      }
       // needs to return an object that contains both the sourcequeue and sink that you can control when to close
       // you close the source, not the
 
@@ -292,7 +314,7 @@ abstract class ScanAndIndexSpec extends RambutanSpec {
       // println(Json.stringify(res4))
       // // HOW TO DISCONNECT?
 
-      Thread.sleep(10000)
+      // Thread.sleep(10000)
     }
   }
 }

@@ -38,6 +38,7 @@ import sangria.marshalling.ScalaInput
 import sangria.util.tag._
 import akka.stream.scaladsl.SourceQueue
 import akka.stream.OverflowStrategy
+import akka.stream.scaladsl.Keep
 
 object GraphQLSubscriptionActor {
   case class Subscribe(query: String, operation: Option[String])
@@ -105,20 +106,21 @@ class GraphQLController @Inject() (
   socketService:   SocketService,
   rambutanContext: RambutanContext)(implicit ec: ExecutionContext, as: ActorSystem) extends API {
 
-  def socket() = WebSocket.acceptOrResult[JsValue, JsValue] { request =>
+  def socket() = WebSocket.acceptOrResult[String, String] { request =>
     for {
       socket <- socketService.openSocket(List(-1))
       errors = Source
         .queue[JsValue](1000, OverflowStrategy.dropHead)
-      subscriptionActor = as.actorOf(Props(classOf[GraphQLSubscriptionActor], rambutanContext, errors))
+      errorsQueue = errors.toMat(Sink.ignore)(Keep.left).run()
+      subscriptionActor = as.actorOf(Props(classOf[GraphQLSubscriptionActor], rambutanContext, errorsQueue))
     } yield {
       // pushes subscribe messages
       // TODO: this also needs to push back error messages. Idea: another SourceQueue
 
-      val sink = Flow[JsValue]
+      val sink = Flow[String]
         .map { i =>
           println("hello", i)
-          i
+          Json.parse(i)
         }
         .collect { case input => Json.fromJson[GraphQLSubscriptionActor.Subscribe](input) }
         .collect { case JsSuccess(subscription, _) => subscription }
@@ -131,7 +133,7 @@ class GraphQLController @Inject() (
         m.asInstanceOf[List[EventMessage]].map(_.toJson)
       }).merge(errors).merge {
         Source.tick(1.second, 20.second, Json.toJson(Map("type" -> JsString("ping"))))
-      }
+      }.map(Json.stringify)
       Right(Flow.fromSinkAndSource(sink, source))
     }
 

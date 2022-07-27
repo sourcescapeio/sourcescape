@@ -59,6 +59,8 @@ trait WebSocketClient {
   def connect(url: URI, version: WebSocketVersion = WebSocketVersion.V13, subprotocol: Option[String] = None)(
     onConnect: (immutable.Seq[(String, String)], Flow[WebSocketClient.ExtendedMessage, WebSocketClient.ExtendedMessage, _]) => Unit): Future[Unit]
 
+  def isShutDown(): Boolean
+
   /**
    * Shutdown the client and release all associated resources.
    */
@@ -150,6 +152,8 @@ object WebSocketClient {
 
       disconnected.future
     }
+
+    def isShutDown() = eventLoop.isTerminated()
 
     def shutdown() = eventLoop.shutdownGracefully()
   }
