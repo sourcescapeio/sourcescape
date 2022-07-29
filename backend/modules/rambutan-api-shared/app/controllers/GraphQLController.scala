@@ -24,7 +24,7 @@ import sangria.slowlog.SlowLog
 // import sangria.schema._
 import scala.util.{ Failure, Success }
 import graphql.RambutanContext
-import services.SocketService
+import services._
 
 // Websocket stuff
 import play.api.mvc.WebSocket
@@ -39,11 +39,12 @@ import sangria.util.tag._
 import akka.stream.scaladsl.SourceQueue
 import akka.stream.OverflowStrategy
 import akka.stream.scaladsl.Keep
+import scala.util.Try
 
 object GraphQLSubscriptionActor {
   case class Subscribe(query: String, operation: Option[String])
-  case class Filter(items: List[EventMessage])
-  case class PreparedQueryContext(query: PreparedQuery[RambutanContext, Unit, Map[String, Any] @@ ScalaInput])
+  case class Filter(item: EventMessage)
+  case class PreparedQueryContext(query: PreparedQuery[RambutanContext, Any, Map[String, Any] @@ ScalaInput])
 
   implicit val reads = Json.reads[Subscribe]
 }
@@ -56,7 +57,7 @@ class GraphQLSubscriptionActor(ctx: RambutanContext, errors: SourceQueue[JsValue
   // needs to handle Ask message
   implicit val ec = context.system.dispatcher
   val executor = Executor(graphql.SchemaDefinition.RambutanSchema)
-  var subscriptions = Map.empty[String, Set[GraphQLSubscriptionActor.PreparedQueryContext]]
+  var subscriptions = Set.empty[GraphQLSubscriptionActor.PreparedQueryContext]
 
   def receive = {
     case GraphQLSubscriptionActor.Subscribe(query, operation) => {
@@ -65,8 +66,14 @@ class GraphQLSubscriptionActor(ctx: RambutanContext, errors: SourceQueue[JsValue
         case Success(ast) => {
           ast.operationType(operation) match {
             case Some(OperationType.Subscription) => {
+              println("SUBSCRIPTION")
               executor.prepare(ast, ctx, (), operation).map { query =>
                 self ! GraphQLSubscriptionActor.PreparedQueryContext(query)
+              }.recover {
+                case t: Throwable => {
+                  errors.offer(Json.obj(
+                    "error" -> t.getMessage()))
+                }
               }
             }
             case x => {
@@ -85,16 +92,22 @@ class GraphQLSubscriptionActor(ctx: RambutanContext, errors: SourceQueue[JsValue
     }
     case context @ GraphQLSubscriptionActor.PreparedQueryContext(query) => {
       println(s"Query is prepared: ${query}")
-      query.fields.map(_.field.name).foreach { field =>
-        subscriptions = subscriptions.updated(field, subscriptions.get(field) match {
-          case Some(contexts) => contexts + context
-          case _              => Set(context)
-        })
-      }
+      subscriptions = subscriptions + context
     }
-    case GraphQLSubscriptionActor.Filter(items) => {
-      // do filter
-      sender() ! Nil
+
+    // def subscriptionFieldName(event: Event) =
+    // SubscriptionFields.find(_._2.clazz.isAssignableFrom(event.getClass)).map(_._1)
+
+    case GraphQLSubscriptionActor.Filter(item) => {
+      val s = sender()
+      Future.sequence {
+        // for efficiency, do we want to do a pre-filtering?
+        subscriptions.map { ctx =>
+          ctx.query.execute(root = item)
+        }
+      }.map { r =>
+        s ! r.toList
+      }
     }
   }
 
@@ -106,31 +119,40 @@ class GraphQLController @Inject() (
   socketService:   SocketService,
   rambutanContext: RambutanContext)(implicit ec: ExecutionContext, as: ActorSystem) extends API {
 
+  // Default JsValue socket is a little too strict. If I send a bad msg, it dies. Frowntown.
   def socket() = WebSocket.acceptOrResult[String, String] { request =>
     for {
       socket <- socketService.openSocket(List(-1))
-      errors = Source
-        .queue[JsValue](1000, OverflowStrategy.dropHead)
-      errorsQueue = errors.toMat(Sink.ignore)(Keep.left).run()
+      (errorsQueue, errors) = Source
+        .queue[JsValue](1000, OverflowStrategy.dropHead).preMaterialize()
       subscriptionActor = as.actorOf(Props(classOf[GraphQLSubscriptionActor], rambutanContext, errorsQueue))
     } yield {
       // pushes subscribe messages
       // TODO: this also needs to push back error messages. Idea: another SourceQueue
 
       val sink = Flow[String]
-        .map { i =>
-          println("hello", i)
-          Json.parse(i)
-        }
+        .mapAsync(1) { i =>
+          Try(Json.parse(i)) match {
+            case Success(value) => {
+              Future.successful(List(value))
+            }
+            case Failure(value) => {
+              errorsQueue.offer(Json.obj(
+                "error" -> "parsing",
+                "raw" -> i)).map { _ => Nil }
+            }
+          }
+        }.mapConcat(identity)
         .collect { case input => Json.fromJson[GraphQLSubscriptionActor.Subscribe](input) }
         .collect { case JsSuccess(subscription, _) => subscription }
         .to(Sink.actorRef[GraphQLSubscriptionActor.Subscribe](subscriptionActor, PoisonPill))
 
       val source = (socket.mapAsync(1) { v =>
+        // filtering is handled at query level
         implicit val timeout = Timeout(100.milliseconds)
-        (subscriptionActor ? GraphQLSubscriptionActor.Filter(List(v)))
+        (subscriptionActor ? GraphQLSubscriptionActor.Filter(v))
       }.mapConcat { m =>
-        m.asInstanceOf[List[EventMessage]].map(_.toJson)
+        m.asInstanceOf[List[JsValue]]
       }).merge(errors).merge {
         Source.tick(1.second, 20.second, Json.toJson(Map("type" -> JsString("ping"))))
       }.map(Json.stringify)

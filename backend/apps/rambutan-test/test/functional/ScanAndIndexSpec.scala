@@ -43,56 +43,75 @@ import akka.actor.ActorRef
 import akka.pattern.ask
 import akka.actor.Props
 import akka.actor.Actor
-import play.api.http.websocket.TextMessage
-import play.api.http.websocket.BinaryMessage
-import play.api.http.websocket.CloseMessage
+import akka.http.scaladsl.model.ws._
+import akka.Done
+import akka.NotUsed
+import akka.http.scaladsl.Http
+import akka.http.scaladsl.model.StatusCodes
 
-case class WebSocketResponse(
-  queue: SourceQueue[WebSocketClient.ExtendedMessage],
-  // sink
-  sinkActor:        ActorRef,
-  disconnectFuture: Future[Unit],
-  client:           WebSocketClient) {
-
-  def push(item: WebSocketClient.ExtendedMessage) = {
+case class GraphQLWebSocket(
+  connected: Future[Done],
+  closed:    Future[Done],
+  queue:     SourceQueueWithComplete[Message],
+  sink:      ActorRef) {
+  def push(item: Message) = {
     await(queue.offer(item))
-    // sinkActor ! WebSocketClientActor.Push(items)
   }
 
-  def pull() = {
-    (sinkActor ? WebSocketClientActor.Pull).map { i =>
-      i.asInstanceOf[List[WebSocketClient.ExtendedMessage]]
+  def pushG(query: Document) = {
+    val item = Json.obj(
+      "query" -> query.renderCompact
+    // "operation" ->
+    )
+    await(queue.offer(TextMessage(Json.stringify(item))))
+  }
+
+  def waitFor(f: PartialFunction[Message, Boolean]): Future[Unit] = {
+    val promise = Promise[Unit]()
+
+    for {
+      r <- sink ? WebSocketClientActor.Subscribe(promise, f)
+      rr <- r.asInstanceOf[Future[Unit]]
+    } yield {
+      rr
     }
-  }
-
-  def isShutDown = {
-    client.isShutDown()
-  }
-
-  def shutdown() = {
-    // client.shutdown()
-    disconnectFuture
   }
 }
 
 object WebSocketClientActor {
-  case object Pull
-  case class Received(item: WebSocketClient.ExtendedMessage)
+  case class Subscribe(p: Promise[Unit], f: PartialFunction[Message, Boolean])
+  case class Received(item: Message)
 }
 
 class WebSocketClientActor() extends Actor {
 
-  var items = List.empty[WebSocketClient.ExtendedMessage]
+  var items = List.empty[Message]
+
+  var subscriptions = List.empty[(Promise[Unit], PartialFunction[Message, Boolean])]
 
   def receive = {
-    // client facing
-    case WebSocketClientActor.Pull => {
-      sender() ! items
-      items = List.empty[WebSocketClient.ExtendedMessage]
+    // Add subscription
+    case WebSocketClientActor.Subscribe(prom, filter) => {
+      // early complete
+      items.foreach { i =>
+        if (filter.isDefinedAt(i) && filter(i)) {
+          prom.trySuccess(())
+        }
+      }
+
+      subscriptions = subscriptions.appended((prom, filter))
+
+      sender() ! prom.future
     }
-    // internal
+    // Received item as a sink
     case WebSocketClientActor.Received(item) => {
-      println(item)
+      subscriptions.foreach {
+        case (p, f) if f.isDefinedAt(item) && f(item) => {
+          p.trySuccess(())
+        }
+        case _ => ()
+      }
+
       items = items.appended(item)
     }
   }
@@ -115,39 +134,40 @@ abstract class RambutanSpec extends PlaySpec
     //Sink.actorRef
     def subscribe() = {
       // create actor
-      val source = Source.queue[WebSocketClient.ExtendedMessage](10, OverflowStrategy.dropHead)
+      implicit val as = app.actorSystem
 
-      import app.materializer
-      val relay = source.map { i =>
-        println(i)
-        i
-      }.toMat(Sink.ignore)(Keep.left).run()
       val sinkActor = app.actorSystem.actorOf(Props(classOf[WebSocketClientActor]))
-      val sink = Flow[WebSocketClient.ExtendedMessage].map { item =>
+      val sink = Flow[Message].map { item =>
         WebSocketClientActor.Received(item)
-      }.to(Sink.actorRef(sinkActor, PoisonPill)) // separate
+      }.to(Sink.actorRef(sinkActor, PoisonPill)).mapMaterializedValue { _ =>
+        Future.successful(Done)
+      } // separate
 
-      val (disconnectFuture, client) = WebSocketClient { client =>
-        println(testServerPort)
-        val innerResult = Promise[Unit]()
-        val url = java.net.URI.create("ws://localhost:" + testServerPort + GraphQLEndpoint)
-        val dF = client.connect(url, subprotocol = None) { (headers, flow) =>
-
-          println("CONNECTED")
-          innerResult.success(())
-          source.via(flow).runWith(sink)
-        }
-
-        await(innerResult.future)
-
-        (dF, client)
+      val (relay, source) = {
+        Source.queue[Message](10, OverflowStrategy.dropHead).preMaterialize()
       }
 
-      WebSocketResponse(relay, sinkActor, disconnectFuture, client)
+      val flow: Flow[Message, Message, Future[Done]] = {
+        Flow.fromSinkAndSourceMat(sink, source)(Keep.left)
+      }
+
+      val (upgradeResponse, closed) =
+        Http().singleWebSocketRequest(WebSocketRequest("ws://localhost:" + testServerPort + GraphQLEndpoint), flow)
+
+      val connected = upgradeResponse.map { upgrade =>
+        // just like a regular http request we can access response status which is available via upgrade.response.status
+        // status code 101 (Switching Protocols) indicates that server support WebSockets
+        if (upgrade.response.status == StatusCodes.SwitchingProtocols) {
+          Done
+        } else {
+          throw new RuntimeException(s"Connection failed: ${upgrade.response.status}")
+        }
+      }
+
+      GraphQLWebSocket(connected, closed, relay, sinkActor)
     }
 
     def graphql(query: Document, expectedStatus: Int = 200) = {
-      println(query.renderPretty)
       val req = FakeRequest(POST, GraphQLEndpoint).withBody(
         Json.obj(
           "query" -> query.renderCompact))
@@ -246,62 +266,75 @@ abstract class ScanAndIndexSpec extends RambutanSpec {
     "work" taggedAs (Tag("single")) in {
       // Add a scan directory
 
-      // val res = curl.getString("/render-schema")
+      val res = curl.getString("/render-schema")
 
-      // println(res)
+      println(res)
 
       running(TestServer(testServerPort, app)) {
+
+        val res2 = curl.graphql(graphql"""
+          {
+            scans {
+              path
+            }
+          }
+        """)
+        println(res2)
+
         val socket = curl.subscribe()
+        await(socket.connected)
 
-        socket.push(
-          WebSocketClient.SimpleMessage(
-            TextMessage(Json.stringify(Json.obj("a" -> "b"))),
-            false))
+        // (id: "scan1Id")
+        socket.pushG(
+          graphql"""
+            subscription ScanChanges {
+              scanProgress {
+                id
+                progress
+              }
+            }
+          """)
 
-        await(socket.disconnectFuture)
+        val res3 = curl.graphql(graphql"""
+          mutation addScan {
+            path1: createScan(path: "/Users/test") {
+              id
+              path
+            },
+            path2: createScan(path: "/Users/test2") {
+              id
+              path
+            }
+          }
+        """)
 
-        println("STOPPED")
+        println(res3)
+        val scan1Id = (res3 \ "data" \ "path1" \ "id").as[Int]
+
+        val socketService = app.injector.instanceOf[SocketService]
+
+        // await confirmation of subscription
+
+        Thread.sleep(4000)
+
+        val p = socket.waitFor {
+          case t: TextMessage.Strict => {
+            println("CALLED", t.text)
+            (Json.parse(t.text) \ "data" \ "scanProgress" \ "progress").asOpt[Int] =?= Some(30)
+          }
+        }
+
+        await(socketService.scanProgress(-1, 10))
+        await(socketService.scanProgress(-1, 20))
+        await(socketService.scanProgress(-1, 30))
+
+        await(p.map { _ =>
+          println("COMPLETED")
+        })
+        socket.queue.complete()
+        await(socket.closed)
+        println("CLOSED")
       }
-      // needs to return an object that contains both the sourcequeue and sink that you can control when to close
-      // you close the source, not the
-
-      // socket.push(
-
-      // )
-      // await(socket.pull())
-
-      // create a socket
-      // new WebSocketClient
-
-      // val res2 = curl.graphql(graphql"""
-      //   {
-      //     scans {
-      //       path
-      //     }
-      //   }
-      // """)
-
-      // println(res2)
-
-      // val res3 = curl.graphql(graphql"""
-      //   mutation addScan {
-      //     path1: createScan(path: "/Users/test") {
-      //       id
-      //       path
-      //     },
-      //     path2: createScan(path: "/Users/test2") {
-      //       id
-      //       path
-      //     }
-      //   }
-      // """)
-
-      // // open socket
-
-      // println(res3)
-
-      // // await(socket.shutdown())
-
       // val res4 = curl.graphql(graphql"""
       //   {
       //     scans {

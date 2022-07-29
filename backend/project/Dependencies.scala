@@ -15,7 +15,7 @@ object Dependencies {
 
     // TODO: 2.6.19 once we upgrade Play
     val Akka = "2.5.31"
-    // val AkkaHttp = "10.1.11"
+    val AkkaHttp = "10.1.11"
     // val Alpakka = "2.0.2"
 
     // TODO: could use an upgrade
@@ -29,7 +29,7 @@ object Dependencies {
 
   object Core {
     val akkaStreams = "com.typesafe.akka" %% "akka-stream" % Vsn.Akka
-    // val akkaHttp = "com.typesafe.akka" %% "akka-http" % Vsn.AkkaHttp
+    val akkaHttp = "com.typesafe.akka" %% "akka-http" % Vsn.AkkaHttp
     // val akkaSprayJson = "com.typesafe.akka" %% "akka-http-spray-json" % Vsn.AkkaHttp
 
     val apacheCommons = "commons-io" % "commons-io" % "2.6"
@@ -37,6 +37,7 @@ object Dependencies {
     val sangria = "org.sangria-graphql" %% "sangria" % "2.0.1"
     val sangriaSlowLog = "org.sangria-graphql" %% "sangria-slowlog" % "2.0.1"
     val sangriaPlayJson = "org.sangria-graphql" %% "sangria-play-json" % "2.0.1"
+    val sangriaAkkaStreams = "org.sangria-graphql" %% "sangria-akka-streams" % "1.0.2",
   }
 
   object Persist {
@@ -91,12 +92,5 @@ object Dependencies {
     val testContainers = "com.dimafeng" %% "testcontainers-scala-scalatest" % Vsn.TestContainersScala % Test
     val testContainersPostgres = "com.dimafeng" %% "testcontainers-scala-postgresql" % Vsn.TestContainersScala % Test
     val testContainersElasticSearch = "com.dimafeng" %% "testcontainers-scala-elasticsearch" % Vsn.TestContainersScala % Test
-
-    private val nettyVersion = "4.1.77.Final"
-    val nettyStreams = "com.typesafe.netty" % "netty-reactive-streams-http" % "2.0.6"
-    // val netty = 
-    //     ("io.netty" % "netty-transport-native-epoll" % nettyVersion).classifier("linux-x86_64")
-    //   )
-      // ++ specs2Deps.map(_ % Test)
   }
 }

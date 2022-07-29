@@ -9,7 +9,7 @@ object APIBuild {
   import Dependencies._
 
   val libDependencies = Seq(
-    // Core.akkaHttp,
+    Core.akkaHttp,
     // Core.akkaSprayJson,
     Core.akkaStreams,
     play.sbt.PlayImport.evolutions,
@@ -34,6 +34,7 @@ object APIBuild {
     Core.sangria,
     Core.sangriaPlayJson,
     Core.sangriaSlowLog,
+    Core.sangriaAkkaStreams,
     Parse.fastParse,
     Parse.scalaMeta,
     Persist.redis,
@@ -49,8 +50,7 @@ object APIBuild {
     TestDeps.mockito,
     TestDeps.testContainers,
     TestDeps.testContainersPostgres,
-    TestDeps.testContainersElasticSearch,
-    TestDeps.nettyStreams // for websocket testing
+    TestDeps.testContainersElasticSearch
   )
 
   // Conservative. Should match with .bash_profile settings

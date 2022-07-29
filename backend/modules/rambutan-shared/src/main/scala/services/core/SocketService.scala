@@ -39,7 +39,7 @@ class SubscribeActor(
   }
 }
 
-abstract class SocketEventType(val identifier: String) extends Identifiable
+sealed abstract class SocketEventType(val identifier: String) extends Identifiable
 
 object SocketEventType extends Plenumeration[SocketEventType] {
   // startup messages
