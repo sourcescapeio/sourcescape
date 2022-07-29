@@ -12,6 +12,7 @@ object RemoteType extends Plenumeration[RemoteType] {
 
 case class LocalRepoConfig(
   orgId:      Int,
+  scanId:     Int,
   repoName:   String,
   repoId:     Int,
   localPath:  String,

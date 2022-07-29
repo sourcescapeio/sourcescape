@@ -20,10 +20,7 @@ class LocalScanService @Inject() (
   repoSyncService:        RepoSyncService,
   gitTreeIndexingService: GitTreeIndexingService,
   gitService:             LocalGitService,
-  localDao:               dal.LocalDataAccessLayer)(implicit val ec: ExecutionContext, mat: akka.stream.Materializer) extends ScanService {
-
-  lazy val BaseDirectory = configuration.get[String]("external.directory")
-
+  localDao:               dal.LocalDataAccessLayer)(implicit val ec: ExecutionContext, mat: akka.stream.Materializer) {
   // add directory (should trigger scan)
 
   def getScanById(id: Int): Future[Option[LocalScanDirectory]] = {
@@ -35,14 +32,21 @@ class LocalScanService @Inject() (
     localDao.LocalScanDirectoryTable.all
   }
 
-  def createScan(path: String): Future[LocalScanDirectory] = {
+  def createScan(orgId: Int, path: String, shouldScan: Boolean): Future[LocalScanDirectory] = {
     val obj = LocalScanDirectory(-1, 0, path)
-    localDao.LocalScanDirectoryTable.insert(obj).map { id =>
-      obj.copy(id = id)
+    for {
+      obj <- localDao.LocalScanDirectoryTable.insert(obj).map { id =>
+        obj.copy(id = id)
+      }
+      _ <- withFlag(shouldScan) {
+        initialScan(orgId, obj.id, path)
+      }
+    } yield {
+      obj
     }
   }
 
-  def initialScan(orgId: Int): Future[Unit] = {
+  def initialScan(orgId: Int, scanId: Int, directory: String): Future[Unit] = {
     def progressCalc(idx: Long): Int = {
       val base = if (idx < 20) {
         (idx / 20.0) * 0.7
@@ -56,7 +60,8 @@ class LocalScanService @Inject() (
 
     for {
       _ <- Future.successful(())
-      gitDirectories = gitService.scanGitDirectory(BaseDirectory).filter(_.valid)
+      gitDirectories = gitService.scanGitDirectory(directory).filter(_.valid)
+      _ = println(gitDirectories)
       newDirectories <- gitDirectories.mapConcat { scanResult =>
         val remote = scanResult.remotes.flatMap { url =>
           val githubHttpsUrl = "https://github.com/([\\w\\.@\\:/\\-~]+).git".r
@@ -74,8 +79,10 @@ class LocalScanService @Inject() (
 
         remote.map {
           case (name, remote, remoteType) => {
+            // LINK TO SCANID
             LocalRepoConfig(
               orgId,
+              scanId,
               name,
               0,
               scanResult.localDir,
@@ -87,10 +94,10 @@ class LocalScanService @Inject() (
       }.zipWithIndex.groupedWithin(20, 500.milliseconds).mapAsync(1) {
         case items => {
           val idxs: List[Long] = items.map(_._2).toList
-          println(idxs)
+          println("IDX", idxs)
           for {
             _ <- withDefined(idxs.maxByOption(i => i)) { max =>
-              socketService.scanProgress(orgId, progressCalc(max))
+              socketService.scanProgress(orgId, scanId, progressCalc(max))
             }
           } yield {
             items.map(_._1)
@@ -124,7 +131,7 @@ class LocalScanService @Inject() (
           // repoDataService.deleteRepo(r.id) // soft deletes?
         }
       }.runWith(Sink.ignore)
-      _ <- socketService.scanFinished(orgId)
+      _ <- socketService.scanFinished(orgId, scanId)
     } yield {
       ()
     }

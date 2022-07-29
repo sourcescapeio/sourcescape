@@ -16,6 +16,10 @@ class LocalRepoDataService @Inject() (
 
   def getRepo(repoId: Int) = getRepoLocal(repoId)
 
+  def getReposByScan(scanId: Int) = {
+    localDao.LocalRepoConfigTable.byScanId.lookup(scanId)
+  }
+
   def getAllLocalRepos() = localDao.LocalRepoConfigTable.all()
   def getAllRepos() = getAllLocalRepos()
 

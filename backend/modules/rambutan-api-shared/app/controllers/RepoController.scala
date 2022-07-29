@@ -16,7 +16,7 @@ import play.api.libs.json._
 class RepoController @Inject() (
   configuration:        play.api.Configuration,
   authService:          services.AuthService,
-  scanService:          services.ScanService,
+  scanService:          services.LocalScanService,
   repoService:          services.RepoService,
   repoSyncService:      services.RepoSyncService,
   repoDataService:      services.RepoDataService,
@@ -79,12 +79,12 @@ class RepoController @Inject() (
     }
   }
 
-  def scanRepos(orgId: Int) = {
-    api { implicit request =>
-      // can move to repoData
-      authService.authenticatedForOrg(orgId, OrgRole.Admin) {
-        scanService.initialScan(orgId)
-      }
-    }
-  }
+  // def scanRepos(orgId: Int) = {
+  //   api { implicit request =>
+  //     // can move to repoData
+  //     authService.authenticatedForOrg(orgId, OrgRole.Admin) {
+  //       scanService.initialScan(orgId)
+  //     }
+  //   }
+  // }
 }

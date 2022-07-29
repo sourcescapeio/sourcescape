@@ -161,12 +161,12 @@ class SocketService @Inject() (
   /**
    * Local messages
    */
-  def scanProgress(orgId: Int, progress: Int) = {
-    publish(EventMessage(orgId, Nil, SocketEventType.ScanStartup, "scan", true, Json.obj("progress" -> progress)))
+  def scanProgress(orgId: Int, scanId: Int, progress: Int) = {
+    publish(EventMessage(orgId, Nil, SocketEventType.ScanStartup, scanId.toString(), true, Json.obj("progress" -> progress)))
   }
 
-  def scanFinished(orgId: Int) = {
-    publish(EventMessage(orgId, Nil, SocketEventType.ScanFinished, "scan", false, Json.obj()))
+  def scanFinished(orgId: Int, scanId: Int) = {
+    publish(EventMessage(orgId, Nil, SocketEventType.ScanFinished, scanId.toString(), false, Json.obj()))
   }
 
   def localRepoUpdate(orgId: Int, repoId: Int) = {

@@ -1,9 +1,6 @@
 package graphql
 
 import models.LocalScanDirectory
-import services.LocalScanService
-
-import javax.inject._
 
 import sangria.execution._
 import sangria.parser.{ QueryParser, SyntaxError }
@@ -19,13 +16,44 @@ import sangria.macros.derive._
 import sangria.streaming.akkaStreams._
 import services.EventMessage
 import services.SocketEventType
+import models.LocalRepoConfig
+import models.RepoSHAIndex
 
 // Question: how to define GraphQL context
-// let's use a graphql directory with all graphql stuff
-// hydrated should basically all go in there
-// this should then have a trait that essentially defers to necessary objects in the cake?
 object SchemaDefinition {
   val ScanID = Argument("id", IntType, description = "id of the scan")
+
+  val RepoIndexType = ObjectType(
+    "RepoIndex",
+    "Index for a repo",
+    fields[RambutanContext, RepoSHAIndex](
+      Field("id", IntType,
+        Some("the id of the index"),
+        resolve = _.value.id),
+      Field("sha", StringType,
+        Some("the sha of the index"),
+        resolve = _.value.sha),
+    )
+  )
+
+  val Repo = ObjectType(
+    "Repo",
+    "A scanned repo",
+    fields[RambutanContext, LocalRepoConfig](
+      Field("id", IntType,
+        Some("the id of the repo"),
+        resolve = _.value.repoId),
+      Field("name", StringType,
+        Some("the name of the repo"),
+        resolve = _.value.repoName),
+      Field("path", StringType,
+        Some("the path"),
+        resolve = _.value.localPath),
+      Field("indexes", ListType(RepoIndexType),
+        Some("indexes for the repo"),
+        resolve = ctx => ctx.ctx.repoIndexDataService.getIndexesForRepo(ctx.value.repoId)
+      )
+    ))
 
   val Scan = ObjectType(
     "Scan",
@@ -37,7 +65,10 @@ object SchemaDefinition {
         resolve = _.value.id),
       Field("path", StringType,
         Some("the path we're scanning"),
-        resolve = _.value.path)))
+        resolve = _.value.path),
+      Field("repos", ListType(Repo),
+        Some("repos for this scan"),
+        resolve = ctx => ctx.ctx.localRepoDataService.getReposByScan(ctx.value.id))))
 
   val Query = ObjectType(
     "Query", fields[RambutanContext, Any](
@@ -56,7 +87,11 @@ object SchemaDefinition {
       "Mutation", fields[RambutanContext, Any](
         Field("createScan", Scan,
           arguments = PathArg :: Nil,
-          resolve = ctx => ctx.ctx.localScanService.createScan(ctx.arg(PathArg)))))
+          resolve = ctx => ctx.ctx.localScanService.createScan(-1, ctx.arg(PathArg), true)),
+        Field("selectRepos", Scan,
+          arguments = PathArg :: Nil,
+          resolve = ctx => ctx.ctx.localScanService.createScan(-1, ctx.arg(PathArg), true))          
+      ))
   }
 
   trait Event {
@@ -105,6 +140,11 @@ object SchemaDefinition {
               msg.id,
               0L,
               (msg.data \ "progress").as[Int]))
+          case SocketEventType.ScanFinished => Option(
+            ScanProgress(
+              msg.id,
+              0L,
+              100))
           case _ => None
         }
       })))
@@ -112,11 +152,4 @@ object SchemaDefinition {
   val RambutanSchema = sangria.schema.Schema(Query, Some(Mutation), Some(SubscriptionType))
 
   // also define fetchers here
-}
-
-@Singleton
-class RambutanContext @Inject() (
-  configuration:        play.api.Configuration,
-  val localScanService: LocalScanService) {
-
 }

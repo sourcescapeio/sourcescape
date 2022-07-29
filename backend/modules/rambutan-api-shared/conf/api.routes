@@ -43,7 +43,7 @@ POST    /orgs/:o/targeting                          controllers.TargetingControl
 # REPO #
 ########
 
-POST    /orgs/:o/repos/scan                         controllers.RepoController.scanRepos(o: Int)
+# POST    /orgs/:o/repos/scan                         controllers.RepoController.scanRepos(o: Int)
 POST    /orgs/:o/repos/open                         controllers.LocalRepoController.openItem(o: Int)
 
 GET     /orgs/:o/repos                              controllers.RepoController.getRepoSummary(o: Int)

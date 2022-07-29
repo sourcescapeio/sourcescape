@@ -54,6 +54,9 @@ case class GraphQLWebSocket(
   closed:    Future[Done],
   queue:     SourceQueueWithComplete[Message],
   sink:      ActorRef) {
+
+  def close() = queue.complete()
+
   def push(item: Message) = {
     await(queue.offer(item))
   }
@@ -167,7 +170,7 @@ abstract class RambutanSpec extends PlaySpec
       GraphQLWebSocket(connected, closed, relay, sinkActor)
     }
 
-    def graphql(query: Document, expectedStatus: Int = 200) = {
+    def graphql[T](query: Document, expectedStatus: Int = 200)(f: JsValue => T) = {
       val req = FakeRequest(POST, GraphQLEndpoint).withBody(
         Json.obj(
           "query" -> query.renderCompact))
@@ -176,27 +179,40 @@ abstract class RambutanSpec extends PlaySpec
       if (status(result) =/= expectedStatus) {
         throw new Exception(contentAsString(result))
       } else {
-        contentAsJson(result)
+        f(contentAsJson(result))
       }
     }
 
-    def get(url: String, expectedStatus: Int = 200) = {
+    def graphqlU[T](query: String, expectedStatus: Int = 200)(f: JsValue => T) = {
+      val req = FakeRequest(POST, GraphQLEndpoint).withBody(
+        Json.obj(
+          "query" -> query))
+      val Some(result) = route(app, req)
+
+      if (status(result) =/= expectedStatus) {
+        throw new Exception(contentAsString(result))
+      } else {
+        f(contentAsJson(result))
+      }
+    }
+
+    // def get[T](url: String, expectedStatus: Int = 200)(f: JsValue => T) = {
+    //   val Some(result) = route(app, FakeRequest(GET, url))
+
+    //   if (status(result) =/= expectedStatus) {
+    //     throw new Exception(contentAsString(result))
+    //   } else {
+    //     f(contentAsJson(result))
+    //   }
+    // }
+
+    def getString[T](url: String, expectedStatus: Int = 200)(f: String => T) = {
       val Some(result) = route(app, FakeRequest(GET, url))
 
       if (status(result) =/= expectedStatus) {
         throw new Exception(contentAsString(result))
       } else {
-        contentAsJson(result)
-      }
-    }
-
-    def getString(url: String, expectedStatus: Int = 200) = {
-      val Some(result) = route(app, FakeRequest(GET, url))
-
-      if (status(result) =/= expectedStatus) {
-        throw new Exception(contentAsString(result))
-      } else {
-        contentAsString(result)
+        f(contentAsString(result))
       }
     }
   }
@@ -228,6 +244,7 @@ abstract class ScanAndIndexSpec extends RambutanSpec {
   // }
 
   override def beforeAll() = {
+    // do we need to flush all redis?
     val dal = app.injector.instanceOf[SharedDataAccessLayer]
     val localDal = app.injector.instanceOf[LocalDataAccessLayer]
     val elasticSearchService = app.injector.instanceOf[ElasticSearchService]
@@ -266,20 +283,21 @@ abstract class ScanAndIndexSpec extends RambutanSpec {
     "work" taggedAs (Tag("single")) in {
       // Add a scan directory
 
-      val res = curl.getString("/render-schema")
-
-      println(res)
+      curl.getString("/render-schema") { res =>
+        println(res)
+      }
 
       running(TestServer(testServerPort, app)) {
 
-        val res2 = curl.graphql(graphql"""
+        curl.graphql(graphql"""
           {
             scans {
               path
             }
           }
-        """)
-        println(res2)
+        """) { res =>
+          println(res)
+        }
 
         val socket = curl.subscribe()
         await(socket.connected)
@@ -295,59 +313,70 @@ abstract class ScanAndIndexSpec extends RambutanSpec {
             }
           """)
 
-        val res3 = curl.graphql(graphql"""
+        curl.graphql(graphql"""
           mutation addScan {
-            path1: createScan(path: "/Users/test") {
-              id
-              path
-            },
-            path2: createScan(path: "/Users/test2") {
+            path1: createScan(path: "/Users/jierenchen/Projects") {
               id
               path
             }
           }
-        """)
-
-        println(res3)
-        val scan1Id = (res3 \ "data" \ "path1" \ "id").as[Int]
+        """) { res =>
+          println(res)
+          // val scan1Id = (res3 \ "data" \ "path1" \ "id").as[Int]
+        }
 
         val socketService = app.injector.instanceOf[SocketService]
 
-        // await confirmation of subscription
-
-        Thread.sleep(4000)
-
         val p = socket.waitFor {
           case t: TextMessage.Strict => {
-            println("CALLED", t.text)
-            (Json.parse(t.text) \ "data" \ "scanProgress" \ "progress").asOpt[Int] =?= Some(30)
+            println("RECEIVED MESSAGE", t.text)
+            (Json.parse(t.text) \ "data" \ "scanProgress" \ "progress").asOpt[Int] =?= Some(100)
           }
         }
 
-        await(socketService.scanProgress(-1, 10))
-        await(socketService.scanProgress(-1, 20))
-        await(socketService.scanProgress(-1, 30))
-
         await(p.map { _ =>
-          println("COMPLETED")
+          println("COMPLETED SCANS")
         })
-        socket.queue.complete()
+
+        curl.graphql(graphql"""
+          {
+            scans {
+              id
+              path
+              repos {
+                id
+                name
+                path
+                indexes {
+                  id
+                  sha
+                }
+              }
+            }
+          }
+        """) { res =>
+          println(Json.prettyPrint(res))
+        }
+
+        // do repo selection
+        curl.graphqlU(s"""
+          mutation SelectRepos {
+            path1: selectRepos(ids: [1, 2, 3]) {
+              id
+              path
+            }
+          }
+        """) { res =>
+          println(res)
+          // val scan1Id = (res3 \ "data" \ "path1" \ "id").as[Int]
+        }
+
+        // check again
+
+        socket.close()
         await(socket.closed)
-        println("CLOSED")
+        println("CLOSED WEBSOCKET")
       }
-      // val res4 = curl.graphql(graphql"""
-      //   {
-      //     scans {
-      //       id
-      //       path
-      //     }
-      //   }
-      // """)
-
-      // println(Json.stringify(res4))
-      // // HOW TO DISCONNECT?
-
-      // Thread.sleep(10000)
     }
   }
 }
