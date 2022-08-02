@@ -25,7 +25,7 @@ trait RepoSyncService {
       }
       // need to enable queue
       _ <- withFlag(currentlySkipped) {
-        setRepoIntent(orgId, repoId, RepoCollectionIntent.Collect, queue = false)
+        setRepoIntent(orgId, repoId, RepoCollectionIntent.Collect, queue = false) map (_ => ())
       }
       // ensure watch
       prelim <- repoRefreshDirect(repo, sha, maybeDirty)
@@ -55,5 +55,5 @@ trait RepoSyncService {
   def repoRefreshAsync(orgId: Int, repoId: Int): Future[Unit]
 
   // TODO: can we move this out?
-  def setRepoIntent(orgId: Int, repoId: Int, intent: RepoCollectionIntent, queue: Boolean): Future[Unit]
+  def setRepoIntent(orgId: Int, repoId: Int, intent: RepoCollectionIntent, queue: Boolean): Future[Int]
 }

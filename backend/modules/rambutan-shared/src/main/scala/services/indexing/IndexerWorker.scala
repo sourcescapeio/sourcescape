@@ -67,6 +67,17 @@ class IndexerWorker @Inject() (
     }
   }
 
+  def consumeOne() = {
+    for {
+      item <- indexerQueueService.source.runWith(Sink.head)
+      _ = println(item)
+      _ <- runIndex(item)
+      _ <- indexerQueueService.ack(item) // Don't ack?
+    } yield {
+      ()
+    }
+  }
+
   /**
    * Indexing. Split into separate service.
    */

@@ -124,7 +124,7 @@ class RepoIndexDataService @Inject() (
           chainData <- source.runWith(Sinks.ListAccum)
           shas <- getSHAs(repoId, List(Final), chainData)
         } yield {
-          shas.foreach(println)
+          // shas.foreach(println)
 
           val isTerminal = shas.length < Grouping
           val lastSHA = shas.lastOption.map(_.sha)

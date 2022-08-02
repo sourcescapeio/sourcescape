@@ -41,11 +41,11 @@ trait ConsumerService {
         }.headOption
       }
     } yield {
-      println("ROOT", rootIndex)
-      println("BELOW CHAIN")
-      belowChain.foreach(println)
-      println("ABOVE CHAIN")
-      aboveChain.foreach(println)
+      // println("ROOT", rootIndex)
+      // println("BELOW CHAIN")
+      // belowChain.foreach(println)
+      // println("ABOVE CHAIN")
+      // aboveChain.foreach(println)
       rootIndex.map(_.id)
     }
   }

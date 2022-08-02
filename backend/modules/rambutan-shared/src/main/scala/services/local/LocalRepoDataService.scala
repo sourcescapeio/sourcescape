@@ -20,6 +20,10 @@ class LocalRepoDataService @Inject() (
     localDao.LocalRepoConfigTable.byScanId.lookup(scanId)
   }
 
+  def getReposByScanBatch(scanIds: Seq[Int]) = {
+    localDao.LocalRepoConfigTable.byScanId.lookupBatch(scanIds)
+  }
+
   def getAllLocalRepos() = localDao.LocalRepoConfigTable.all()
   def getAllRepos() = getAllLocalRepos()
 

@@ -8,6 +8,8 @@ import models._
 import java.nio.file._
 import play.api.libs.json._
 import org.joda.time._
+import akka.stream.scaladsl.Sink
+import akka.stream.Materializer
 
 @Singleton
 class WebhookConsumerService @Inject() (
@@ -22,7 +24,7 @@ class WebhookConsumerService @Inject() (
   val indexerService:       IndexerService,
   val repoIndexDataService: RepoIndexDataService,
   val clonerQueueService:   ClonerQueueService,
-  val logService:           LogService)(implicit val ec: ExecutionContext) extends ConsumerService {
+  val logService:           LogService)(implicit val ec: ExecutionContext, mat: Materializer) extends ConsumerService {
 
   val WebhookConcurrency = 4
 
@@ -39,6 +41,17 @@ class WebhookConsumerService @Inject() (
           println("COMPLETE + ACK", item)
           webhookConsumerQueueService.ack(item)
         }
+    } yield {
+      ()
+    }
+  }
+
+  def consumeOne() = {
+    for {
+      item <- webhookConsumerQueueService.source.runWith(Sink.head)
+      _ = println(item)
+      _ <- repoRefresh(item)
+      _ <- webhookConsumerQueueService.ack(item)
     } yield {
       ()
     }

@@ -15,7 +15,6 @@ import play.api.libs.json._
 import sangria.execution._
 import sangria.parser.{ QueryParser, SyntaxError }
 import sangria.marshalling.playJson._
-import sangria.execution.deferred.DeferredResolver
 import sangria.renderer.SchemaRenderer
 import sangria.slowlog.SlowLog
 
@@ -103,10 +102,22 @@ class GraphQLSubscriptionActor(ctx: RambutanContext, errors: SourceQueue[JsValue
       Future.sequence {
         // for efficiency, do we want to do a pre-filtering?
         subscriptions.map { ctx =>
-          ctx.query.execute(root = item)
+          val allFields = ctx.query.fields.map(_.field.name)
+          // println(, item.eventType.identifier)
+          ctx.query.execute(root = item).map { item =>
+            // check data for fields we're looking for
+            val ff = allFields.flatMap { f =>
+              (item \ "data" \ f).asOpt[JsObject]
+            }
+            if (ff.length > 0) {
+              Some(item)
+            } else {
+              None
+            }
+          }
         }
       }.map { r =>
-        s ! r.toList
+        s ! r.flatten.toList
       }
     }
   }
@@ -202,8 +213,7 @@ class GraphQLController @Inject() (
         Executor.execute(graphql.SchemaDefinition.RambutanSchema, queryAst, rambutanContext,
           operationName = operation,
           variables = variables getOrElse Json.obj(),
-          // deferredResolver = DeferredResolver.fetchers(
-          //   SchemaDefinition.characters),
+          deferredResolver = graphql.SchemaDefinition.Resolvers,
           exceptionHandler = exceptionHandler,
           queryReducers = List(
             QueryReducer.rejectMaxDepth[RambutanContext](15),

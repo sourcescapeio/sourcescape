@@ -117,7 +117,7 @@ class LocalRepoSyncService @Inject() (
     }
   }
 
-  def setRepoIntent(orgId: Int, repoId: Int, intent: RepoCollectionIntent, queue: Boolean): Future[Unit] = {
+  def setRepoIntent(orgId: Int, repoId: Int, intent: RepoCollectionIntent, queue: Boolean): Future[Int] = {
     for {
       // get repo
       changed <- repoDataService.setRepoIntent(orgId, repoId, intent)
@@ -134,7 +134,7 @@ class LocalRepoSyncService @Inject() (
         socketService.reposUpdated(orgId)
       }
     } yield {
-      ()
+      changed
     }
   }
 }

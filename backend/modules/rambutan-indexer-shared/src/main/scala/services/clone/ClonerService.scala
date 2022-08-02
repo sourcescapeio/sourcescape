@@ -56,6 +56,17 @@ class ClonerService @Inject() (
     }
   }
 
+  def consumeOne() = {
+    for {
+      item <- clonerQueueService.source.runWith(Sink.head)
+      _ = println(item)
+      _ <- runCloneForItem(item)
+      // _ <- clonerQueueService.ack(item) // Don't ack?
+    } yield {
+      ()
+    }
+  }
+
   val RequeueSize = 10
   private def runCloneForItem(item: ClonerQueueItem): Future[Unit] = {
     val orgId = item.orgId
@@ -250,7 +261,6 @@ class ClonerService @Inject() (
           fileTree.toList,
           workRecord.id,
           indexRecord.id)
-        println("INDEX", queueItem)
         indexerQueueService.enqueue(queueItem)
       } else {
         for {

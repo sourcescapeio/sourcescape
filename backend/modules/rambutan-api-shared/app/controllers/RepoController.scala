@@ -53,24 +53,6 @@ class RepoController @Inject() (
     }
   }
 
-  def batchSelect(orgId: Int) = {
-    api(parse.tolerantJson) { implicit request =>
-      authService.authenticatedForOrg(orgId, OrgRole.Admin) {
-        withJson { form: RepoForm =>
-          for {
-            _ <- Future.sequence {
-              form.repos.map { repoId =>
-                repoSyncService.setRepoIntent(orgId, repoId, RepoCollectionIntent.Collect, queue = true)
-              }
-            }
-          } yield {
-            ()
-          }
-        }
-      }
-    }
-  }
-
   def setRepoIntent(orgId: Int, repoId: Int, intent: RepoCollectionIntent) = {
     api { implicit request =>
       authService.authenticatedForOrg(orgId, OrgRole.Admin) {

@@ -7,11 +7,6 @@ GET     /all-tables/diff.html                       controllers.HealthController
 GET     /all-tables/create.html                     controllers.HealthController.create()
 GET     /all-tables/deletes.html                    controllers.HealthController.deletes()
 
-POST    /graphql                                    controllers.GraphQLController.graphqlBody()
-# Websocket
-GET     /graphql                                    controllers.GraphQLController.socket()
-GET     /render-schema                              controllers.GraphQLController.renderSchema
-
 
 POST    /cycle-indexes/:it                          controllers.HealthController.cycleIndexes(it: models.IndexType)
 
@@ -20,8 +15,16 @@ GET     /me                                         controllers.UserController.g
 POST    /orgs                                       controllers.UserController.createOrg()
 
 GET     /index-summary                              controllers.AdminController.indexSummary()
-# GET     /socket                                     controllers.AdminController.updateSocket()
 
+
+###########
+# GRAPHQL #
+###########
+
+POST    /graphql                                    controllers.GraphQLController.graphqlBody()
+# Websocket
+GET     /graphql                                    controllers.GraphQLController.socket()
+GET     /render-schema                              controllers.GraphQLController.renderSchema
 
 ###########
 # PROJECT #
@@ -58,12 +61,6 @@ GET     /orgs/:o/repos/:r/shas                      controllers.RepoController.g
 # Webhook events
 POST    /orgs/:o/repos/:r/watcher                   controllers.LocalRepoController.watcherUpdate(o: Int, r: Int)
 POST    /orgs/:o/repos/:r/finish-watch              controllers.LocalRepoController.finishedWatcherStart(o: Int, r: Int)
-
-
-
-
-# Onboarding stuff. TODO: better url
-PUT     /orgs/:o/select-repos                       controllers.RepoController.batchSelect(o: Int)
 
 
 

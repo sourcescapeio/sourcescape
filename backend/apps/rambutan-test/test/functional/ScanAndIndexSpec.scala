@@ -48,6 +48,9 @@ import akka.Done
 import akka.NotUsed
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.model.StatusCodes
+import models.graph._
+import akka.util.Timeout
+import scala.concurrent.duration._
 
 case class GraphQLWebSocket(
   connected: Future[Done],
@@ -90,29 +93,38 @@ class WebSocketClientActor() extends Actor {
 
   var items = List.empty[Message]
 
-  var subscriptions = List.empty[(Promise[Unit], PartialFunction[Message, Boolean])]
+  var subscriptions = List.empty[(String, Promise[Unit], PartialFunction[Message, Boolean])]
 
   def receive = {
     // Add subscription
     case WebSocketClientActor.Subscribe(prom, filter) => {
       // early complete
+      var shouldAdd = true
       items.foreach { i =>
         if (filter.isDefinedAt(i) && filter(i)) {
           prom.trySuccess(())
+          shouldAdd = false
         }
       }
 
-      subscriptions = subscriptions.appended((prom, filter))
+      if (shouldAdd) {
+        subscriptions = subscriptions.appended((Hashing.uuid(), prom, filter))
+      }
 
       sender() ! prom.future
     }
     // Received item as a sink
     case WebSocketClientActor.Received(item) => {
-      subscriptions.foreach {
-        case (p, f) if f.isDefinedAt(item) && f(item) => {
+      val rmSet = subscriptions.flatMap {
+        case (id, p, f) if f.isDefinedAt(item) && f(item) => {
           p.trySuccess(())
+          Some(id)
         }
-        case _ => ()
+        case _ => None
+      }.toSet
+
+      subscriptions = subscriptions.filterNot {
+        case (id, _, _) => rmSet.contains(id)
       }
 
       items = items.appended(item)
@@ -235,7 +247,7 @@ abstract class ScanAndIndexSpec extends RambutanSpec {
         "use.watcher" -> false // should already be set, but just to be sure
       ).configure(
           renderedConfig: _*)
-      .overrides(bind[FileService].toInstance(mockFileService))
+      // .overrides(bind[FileService].toInstance(mockFileService))
       .build()
   }
 
@@ -265,6 +277,10 @@ abstract class ScanAndIndexSpec extends RambutanSpec {
           ()
         }
       }.runWith(Sink.ignore)
+      _ <- elasticSearchService.dropIndex(GenericGraphNode.globalIndex)
+      _ <- elasticSearchService.ensureIndex(GenericGraphNode.globalIndex, GenericGraphNode.mappings)
+      _ <- elasticSearchService.dropIndex(GenericGraphEdge.globalIndex)
+      _ <- elasticSearchService.ensureIndex(GenericGraphEdge.globalIndex, GenericGraphEdge.mappings)
     } yield {
       ()
     }
@@ -275,7 +291,15 @@ abstract class ScanAndIndexSpec extends RambutanSpec {
   override def beforeEach() = {
     // clear all indexed data sync
     val indexUpgradeService = app.injector.instanceOf[IndexUpgradeService]
-    val work = indexUpgradeService.deleteAllIndexesSync()
+
+    val redisService = app.injector.instanceOf[RedisService]
+
+    val work = for {
+      _ <- indexUpgradeService.deleteAllIndexesSync()
+      _ <- redisService.redisClient.flushall()
+    } yield {
+      ()
+    }
     await(work)
   }
 
@@ -327,26 +351,27 @@ abstract class ScanAndIndexSpec extends RambutanSpec {
 
         val socketService = app.injector.instanceOf[SocketService]
 
-        val p = socket.waitFor {
-          case t: TextMessage.Strict => {
-            println("RECEIVED MESSAGE", t.text)
-            (Json.parse(t.text) \ "data" \ "scanProgress" \ "progress").asOpt[Int] =?= Some(100)
+        await {
+          socket.waitFor {
+            case t: TextMessage.Strict => {
+              (Json.parse(t.text) \ "data" \ "scanProgress" \ "progress").asOpt[Int].getOrElse(0) > 50
+            }
+          }.map { _ =>
+            println("50% SCANNED")
           }
         }
-
-        await(p.map { _ =>
-          println("COMPLETED SCANS")
-        })
 
         curl.graphql(graphql"""
           {
             scans {
               id
               path
+              progress
               repos {
                 id
                 name
                 path
+                intent
                 indexes {
                   id
                   sha
@@ -358,20 +383,234 @@ abstract class ScanAndIndexSpec extends RambutanSpec {
           println(Json.prettyPrint(res))
         }
 
-        // do repo selection
-        curl.graphqlU(s"""
-          mutation SelectRepos {
-            path1: selectRepos(ids: [1, 2, 3]) {
+        await {
+          socket.waitFor {
+            case t: TextMessage.Strict => {
+              (Json.parse(t.text) \ "data" \ "scanProgress" \ "progress").asOpt[Int] =?= Some(100)
+            }
+          }.map { _ =>
+            println("COMPLETED SCAN")
+          }
+        }
+
+        curl.graphql(graphql"""
+          {
+            scans {
               id
               path
+              progress
+              repos {
+                id
+                name
+                path
+                intent
+                indexes {
+                  id
+                  sha
+                }
+              }
             }
           }
         """) { res =>
+          println(Json.prettyPrint(res))
+        }
+
+        socket.pushG(
+          graphql"""
+            subscription CloneChanges {
+              cloneProgress {
+                id
+                progress
+              }
+            }
+          """)
+
+        socket.pushG(
+          graphql"""
+            subscription IndexChanges {
+              indexProgress {
+                id
+                progress
+              }
+            }
+          """)
+
+        // Need to start up indexers here first before we schedule the mutation
+        val webhookConsumerService = app.injector.instanceOf[WebhookConsumerService]
+        val clonerService = app.injector.instanceOf[ClonerService]
+        val indexerWorker = app.injector.instanceOf[IndexerWorker]
+        val consumerF = webhookConsumerService.consumeOne()
+        val clonerF = clonerService.consumeOne()
+        val indexF = indexerWorker.consumeOne()
+
+        // val consumerF2 = webhookConsumerService.consumeOne()
+        // val clonerF2 = clonerService.consumeOne()
+        // val indexF2 = indexerWorker.consumeOne()
+
+        // do repo selection
+        curl.graphqlU(s"""
+          mutation SelectRepo {
+            repo1: selectRepo(id: 5)
+            repo2: selectRepo(id: 6)
+          }
+        """) { res =>
           println(res)
-          // val scan1Id = (res3 \ "data" \ "path1" \ "id").as[Int]
+        }
+
+        await(consumerF)
+
+        await {
+          socket.waitFor {
+            case t: TextMessage.Strict => {
+              (Json.parse(t.text) \ "data" \ "cloneProgress" \ "progress").asOpt[Int].getOrElse(0) > 50
+            }
+          }.map { _ =>
+            println("50% CLONED")
+          }
+        }
+
+        curl.graphql(graphql"""
+          {
+            scans {
+              id
+              path
+              progress
+              repos {
+                id
+                name
+                path
+                intent
+                indexes {
+                  id
+                  sha
+                  cloneProgress
+                  indexProgress
+                }
+              }
+            }
+          }
+        """) { res =>
+          println(Json.prettyPrint(res))
+        }
+
+        await {
+          socket.waitFor {
+            case t: TextMessage.Strict => {
+              (Json.parse(t.text) \ "data" \ "cloneProgress" \ "progress").asOpt[Int] =?= Some(100)
+            }
+          }.map { _ =>
+            println("CLONE COMPLETED")
+          }
+        }
+
+        // make sure complete
+
+        await {
+          socket.waitFor {
+            case t: TextMessage.Strict => {
+              (Json.parse(t.text) \ "data" \ "indexProgress" \ "progress").asOpt[Int].getOrElse(0) > 20
+            }
+          }.map { _ =>
+            println("20% INDEXED")
+          }
+        }
+
+        curl.graphql(graphql"""
+          {
+            scans {
+              id
+              path
+              progress
+              repos {
+                id
+                name
+                path
+                indexes {
+                  id
+                  sha
+                  cloneProgress
+                  indexProgress                  
+                }
+              }
+            }
+          }
+        """) { res =>
+          println(Json.prettyPrint(res))
+        }
+
+        await {
+          socket.waitFor {
+            case t: TextMessage.Strict => {
+              (Json.parse(t.text) \ "data" \ "indexProgress" \ "progress").asOpt[Int].getOrElse(0) > 40
+            }
+          }.map { _ =>
+            println("40% INDEXED")
+          }
+        }
+
+        await {
+          socket.waitFor {
+            case t: TextMessage.Strict => {
+              (Json.parse(t.text) \ "data" \ "indexProgress" \ "progress").asOpt[Int].getOrElse(0) > 60
+            }
+          }.map { _ =>
+            println("60% INDEXED")
+          }
+        }
+
+        await {
+          socket.waitFor {
+            case t: TextMessage.Strict => {
+              (Json.parse(t.text) \ "data" \ "indexProgress" \ "progress").asOpt[Int].getOrElse(0) > 80
+            }
+          }.map { _ =>
+            println("80% INDEXED")
+          }
+        }
+
+        await {
+          socket.waitFor {
+            case t: TextMessage.Strict => {
+              (Json.parse(t.text) \ "data" \ "indexProgress" \ "progress").asOpt[Int] =?= Some(100)
+            }
+          }.map { _ =>
+            println("INDEXING COMPLETED")
+          }
         }
 
         // check again
+        curl.graphql(graphql"""
+          {
+            scans {
+              id
+              path
+              progress
+              repos {
+                id
+                name
+                path
+                intent
+                indexes {
+                  id
+                  sha
+                }
+              }
+            }
+          }
+        """) { res =>
+          println(Json.prettyPrint(res))
+        }
+
+        // await(consumerF2)
+        // finish these off
+        await(clonerF)
+        await(indexF)
+
+        /**
+         * Second batch
+         */
+        // await(clonerF2)(Timeout(40.seconds))
+        // await(indexF2)(Timeout(120.seconds))
 
         socket.close()
         await(socket.closed)
