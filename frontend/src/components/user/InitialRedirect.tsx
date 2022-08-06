@@ -10,6 +10,7 @@ function InitialRedirectComponentBase() {
   const [completed, setCompleted] = useState<boolean | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // to be replaced by graphql
   useEffect(() => {
     axios({
       method: 'GET',

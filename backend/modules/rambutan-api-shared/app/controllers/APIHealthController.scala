@@ -22,7 +22,7 @@ abstract class APIHealthController @Inject() (
 
   def checkDatabaseDiff(items: List[CanInitializeTable]): Future[DatabaseDiff]
 
-  def healthView(diff: DatabaseDiff): JsValue
+  def healthView(diff: DatabaseDiff): HtmlFormat.Appendable
 
   def diff() = {
     api { implicit request =>

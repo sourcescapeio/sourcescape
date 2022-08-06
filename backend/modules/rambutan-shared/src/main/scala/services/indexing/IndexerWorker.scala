@@ -97,7 +97,7 @@ class IndexerWorker @Inject() (
       }
       additionalOrgIds <- repoDataService.getAdditionalOrgs(repoId)
       index <- repoIndexDataService.getIndexId(indexId).map(_.getOrElse(throw new Exception("invalid index")))
-      _ <- socketService.indexingProgress(orgId, additionalOrgIds, indexRecord.id, repo, indexId, 0)
+      _ <- socketService.indexingProgress(orgId, additionalOrgIds, indexRecord.id, repo, repoId, indexId, 0)
       /**
        * Child records
        */
@@ -124,7 +124,7 @@ class IndexerWorker @Inject() (
        * Index pipeline
        */
       _ <- Source(fileTree)
-        .via(reportProgress(orgId, additionalOrgIds, repo, indexId, fileTree.length)(indexRecord)) // report earlier for better accuracy
+        .via(reportProgress(orgId, additionalOrgIds, repo, repoId, indexId, fileTree.length)(indexRecord)) // report earlier for better accuracy
         .via(readFiles(collectionsDirectory, indexId, concurrency = fileService.parallelism)(indexRecord))
         .via(runAnalysis(analysisDirectoryBase, concurrency = 4)(analysisRecord)) // limited by primadonna
         // .via(writeAnalysisFiles(analysisDirectoryBase, concurrency = 1)(analysisRecord))
@@ -186,7 +186,7 @@ class IndexerWorker @Inject() (
       materializeRecord = indexRecord // should be child of indexRecord
       writeRecord = indexRecord // should be child of indexRecord
       _ <- Source(fileTree)
-        .via(reportProgress(orgId, Nil, repo, indexId, fileTree.size)(indexRecord))
+        .via(reportProgress(orgId, Nil, repo, repoId, indexId, fileTree.size)(indexRecord))
         .via(fakeReadFiles(indexId))
         // may need to mock differently for compiled stuff (Scala)
         .via(runAnalysis(analysisDirectoryBase, concurrency = 4)(analysisRecord)) // limited by primadonna
@@ -210,9 +210,9 @@ class IndexerWorker @Inject() (
   /**
    * Sub-tasks
    */
-  private def reportProgress[T](orgId: Int, additionalOrgIds: List[Int], repo: String, indexId: Int, fileTotal: Int)(record: WorkRecord) = {
+  private def reportProgress[T](orgId: Int, additionalOrgIds: List[Int], repo: String, repoId: Int, indexId: Int, fileTotal: Int)(record: WorkRecord) = {
     indexerService.reportProgress[T](fileTotal) { progress =>
-      socketService.indexingProgress(orgId, additionalOrgIds, record.id, repo, indexId, progress)
+      socketService.indexingProgress(orgId, additionalOrgIds, record.id, repo, repoId, indexId, progress)
     }
   }
 

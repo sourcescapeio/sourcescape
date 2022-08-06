@@ -95,6 +95,7 @@ object SchemaDefinition {
           import ctx.ctx.ec
           DeferredValue(messageByIdFetcher.deferOpt((SocketEventType.IndexingStarted, ctx.value.id.toString()))).map {
             case Some((i, Some(v))) => {
+              println(v.data)
               (v.data \ "progress").asOpt[Int].getOrElse(0)
             }
             case _ => 0
@@ -185,7 +186,13 @@ object SchemaDefinition {
         resolve = ctx => ctx.ctx.localScanService.getScanById(ctx.arg(ScanID))),
       Field("scans", ListType(Scan),
         arguments = Nil,
-        resolve = ctx => ctx.ctx.localScanService.listScans())))
+        resolve = ctx => ctx.ctx.localScanService.listScans()),
+      Field("repos", ListType(Repo),
+        arguments = Nil,
+        resolve = ctx => {
+          import ctx.ctx.ec
+          ctx.ctx.localRepoDataService.getAllLocalRepos().map(_.sortBy(_.repoName)) // TODO: by org id
+        })))
 
   val Mutation = {
     val PathArg = Argument("path", StringType, description = "path of the scan")
@@ -195,6 +202,9 @@ object SchemaDefinition {
         Field("createScan", Scan,
           arguments = PathArg :: Nil,
           resolve = ctx => ctx.ctx.localScanService.createScan(-1, ctx.arg(PathArg), shouldScan = true)),
+        Field("deleteScan", OptionType(Scan),
+          arguments = ScanID :: Nil,
+          resolve = ctx => ctx.ctx.localScanService.deleteScan(-1, ctx.arg(ScanID))),
         Field("selectRepo", IntType,
           arguments = RepoID :: Nil,
           resolve = ctx => ctx.ctx.localRepoSyncService.setRepoIntent(-1, ctx.arg(RepoID), RepoCollectionIntent.Collect, queue = true))))
@@ -219,11 +229,15 @@ object SchemaDefinition {
   case class CloneProgress(
     id:       String, // indexId
     version:  Long,
+    indexId:  Int,
+    repoId:   Int,
     progress: Int) extends Event
 
   case class IndexProgress(
     id:       String, // indexId
     version:  Long,
+    indexId:  Int,
+    repoId:   Int,
     progress: Int) extends Event
 
   val ScanProgressType = deriveObjectType[RambutanContext, ScanProgress](Interfaces(EventType))
@@ -240,11 +254,15 @@ object SchemaDefinition {
             IndexProgress(
               msg.id,
               0L,
+              (msg.data \ "indexId").as[Int],
+              (msg.data \ "repoId").as[Int],
               (msg.data \ "progress").as[Int]))
           case SocketEventType.IndexingFinished => Option(
             IndexProgress(
               msg.id,
               0L,
+              (msg.data \ "indexId").as[Int],
+              (msg.data \ "repoId").as[Int],
               100))
           case _ => None
         }
@@ -256,11 +274,15 @@ object SchemaDefinition {
             CloneProgress(
               msg.id,
               0L,
+              (msg.data \ "indexId").as[Int],
+              (msg.data \ "repoId").as[Int],
               (msg.data \ "progress").as[Int]))
           case SocketEventType.CloningFinished => Option(
             CloneProgress(
               msg.id,
               0L,
+              (msg.data \ "indexId").as[Int],
+              (msg.data \ "repoId").as[Int],
               100))
           case _ => None
         }

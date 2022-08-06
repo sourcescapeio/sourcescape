@@ -66,7 +66,9 @@ case class GraphQLWebSocket(
 
   def pushG(query: Document) = {
     val item = Json.obj(
-      "query" -> query.renderCompact
+      "payload" -> Json.obj(
+        "query" -> query.renderCompact
+      )
     // "operation" ->
     )
     await(queue.offer(TextMessage(Json.stringify(item))))

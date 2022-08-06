@@ -231,11 +231,11 @@ class ClonerService @Inject() (
        */
       _ <- logService.startRecord(copyRecord)
       additionalOrgIds <- repoDataService.getAdditionalOrgs(repoId)
-      _ <- socketService.cloningProgress(orgId, additionalOrgIds, copyRecord.id, repoName, indexId, 0)
+      _ <- socketService.cloningProgress(orgId, additionalOrgIds, copyRecord.id, repoName, repoId, indexId, 0)
       collectionsDirectory = index.collectionsDirectory
       _ <- logService.event(s"Starting copying. Ensuring collections directory ${collectionsDirectory}")(copyRecord)
       _ <- logService.event(s"Copying clean files ${cleanTree.mkString(", ")}")(copyRecord)
-      _ <- copyClean(cleanTree.toList, repo, sha, collectionsDirectory)(copyRecord, additionalOrgIds, repoName, indexId)
+      _ <- copyClean(cleanTree.toList, repo, sha, collectionsDirectory)(copyRecord, additionalOrgIds, repoName, repoId, indexId)
       _ <- logService.event(s"Copying dirty files ${dirtyTree.mkString(", ")}")(copyRecord)
       _ <- withDefined(dbRepo.dirtyPath) { dirtyPath =>
         copyDirty(dirtyTree.toList, dirtyPath, collectionsDirectory)
@@ -281,7 +281,7 @@ class ClonerService @Inject() (
           ()
         }
       }
-      _ <- socketService.cloningFinished(orgId, additionalOrgIds, copyRecord.id, repoName, indexId)
+      _ <- socketService.cloningFinished(orgId, additionalOrgIds, copyRecord.id, repoName, repoId, indexId)
     } yield {
       ()
     }
@@ -290,7 +290,7 @@ class ClonerService @Inject() (
   /**
    * Helpers
    */
-  private def copyClean(files: List[String], repo: GitServiceRepo, sha: String, to: String)(record: WorkRecord, additionalOrgIds: List[Int], repoName: String, indexId: Int) = {
+  private def copyClean(files: List[String], repo: GitServiceRepo, sha: String, to: String)(record: WorkRecord, additionalOrgIds: List[Int], repoName: String, repoId: Int, indexId: Int) = {
     ifNonEmpty(files) {
       val fileSet = files.toSet
       for {
@@ -299,7 +299,7 @@ class ClonerService @Inject() (
         _ <- Source(files).scanAsync((0, "", akka.util.ByteString.empty)) {
           case ((counter, _, _), (f, content)) => {
             val progress = (counter / fileTotal.toDouble * 100).toInt
-            socketService.cloningProgress(record.orgId, additionalOrgIds, record.id, repoName, indexId, progress) map { _ =>
+            socketService.cloningProgress(record.orgId, additionalOrgIds, record.id, repoName, repoId, indexId, progress) map { _ =>
               (counter + 1, f, content)
             }
           }

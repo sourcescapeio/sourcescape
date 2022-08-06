@@ -57,34 +57,6 @@ import 'bootstrap/dist/css/bootstrap-grid.min.css';
 import { Loading } from 'components/shared/Loading';
 import { LocalViewWrapper } from 'components/dash';
 import { LocalOnboardingContainer } from 'components/user/Onboarding';
-// import { Card, H3 } from '@blueprintjs/core';
-
-/**
-  * Websocket
-  */
-let protocol;
-if (window.location.protocol === "https:") {
-  protocol = "wss";
-} else {
-  protocol = "ws";
-}
-
-// const enqueueItem = enqueue(localStore.dispatch);
-
-const ws = new Sockette(`${protocol}://${window.location.host}/api/socket`, {
-  maxAttempts: 10,
-  onopen: (e: any) => console.log('Connected!', e),
-  onmessage: (e: any) => {
-    const eData = JSON.parse(e.data);
-    // even enqueue pings to clean up
-    console.warn(eData);
-    // enqueueItem(eData);
-  },
-  onreconnect: (e: any) => console.log('Reconnecting...', e),
-  onmaximum: (e: any) => console.log('Stop Attempting!', e),
-  onclose: (e: any) => console.log('Closed!', e),
-  onerror: (e: any) => console.log('Error:', e)
-});
 
 function LocalAppBase() {
   return <Router>
@@ -96,9 +68,7 @@ function LocalAppBase() {
         // Wrapped
       }
       <Route path="/" element={<LocalViewWrapper debug={false} currentPath="/"/>}>
-
-        {/* <Route path="/loading" element={<Loading loading={true}/>} /> */}
-        <Route path="/console" element={<div>test</div>} />
+        <Route path="/console" element={<div>Test</div>} />
       </Route>
     </Routes>
   </Router>

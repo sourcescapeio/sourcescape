@@ -195,7 +195,7 @@ class SocketService @Inject() (
   }
 
   // indexing records
-  def cloningProgress(orgId: Int, additionalOrgIds: List[Int], workId: String, repo: String, indexId: Int, progress: Int) = {
+  def cloningProgress(orgId: Int, additionalOrgIds: List[Int], workId: String, repo: String, repoId: Int, indexId: Int, progress: Int) = {
     publish(
       EventMessage(
         orgId,
@@ -203,14 +203,14 @@ class SocketService @Inject() (
         SocketEventType.CloningStarted,
         indexId.toString,
         true,
-        Json.obj("repo" -> repo, "progress" -> progress, "cloningProgress" -> progress)))
+        Json.obj("repo" -> repo, "repoId" -> repoId, "indexId" -> indexId, "progress" -> progress, "cloningProgress" -> progress)))
   }
 
-  def cloningFinished(orgId: Int, additionalOrgIds: List[Int], workId: String, repo: String, indexId: Int) = {
-    publish(EventMessage(orgId, Nil, SocketEventType.CloningFinished, indexId.toString, true, Json.obj("repo" -> repo)))
+  def cloningFinished(orgId: Int, additionalOrgIds: List[Int], workId: String, repo: String, repoId: Int, indexId: Int) = {
+    publish(EventMessage(orgId, Nil, SocketEventType.CloningStarted, indexId.toString, true, Json.obj("repoId" -> repoId, "indexId" -> indexId, "repo" -> repo, "progress" -> 100)))
   }
 
-  def indexingProgress(orgId: Int, additionalOrgIds: List[Int], workId: String, repo: String, indexId: Int, progress: Int) = {
+  def indexingProgress(orgId: Int, additionalOrgIds: List[Int], workId: String, repo: String, repoId: Int, indexId: Int, progress: Int) = {
     publish(
       EventMessage(
         orgId,
@@ -218,7 +218,7 @@ class SocketService @Inject() (
         SocketEventType.IndexingStarted,
         indexId.toString,
         true,
-        Json.obj("repo" -> repo, "progress" -> progress)))
+        Json.obj("repo" -> repo, "repoId" -> repoId, "indexId" -> indexId, "progress" -> progress)))
   }
 
   def indexingFinished(orgId: Int, additionalOrgIds: List[Int], workId: String, repo: String, repoId: Int, sha: String, indexId: Int, parentId: String) = {
@@ -226,10 +226,10 @@ class SocketService @Inject() (
       EventMessage(
         orgId,
         additionalOrgIds,
-        SocketEventType.IndexingFinished,
+        SocketEventType.IndexingStarted,
         indexId.toString,
-        false,
-        Json.obj("repo" -> repo, "parentId" -> parentId, "indexId" -> indexId, "repoId" -> repoId, "sha" -> sha)))
+        true,
+        Json.obj("repo" -> repo, "parentId" -> parentId, "indexId" -> indexId, "repoId" -> repoId, "sha" -> sha, "progress" -> 100)))
   }
 
   def cachingAvailable(orgId: Int, workId: String, available: Int) = {

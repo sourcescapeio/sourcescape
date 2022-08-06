@@ -40,12 +40,25 @@ import akka.stream.OverflowStrategy
 import akka.stream.scaladsl.Keep
 import scala.util.Try
 
-object GraphQLSubscriptionActor {
+object GraphQLWS {
   case class Subscribe(query: String, operation: Option[String])
-  case class Filter(item: EventMessage)
-  case class PreparedQueryContext(query: PreparedQuery[RambutanContext, Any, Map[String, Any] @@ ScalaInput])
 
-  implicit val reads = Json.reads[Subscribe]
+  implicit val subscribeReads = Json.reads[Subscribe]
+
+  case class FullPayload[T: Reads](id: String, `type`: String, payload: T)
+
+  implicit def reads[T: Reads] = Json.reads[FullPayload[T]]
+}
+
+object GraphQLSubscriptionActor {
+  sealed trait ExternalMessage
+
+  case class Subscribe(id: String, query: String, operation: Option[String]) extends ExternalMessage
+  case class ConnectionInit() extends ExternalMessage
+
+  // Internal
+  case class Filter(item: EventMessage)
+  case class PreparedQueryContext(id: String, query: PreparedQuery[RambutanContext, Any, Map[String, Any] @@ ScalaInput])
 }
 
 // This just holds onto the subscription state and does filtering
@@ -56,26 +69,27 @@ class GraphQLSubscriptionActor(ctx: RambutanContext, errors: SourceQueue[JsValue
   // needs to handle Ask message
   implicit val ec = context.system.dispatcher
   val executor = Executor(graphql.SchemaDefinition.RambutanSchema)
-  var subscriptions = Set.empty[GraphQLSubscriptionActor.PreparedQueryContext]
+  var subscriptions = Map.empty[String, GraphQLSubscriptionActor.PreparedQueryContext]
 
   def receive = {
-    case GraphQLSubscriptionActor.Subscribe(query, operation) => {
+    case GraphQLSubscriptionActor.Subscribe(id, query, operation) => {
       // do subscribe fire and forget
       QueryParser.parse(query) match {
         case Success(ast) => {
           ast.operationType(operation) match {
             case Some(OperationType.Subscription) => {
-              println("SUBSCRIPTION")
               executor.prepare(ast, ctx, (), operation).map { query =>
-                self ! GraphQLSubscriptionActor.PreparedQueryContext(query)
+                self ! GraphQLSubscriptionActor.PreparedQueryContext(id, query)
               }.recover {
                 case t: Throwable => {
+                  println("ERROR PARSING", t.getMessage())
                   errors.offer(Json.obj(
                     "error" -> t.getMessage()))
                 }
               }
             }
             case x => {
+              // need to fix error protocol
               errors.offer(Json.obj(
                 "type" -> "query",
                 "error" -> s"OperationType: $x not supported with WebSockets. Use HTTP POST"))
@@ -89,30 +103,37 @@ class GraphQLSubscriptionActor(ctx: RambutanContext, errors: SourceQueue[JsValue
         }
       }
     }
-    case context @ GraphQLSubscriptionActor.PreparedQueryContext(query) => {
+    case context @ GraphQLSubscriptionActor.PreparedQueryContext(id, query) => {
       println(s"Query is prepared: ${query}")
-      subscriptions = subscriptions + context
+      subscriptions = subscriptions.updated(id, context)
     }
 
-    // def subscriptionFieldName(event: Event) =
-    // SubscriptionFields.find(_._2.clazz.isAssignableFrom(event.getClass)).map(_._1)
+    case GraphQLSubscriptionActor.ConnectionInit() => {
+      errors.offer(Json.obj(
+        "type" -> "connection_ack"))
+    }
 
     case GraphQLSubscriptionActor.Filter(item) => {
       val s = sender()
       Future.sequence {
         // for efficiency, do we want to do a pre-filtering?
-        subscriptions.map { ctx =>
-          val allFields = ctx.query.fields.map(_.field.name)
-          // println(, item.eventType.identifier)
-          ctx.query.execute(root = item).map { item =>
-            // check data for fields we're looking for
-            val ff = allFields.flatMap { f =>
-              (item \ "data" \ f).asOpt[JsObject]
-            }
-            if (ff.length > 0) {
-              Some(item)
-            } else {
-              None
+        subscriptions.map {
+          case (id, ctx) => {
+            val allFields = ctx.query.fields.map(_.field.name)
+            // println(, item.eventType.identifier)
+            ctx.query.execute(root = item).map { item =>
+              // check data for fields we're looking for
+              val ff = allFields.flatMap { f =>
+                (item \ "data" \ f).asOpt[JsObject]
+              }
+              if (ff.length > 0) {
+                Some(Json.obj(
+                  "type" -> "next",
+                  "id" -> id,
+                  "payload" -> item))
+              } else {
+                None
+              }
             }
           }
         }
@@ -132,6 +153,7 @@ class GraphQLController @Inject() (
 
   // Default JsValue socket is a little too strict. If I send a bad msg, it dies. Frowntown.
   def socket() = WebSocket.acceptOrResult[String, String] { request =>
+    println("SOCKET")
     for {
       socket <- socketService.openSocket(List(-1))
       (errorsQueue, errors) = Source
@@ -145,6 +167,7 @@ class GraphQLController @Inject() (
         .mapAsync(1) { i =>
           Try(Json.parse(i)) match {
             case Success(value) => {
+              println(value)
               Future.successful(List(value))
             }
             case Failure(value) => {
@@ -154,9 +177,19 @@ class GraphQLController @Inject() (
             }
           }
         }.mapConcat(identity)
-        .collect { case input => Json.fromJson[GraphQLSubscriptionActor.Subscribe](input) }
-        .collect { case JsSuccess(subscription, _) => subscription }
-        .to(Sink.actorRef[GraphQLSubscriptionActor.Subscribe](subscriptionActor, PoisonPill))
+        .mapConcat { input =>
+          val trySubscribe = Json.fromJson[GraphQLWS.FullPayload[GraphQLWS.Subscribe]](input)
+          val tryAck = (input \ "type").asOpt[String]
+          (trySubscribe, tryAck) match {
+            case (JsSuccess(subscription, _), _) if subscription.`type` =?= "subscribe" => {
+              List {
+                GraphQLSubscriptionActor.Subscribe(subscription.id, subscription.payload.query, subscription.payload.operation)
+              }
+            }
+            case (_, Some("connection_init")) => List(GraphQLSubscriptionActor.ConnectionInit())
+            case _                            => Nil
+          }
+        }.to(Sink.actorRef[GraphQLSubscriptionActor.ExternalMessage](subscriptionActor, PoisonPill))
 
       val source = (socket.mapAsync(1) { v =>
         // filtering is handled at query level
@@ -169,17 +202,6 @@ class GraphQLController @Inject() (
       }.map(Json.stringify)
       Right(Flow.fromSinkAndSource(sink, source))
     }
-
-    // Transform any incoming messages into Subscribe messages and let the subscription actor know about it
-
-    // recoverWith {
-    //   case e: BaseAPIException => {
-    //     Resultable.BaseAPIExceptionIsResultable.toResult(e).map(r => Left(r))
-    //   }
-    //   case e: Exception => {
-    //     Resultable.UnknownErrorIsResultable.toResult(e).map(r => Left(r))
-    //   }
-    // }
   }
 
   def graphqlBody() = Action.async(parse.json) { request =>

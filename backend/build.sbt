@@ -13,33 +13,6 @@ lazy val rambutanShared = Project("rambutan-shared", file("modules/rambutan-shar
   settings(APIBuild.rambutanSettings: _*)
 
 /**
- * Scripts
- */
-// lazy val rambutanInitializer = (project in file("apps/rambutan-initializer")).
-//   enablePlugins(JavaAppPackaging).
-//   dependsOn(rambutanShared).
-//   settings(APIBuild.rambutanSettings: _*).
-//   settings(
-//     mainClass := Some("scripts.Initializer")
-//   )
-
-// lazy val rambutanWebInitializer = (project in file("apps/rambutan-web-initializer")).
-//   enablePlugins(JavaAppPackaging).
-//   dependsOn(rambutanShared).
-//   settings(APIBuild.rambutanSettings: _*).
-//   settings(
-//     mainClass := Some("scripts.Initializer")
-//   )  
-
-// lazy val rambutanGrammarWriter = (project in file("apps/rambutan-grammar-writer")).
-//   enablePlugins(JavaAppPackaging).
-//   dependsOn(rambutanShared).
-//   settings(APIBuild.rambutanSettings: _*).
-//   settings(
-//     mainClass := Some("scripts.GrammarWriter")
-//   )
-
-/**
   * Core application logic
   */
 lazy val rambutanIndexerShared = Project("rambutan-indexer-shared", file("modules/rambutan-indexer-shared")).
@@ -50,7 +23,8 @@ lazy val rambutanAPIShared = (project in file("modules/rambutan-api-shared")).
   enablePlugins(PlayScala).
   settings(APIBuild.rambutanSettings: _*).
   settings(
-    name := "rambutan-api-shared"
+    name := "rambutan-api-shared",
+    parallelExecution in Test := false
   ).
   dependsOn(rambutanShared)
 
@@ -75,6 +49,25 @@ lazy val rambutanIndexer = (project in file("apps/rambutan-indexer")).
     parallelExecution in Test := false,
     PlayKeys.devSettings := Seq("play.server.http.port" -> "9002")    
   ).dependsOn(rambutanIndexerShared)
+
+/**
+ * Scripts
+ */
+lazy val rambutanInitializer = (project in file("apps/rambutan-initializer")).
+  enablePlugins(JavaAppPackaging).
+  dependsOn(rambutanShared).
+  settings(APIBuild.rambutanSettings: _*).
+  settings(
+    mainClass := Some("scripts.Initializer")
+  )
+
+lazy val rambutanGrammarWriter = (project in file("apps/rambutan-grammar-writer")).
+  enablePlugins(JavaAppPackaging).
+  dependsOn(rambutanShared).
+  settings(APIBuild.rambutanSettings: _*).
+  settings(
+    mainClass := Some("scripts.GrammarWriter")
+  )
 
 /**
  * End to end tests
