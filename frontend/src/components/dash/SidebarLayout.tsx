@@ -55,6 +55,8 @@ function SidebarItem(props: {
   const subMatch = currentPath.startsWith(linkTo + "/")
   const active = (matchLink || subMatch);
 
+  console.warn(currentPath, linkTo)
+
   const disabledStyles: CSSProperties = disabled ? {pointerEvents: 'none'} : {};
   const activeStyles = active ? {color: 'white', fontWeight: 'bold'} : {color: '#999'};
 

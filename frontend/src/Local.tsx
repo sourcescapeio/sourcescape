@@ -54,24 +54,33 @@ import '@blueprintjs/icons/lib/css/blueprint-icons.css';
 import 'bootstrap/dist/css/bootstrap-grid.min.css';
 // import 'draft-js/dist/Draft.css';
 // import 'prismjs/themes/prism-twilight.css';
-import { Loading } from 'components/shared/Loading';
 import { LocalViewWrapper } from 'components/dash';
 import { LocalOnboardingContainer } from 'components/user/Onboarding';
+import { SrcLogConsoleContainer } from 'components/console/SrcLogConsole';
+import { RelationalConsoleContainer } from 'components/console/RelationalConsole';
+import { GraphConsoleContainer } from 'components/console/GraphConsole';
+
+import { GrammarProvider } from 'contexts/GrammarContext';
 
 function LocalAppBase() {
-  return <Router>
-    <Routes>
-      <Route path="/onboarding" element={<LocalOnboardingContainer />} />
-      <Route path="*" element={<div>Not Found</div>} />
-      <Route path="/" element={<InitialRedirectComponent />} />
-      {
-        // Wrapped
-      }
-      <Route path="/" element={<LocalViewWrapper debug={false} currentPath="/"/>}>
-        <Route path="/console" element={<div>Test</div>} />
-      </Route>
-    </Routes>
-  </Router>
+  return <GrammarProvider>
+    <Router>
+      <Routes>
+        <Route path="/onboarding" element={<LocalOnboardingContainer />} />
+        <Route path="*" element={<div>Not Found</div>} />
+        <Route path="/" element={<InitialRedirectComponent />} />
+        {
+          // Wrapped
+        }
+        <Route path="/" element={<LocalViewWrapper debug={false} />}>
+          <Route path="/console" element={<div>Test</div>} />
+          <Route path="/srclog-console" element={<SrcLogConsoleContainer />} />
+          <Route path="/relational-console" element={<RelationalConsoleContainer />} />
+          <Route path="/graph-console" element={<GraphConsoleContainer />} />
+        </Route>
+      </Routes>
+    </Router>
+  </GrammarProvider>
 }
 
 export default LocalAppBase
