@@ -61,6 +61,7 @@ import { RelationalConsoleContainer } from 'components/console/RelationalConsole
 import { GraphConsoleContainer } from 'components/console/GraphConsole';
 
 import { GrammarProvider } from 'contexts/GrammarContext';
+import { QueryBuilderContainer } from 'components/builder/QueryBuilder';
 
 function LocalAppBase() {
   return <GrammarProvider>
@@ -73,7 +74,7 @@ function LocalAppBase() {
           // Wrapped
         }
         <Route path="/" element={<LocalViewWrapper debug={false} />}>
-          <Route path="/console" element={<div>Test</div>} />
+          <Route path="/console" element={<QueryBuilderContainer />} />
           <Route path="/srclog-console" element={<SrcLogConsoleContainer />} />
           <Route path="/relational-console" element={<RelationalConsoleContainer />} />
           <Route path="/graph-console" element={<GraphConsoleContainer />} />

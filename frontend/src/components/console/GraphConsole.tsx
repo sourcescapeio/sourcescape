@@ -38,7 +38,7 @@ export function GraphConsoleContainer() {
     setLoading(true);
     setError(null);
     setData([]);
-    setColumns([])
+    setColumns([]);
 
     return fetch(`/api/orgs/-1/query/graph/${language}`, {
       method: 'POST',
@@ -52,16 +52,16 @@ export function GraphConsoleContainer() {
     }).catch((e) => {
       console.error(e);
       e.response.json().then((json: any) => {
-        setError(json)
-        setLoading(false)
-        setData([])
+        setError(json);
+        setLoading(false);
+        setData([]);
       })
       return Promise.reject(e);
     }).then((resp: any) => {
       const columnHeader = resp.headers.get('Rambutan-Result') || "{}";
       const columns = JSON.parse(columnHeader).columns;
 
-      setColumns(columns)
+      setColumns(columns);
 
       StreamHandler(resp.body, {
         onClose: () => {

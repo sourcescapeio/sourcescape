@@ -11,7 +11,7 @@ import {
 
 import Draft from 'draft-js';
 
-import * as refractor from 'refractor';
+import { refractor } from 'refractor';
 
 import styled from 'styled-components';
 import Col from 'react-bootstrap/Col';
@@ -19,7 +19,7 @@ import Container from 'react-bootstrap/Container';
 
 import _ from 'lodash';
 
-const PrismDecorator= require('draft-js-prism');
+const PrismDecorator = require('draft-js-prism');
 const MultiDecorator= require('draft-js-multidecorators');
 
 const EditorContainer = styled.div`

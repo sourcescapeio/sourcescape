@@ -22,8 +22,12 @@ import { StreamHandler } from 'lib/StreamHandler';
 
 import axios from 'axios';
 import { GrammarContext } from 'contexts/GrammarContext';
+import { refractor } from 'refractor';
 
 export function RelationalConsoleContainer() {
+  console.warn(refractor.languages['typescript'])
+  
+
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<any | null>(null)
   const [language, setLanguage] = useState('javascript')
