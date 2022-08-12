@@ -1,14 +1,15 @@
 import axios from "axios";
 import { useEffect, useState, createContext } from "react"
 
-// TODO: need a grammar type
-
 type GrammarState = {
   grammars: {[_: string]: any} | null,
   loadingGrammars: boolean,
 }
 
-export const GrammarContext = createContext<GrammarState>({grammars: null, loadingGrammars: true});
+export const GrammarContext = createContext<GrammarState>({
+  grammars: null,
+  loadingGrammars: true
+});
 
 export function GrammarProvider(props: { children: React.ReactNode}) {
 

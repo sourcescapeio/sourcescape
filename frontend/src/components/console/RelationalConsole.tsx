@@ -25,9 +25,6 @@ import { GrammarContext } from 'contexts/GrammarContext';
 import { refractor } from 'refractor';
 
 export function RelationalConsoleContainer() {
-  console.warn(refractor.languages['typescript'])
-  
-
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<any | null>(null)
   const [language, setLanguage] = useState('javascript')
@@ -126,8 +123,6 @@ export function RelationalConsoleContainer() {
           const dataAppend = append.filter((a) => (a.type === "data")).map((a) => (a.obj));
           const explainAppend = append.filter((a) => (a.type === "explain")).map((a) => (a.obj));
           const progressAppend = append.filter((a) => (a.type === "progress")).map((a) => a.progress);
-
-          console.warn(progressAppend)
 
           if (isDiff) {
             const diffAppend = dataAppend.reduce((acc, a) => {
