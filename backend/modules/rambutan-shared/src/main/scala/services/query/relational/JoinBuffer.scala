@@ -21,7 +21,11 @@ final class JoinBuffer[A, B](val pushExplain: ((String, JsObject)) => Unit) exte
   val out1: Outlet[List[A]] = Outlet[List[A]]("JoinBuffer.out1")
   val out2: Outlet[List[B]] = Outlet[List[B]]("JoinBuffer.out2")
 
-  override val shape: FanOutShape2[InputShape, List[A], List[B]] = new FanOutShape2(in, out1, out2)
+  override val shape: FanOutShape2[InputShape, List[A], List[B]] = {
+    new FanOutShape2(in, out1, out2)
+  }
+
+  val MAX_BUFFER = 1000
 
   override def createLogic(inheritedAttributes: Attributes): GraphStageLogic = new GraphStageLogic(shape) {
 
@@ -36,7 +40,7 @@ final class JoinBuffer[A, B](val pushExplain: ((String, JsObject)) => Unit) exte
 
     private def rotateLeft() = {
       val flushLeft = leftBuffer.toList
-      if (leftBuffer.length > 1000) {
+      if (leftBuffer.length > MAX_BUFFER) {
         pushExplain(("overflow", Json.obj("dir" -> "left", "size" -> leftBuffer.length)))
       }
       leftBuffer = collection.mutable.ListBuffer.empty[A]
@@ -45,7 +49,7 @@ final class JoinBuffer[A, B](val pushExplain: ((String, JsObject)) => Unit) exte
 
     private def rotateRight() = {
       val flushRight = rightBuffer.toList
-      if (rightBuffer.length > 1000) {
+      if (rightBuffer.length > MAX_BUFFER) {
         pushExplain(("overflow", Json.obj("dir" -> "right", "size" -> rightBuffer.length)))
       }
       rightBuffer = collection.mutable.ListBuffer.empty[B]
@@ -61,11 +65,11 @@ final class JoinBuffer[A, B](val pushExplain: ((String, JsObject)) => Unit) exte
         grab(in) match {
           case Left(Left(a)) => {
             if (isAvailable(out1)) {
-              pushExplain(("buffer", Json.obj("action" -> "push-left")))
               val flushLeft = rotateLeft()
+              pushExplain(("buffer", Json.obj("action" -> "push-left", "size" -> (flushLeft.size + 1))))
               push(out1, flushLeft :+ a)
             } else {
-              pushExplain(("buffer", Json.obj("action" -> "queue-left")))
+              pushExplain(("buffer", Json.obj("action" -> "queue-left", "key" -> a.asInstanceOf[(List[String], Any)]._1)))
               leftBuffer.append(a)
             }
 
@@ -86,7 +90,7 @@ final class JoinBuffer[A, B](val pushExplain: ((String, JsObject)) => Unit) exte
 
             if (isAvailable(out2)) {
               val flushRight = rotateRight()
-              pushExplain(("buffer", Json.obj("action" -> "push-right")))
+              pushExplain(("buffer", Json.obj("action" -> "push-right", "size" -> (flushRight.size + 1))))
               push(out2, flushRight :+ a)
             } else {
               pushExplain(("buffer", Json.obj("action" -> "queue-right")))

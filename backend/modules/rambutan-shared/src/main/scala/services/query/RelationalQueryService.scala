@@ -30,6 +30,8 @@ import akka.stream.scaladsl.{
 }
 import GraphDSL.Implicits._
 import models.graph.GenericGraphNode
+import akka.stream.scaladsl.Zip
+import akka.stream.scaladsl.ZipN
 
 @Singleton
 class RelationalQueryService @Inject() (
@@ -354,16 +356,23 @@ class RelationalQueryService @Inject() (
       val flow = graphQueryService.executeTrace(
         trace.query.traverses)
 
+      val pushExplain = explain.pusher(toKey)
+
       fromCast ~> Flow[GraphTrace[TU]].map { t =>
+        pushExplain(("buffer", Json.obj("action" -> "trace-in", "key" -> toKey)))
         t.pushExternalKey
-      } ~> flow.log(s"flow[$fromKey,$toKey]") ~> outCast
+      } ~> flow.log(s"flow[$fromKey,$toKey]").map { t => 
+        pushExplain(("buffer", Json.obj("action" -> "trace-out", "key" -> toKey)))
+        t
+      } ~> outCast
 
       explain.link(fromKey, toKey)
 
       val joiner = buildMergeJoin(
         fromJoin,
         outCast,
-        explain.pusher(toKey),
+        // explain.pusher(toKey),
+        pushExplain,
         leftOuter = isLeftJoin,
         rightOuter = false)(
         { joined =>
@@ -674,6 +683,7 @@ private case class JoinTree[TU](joinKey: String, a: JoinUnit[TU], b: JoinUnit[TU
     type RightJoin = (K, V2)
 
     val preJoin = builder.add(new Merge[Either[Either[LeftJoin, Unit], Either[RightJoin, Unit]]](2, eagerComplete = false))
+    // val preJoin = builder.add(new ZipN[Either[Either[LeftJoin, Unit], Either[RightJoin, Unit]]](2))
     val joinBuffer = builder.add(new JoinBuffer[LeftJoin, RightJoin](pushExplain))
     val joiner = builder.add(new MergeJoin[K, V1, V2](pushExplain, leftOuter, rightOuter))
 
@@ -682,6 +692,7 @@ private case class JoinTree[TU](joinKey: String, a: JoinUnit[TU], b: JoinUnit[TU
       case joined => {
         val key = v1Key(joined)
         pushExplain("left-pre", Json.obj("key" -> key))
+        pushExplain("buffer", Json.obj("action" -> "left-pre", "key" -> key))        
         Left(Left((key, joined)))
       }
     }.concat(Source(Left(Right(())) :: Nil)) ~> preJoin
@@ -690,6 +701,7 @@ private case class JoinTree[TU](joinKey: String, a: JoinUnit[TU], b: JoinUnit[TU
       case trace => {
         val key = v2Key(trace)
         pushExplain("right-pre", Json.obj("key" -> key))
+        pushExplain("buffer", Json.obj("action" -> "right-pre", "key" -> key))
         Right(Left((key, trace)))
       }
     }.concat(Source(Right(Right(())) :: Nil)) ~> preJoin

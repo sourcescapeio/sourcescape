@@ -7,13 +7,13 @@ import {
 import _ from 'lodash';
 
 const KEYS = [
-  'left-pre',
-  'right-pre',
+  // 'left-pre',
+  // 'right-pre',
   'buffer',
-  'left',
-  'right',
-  'join',
-  'emit',
+  // 'left',
+  // 'right',
+  // 'join',
+  // 'emit',
 ];
 
 export function GraphExplainComponent(props: {
