@@ -63,6 +63,8 @@ object Dependencies {
     // TODO: replace with more modern instrumentation
     val sentry = "io.sentry" % "sentry-logback" % "1.7.29"
 
+    val openTelemetry = "io.honeycomb" % "honeycomb-opentelemetry-sdk" % "1.3.0"
+
     // val logging = "com.google.cloud" % "google-cloud-logging-logback" % "0.116.0-alpha"
     // val zipkin = "jp.co.bizreach" %% "play-zipkin-tracing-play" % "3.0.1"
     // val prometheus = "io.prometheus" % "simpleclient" % "0.9.0"

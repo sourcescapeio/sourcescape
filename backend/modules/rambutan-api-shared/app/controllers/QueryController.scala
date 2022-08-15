@@ -4,7 +4,7 @@ import models._
 import models.query.grammar._
 import models.query._
 import javax.inject._
-import silvousplay.api.API
+import silvousplay.api.{ API, Telemetry }
 import silvousplay.imports._
 import scala.concurrent.{ ExecutionContext, Future }
 import scala.concurrent.duration._
@@ -27,7 +27,7 @@ class QueryController @Inject() (
   relationalQueryService: services.RelationalQueryService,
   srcLogService:          services.SrcLogCompilerService,
   // experimental
-  graphQueryServiceExperimental: services.gq4.GraphQueryService)(implicit ec: ExecutionContext, as: ActorSystem) extends API with StreamResults {
+  graphQueryServiceExperimental: services.gq5.GraphQueryService)(implicit ec: ExecutionContext, as: ActorSystem) extends API with StreamResults with Telemetry {
 
   /**
    * Get grammars
@@ -418,22 +418,32 @@ class QueryController @Inject() (
       }
     }
   }
+  // .setSampler(new DeterministicTraceSampler(1))
 
   def graphQueryExperimental(orgId: Int, indexType: IndexType) = {
     api { implicit request =>
       authService.authenticatedForOrg(orgId, OrgRole.Admin) {
         withForm(QueryForm.form) { form =>
-          graphQueryService.parseQuery(form.q) match {
-            case Right((targetingRequest, query)) => for {
-              targeting <- queryTargetingService.resolveTargeting(
-                orgId,
-                indexType,
-                targetingRequest.getOrElse(QueryTargetingRequest.AllLatest(None)))
-              (tableHeader, source) <- graphQueryServiceExperimental.runQuery(query)(targeting)
-            } yield {
-              streamQuery(tableHeader, source.map(_.dto))
+          withTelemetry { context =>
+            // span2 = span.
+            println(context.span.getSpanContext().getTraceId())
+
+            graphQueryService.parseQuery(form.q) match {
+              case Right((targetingRequest, query)) => for {
+                targeting <- context.withSpan("targeting-resolution") { _ =>
+                  queryTargetingService.resolveTargeting(
+                    orgId,
+                    indexType,
+                    targetingRequest.getOrElse(QueryTargetingRequest.AllLatest(None)))
+                }
+                (tableHeader, source) <- context.withSpan("query-initial") { cc =>
+                  graphQueryServiceExperimental.runQuery(query)(targeting, cc) // use top level context
+                }
+              } yield {
+                streamQuery(tableHeader, source.map(_.dto))
+              }
+              case Left(fail) => throw Errors.badRequest("query.parse", fail.toString)
             }
-            case Left(fail) => throw Errors.badRequest("query.parse", fail.toString)
           }
         }
       }
