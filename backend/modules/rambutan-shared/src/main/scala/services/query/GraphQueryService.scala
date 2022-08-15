@@ -117,7 +117,7 @@ class GraphQueryService @Inject() (
     val edgeIndex = targeting.edgeIndexName
 
     for {
-      (rootSize, rootSource) <- rootSearch[TU](query.root, progressUpdates, cursor)
+      (rootSize, rootSource) <- rootSearch[TU](query.root, cursor)
       // elasticsearch caps out at 10000 when returning regular query so we do an explicit count
       size <- if (rootSize =?= 10000L && progressUpdates) {
         elasticSearchService.count(
@@ -239,9 +239,8 @@ class GraphQueryService @Inject() (
    * To be exposed
    */
   private def rootSearch[TU](
-    root:            GraphRoot,
-    progressUpdates: Boolean,
-    cursor:          Option[RelationalKeyItem])(implicit targeting: QueryTargeting[TU]): Future[(Long, Source[GraphTrace[TU], _])] = {
+    root:   GraphRoot,
+    cursor: Option[RelationalKeyItem])(implicit targeting: QueryTargeting[TU]): Future[(Long, Source[GraphTrace[TU], _])] = {
     for {
       (size, source) <- elasticSearchService.source(
         targeting.nodeIndexName,

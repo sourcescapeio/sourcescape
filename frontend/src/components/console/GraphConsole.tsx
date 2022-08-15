@@ -40,7 +40,7 @@ export function GraphConsoleContainer() {
     setData([]);
     setColumns([]);
 
-    return fetch(`/api/orgs/-1/query/graph/${language}`, {
+    return fetch(`/api/orgs/-1/query/graph/experimental/${language}`, {
       method: 'POST',
       headers: {
         'Accept': 'application/json',

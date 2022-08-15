@@ -25,7 +25,9 @@ class QueryController @Inject() (
   queryTargetingService:  services.QueryTargetingService,
   graphQueryService:      services.GraphQueryService,
   relationalQueryService: services.RelationalQueryService,
-  srcLogService:          services.SrcLogCompilerService)(implicit ec: ExecutionContext, as: ActorSystem) extends API with StreamResults {
+  srcLogService:          services.SrcLogCompilerService,
+  // experimental
+  graphQueryServiceExperimental: services.gq4.GraphQueryService)(implicit ec: ExecutionContext, as: ActorSystem) extends API with StreamResults {
 
   /**
    * Get grammars
@@ -407,6 +409,27 @@ class QueryController @Inject() (
                 indexType,
                 targetingRequest.getOrElse(QueryTargetingRequest.AllLatest(None)))
               (tableHeader, source) <- graphQueryService.runQuery(query)(targeting)
+            } yield {
+              streamQuery(tableHeader, source.map(_.dto))
+            }
+            case Left(fail) => throw Errors.badRequest("query.parse", fail.toString)
+          }
+        }
+      }
+    }
+  }
+
+  def graphQueryExperimental(orgId: Int, indexType: IndexType) = {
+    api { implicit request =>
+      authService.authenticatedForOrg(orgId, OrgRole.Admin) {
+        withForm(QueryForm.form) { form =>
+          graphQueryService.parseQuery(form.q) match {
+            case Right((targetingRequest, query)) => for {
+              targeting <- queryTargetingService.resolveTargeting(
+                orgId,
+                indexType,
+                targetingRequest.getOrElse(QueryTargetingRequest.AllLatest(None)))
+              (tableHeader, source) <- graphQueryServiceExperimental.runQuery(query)(targeting)
             } yield {
               streamQuery(tableHeader, source.map(_.dto))
             }
