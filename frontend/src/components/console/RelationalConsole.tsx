@@ -69,7 +69,7 @@ export function RelationalConsoleContainer() {
 
     const queryStartTime = new Date().getTime();
 
-    return fetch(`/api/orgs/-1/query/relational/${language}`, {
+    return fetch(`/api/orgs/-1/query/relational/xp/${language}`, {
       method: 'POST',
       headers: {
         'Accept': 'application/json',

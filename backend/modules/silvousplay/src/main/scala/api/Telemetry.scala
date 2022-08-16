@@ -5,13 +5,17 @@ import io.opentelemetry.api.OpenTelemetry
 import io.opentelemetry.api.trace.{ Span, Tracer }
 import io.opentelemetry.context.Context
 import scala.concurrent.{ ExecutionContext, Future }
-import akka.stream.scaladsl.Source
+import akka.stream.scaladsl.{ Flow, Source }
 
 case class SpanContext(tracer: Tracer, span: Span) {
 
-  def withSpan[T](name: String)(f: SpanContext => Future[T])(implicit ec: ExecutionContext): Future[T] = {
+  def withSpan[T](name: String, attrib: (String, String)*)(f: SpanContext => Future[T])(implicit ec: ExecutionContext): Future[T] = {
     val newSpan = this.tracer.spanBuilder(name).setParent(
       Context.current().`with`(this.span)).startSpan()
+
+    attrib.foreach {
+      case (k, v) => newSpan.setAttribute(k, v)
+    }
 
     f(this.copy(span = newSpan)).map { r =>
       newSpan.end()
@@ -35,18 +39,20 @@ case class SpanContext(tracer: Tracer, span: Span) {
     })
   }
 
-  def withSpanFS[T](name: String)(f: SpanContext => Future[Source[T, _]])(implicit ec: ExecutionContext): Future[Source[T, _]] = {
+  def withSpanF[T1, T2](name: String, attrib: (String, String)*)(f: SpanContext => Flow[T1, T2, _])(implicit ec: ExecutionContext): Flow[T1, T2, _] = {
     val newSpan = this.tracer.spanBuilder(name).setParent(
       Context.current().`with`(this.span)).startSpan()
 
-    f(this.copy(span = newSpan)).map { s =>
-      s.watchTermination()((_, done) => {
-        done.onComplete {
-          case scala.util.Failure(_) => newSpan.end()
-          case scala.util.Success(_) => newSpan.end()
-        }
-      })
+    attrib.foreach {
+      case (k, v) => newSpan.setAttribute(k, v)
     }
+
+    f(this.copy(span = newSpan)).watchTermination()((_, done) => {
+      done.onComplete {
+        case scala.util.Failure(_) => newSpan.end()
+        case scala.util.Success(_) => newSpan.end()
+      }
+    })
   }
 
   def event(name: String) = {

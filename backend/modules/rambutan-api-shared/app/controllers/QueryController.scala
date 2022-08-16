@@ -27,7 +27,8 @@ class QueryController @Inject() (
   relationalQueryService: services.RelationalQueryService,
   srcLogService:          services.SrcLogCompilerService,
   // experimental
-  graphQueryServiceExperimental: services.gq5.GraphQueryService)(implicit ec: ExecutionContext, as: ActorSystem) extends API with StreamResults with Telemetry {
+  graphQueryServiceExperimental:      services.gq6.GraphQueryService,
+  relationalQueryServiceExperimental: services.gq6.RelationalQueryService)(implicit ec: ExecutionContext, as: ActorSystem) extends API with StreamResults with Telemetry {
 
   /**
    * Get grammars
@@ -418,8 +419,10 @@ class QueryController @Inject() (
       }
     }
   }
-  // .setSampler(new DeterministicTraceSampler(1))
 
+  /**
+   * Lanks
+   */
   def graphQueryExperimental(orgId: Int, indexType: IndexType) = {
     api { implicit request =>
       authService.authenticatedForOrg(orgId, OrgRole.Admin) {
@@ -443,6 +446,72 @@ class QueryController @Inject() (
                 streamQuery(tableHeader, source.map(_.dto))
               }
               case Left(fail) => throw Errors.badRequest("query.parse", fail.toString)
+            }
+          }
+        }
+      }
+    }
+  }
+
+  def relationalQueryExperimental(orgId: Int, indexType: IndexType) = {
+    api { implicit request =>
+      authService.authenticatedForOrg(orgId, OrgRole.Admin) {
+        withForm(QueryForm.form) { form =>
+          withTelemetry { context =>
+            println(context.span.getSpanContext().getTraceId())
+
+            relationalQueryService.parseQuery(form.q) match {
+              case Right((scrollKey, query)) => for {
+                targeting <- context.withSpan("query.relational.targeting-resolution") { _ =>
+                  queryTargetingService.resolveTargeting(
+                    orgId,
+                    indexType,
+                    QueryTargetingRequest.AllLatest(None))
+                }
+                scroll = QueryScroll(scrollKey)
+                result <- context.withSpan("query.relational.initialize") { cc =>
+                  relationalQueryServiceExperimental.runQuery(
+                    query,
+                    explain = true,
+                    progressUpdates = true)(targeting, cc, scroll)
+                }
+                tableHeader = Json.obj(
+                  "results" -> result.header,
+                  "explain" -> result.explain.headers)
+                source = context.withSpanS("query.relational.consume") { _ =>
+                  result.source
+                }
+                // main data
+                withShutdown = source.map(Right.apply).alsoTo(Sink.onComplete({ _ =>
+                  result.completeExplain
+                }))
+                // explain stream
+                explainSource = result.explain.source.getOrElse(Source(Nil)).map(Left.apply).map(Left.apply)
+                progressSource = result.progressSource.map(Right.apply).map(Left.apply)
+                // merge together
+                mergedSource = withShutdown.merge(explainSource).merge(progressSource).map {
+                  case Left(Left(explain)) => {
+                    Json.obj(
+                      "type" -> "explain",
+                      "obj" -> Json.toJson(explain))
+                  }
+                  case Left(Right(progress)) => {
+                    Json.obj(
+                      "type" -> "progress",
+                      "progress" -> progress)
+                  }
+                  case Right(dto) => {
+                    Json.obj(
+                      "type" -> "data",
+                      "obj" -> dto)
+                  }
+                }
+              } yield {
+                streamQuery(tableHeader, mergedSource)
+              }
+              case Left(fail) => {
+                throw Errors.badRequest("query.parse", fail.toString)
+              }
             }
           }
         }

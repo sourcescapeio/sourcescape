@@ -1,4 +1,4 @@
-package services.gq4
+package services.gq6
 
 import services._
 import models.{ IndexType, ESQuery, Errors, Sinks }
@@ -6,6 +6,7 @@ import models.query._
 import models.graph._
 import models.index.{ NodeType, GraphNode }
 import silvousplay.imports._
+import silvousplay.api.SpanContext
 import play.api.libs.json._
 import akka.stream.scaladsl.{ Source, Flow, Sink, GraphDSL, Broadcast, MergeSorted, Concat, Merge }
 import akka.stream.{ Attributes, FlowShape, OverflowStrategy }
@@ -26,20 +27,25 @@ class GraphQueryService @Inject() (
   val EdgeHopInputSize = 200
   val RecursionSize = 10000
 
-  def runQuery(query: GraphQuery)(implicit targeting: QueryTargeting[TraceUnit]) = {
+  def runQuery(query: GraphQuery)(implicit targeting: QueryTargeting[TraceUnit], context: SpanContext) = {
     runQueryGeneric[TraceUnit, (String, GraphNode), QueryNode](query)
   }
 
   private def runQueryGeneric[TU, IN, NO](query: GraphQuery)(
     implicit
     targeting:        QueryTargeting[TU],
+    context:          SpanContext,
     hasTraceKey:      HasTraceKey[TU],
     fileKeyExtractor: FileKeyExtractor[IN],
     node:             HydrationMapper[TraceKey, JsObject, GraphTrace[TU], GraphTrace[IN]],
     code:             HydrationMapper[FileKey, String, GraphTrace[IN], GraphTrace[NO]]): Future[(QueryResultHeader, Source[GraphTrace[NO], Any])] = {
     for {
-      (sizeEstimate, _, traversed) <- executeUnit[TU](query, progressUpdates = false, cursor = None)(targeting)
-      rehydrated = nodeHydrationService.rehydrate[TU, IN, NO](traversed)
+      (sizeEstimate, _, traversed) <- executeUnit[TU](query, progressUpdates = false, cursor = None)(targeting, context)
+      rehydrated = context.withSpanS("graph.hydrate") { _ =>
+        nodeHydrationService.rehydrate[TU, IN, NO](context.withSpanS("graph.query") { _ =>
+          traversed
+        })
+      }
       traceColumns = query.traverses.filter(_.isColumn).zipWithIndex.map {
         case (_, idx) => QueryColumnDefinition(
           s"trace_${idx}",
@@ -60,7 +66,7 @@ class GraphQueryService @Inject() (
   def executeUnit[TU](
     query:           GraphQuery,
     progressUpdates: Boolean,
-    cursor:          Option[RelationalKeyItem])(implicit targeting: QueryTargeting[TU]): Future[(Long, Source[Long, Any], Source[GraphTrace[TU], Any])] = {
+    cursor:          Option[RelationalKeyItem])(implicit targeting: QueryTargeting[TU], context: SpanContext): Future[(Long, Source[Long, Any], Source[GraphTrace[TU], Any])] = {
 
     val nodeIndex = targeting.nodeIndexName
     val edgeIndex = targeting.edgeIndexName
@@ -138,7 +144,7 @@ class GraphQueryService @Inject() (
   /**
    * Tracing
    */
-  def executeTrace[TU](traverses: List[Traverse])(implicit targeting: QueryTargeting[TU]): TraceFlow[TU] = {
+  def executeTrace[TU](traverses: List[Traverse])(implicit targeting: QueryTargeting[TU], context: SpanContext): TraceFlow[TU] = {
     traverses match {
       case Nil => {
         Flow[GraphTrace[TU]]
@@ -158,7 +164,7 @@ class GraphQueryService @Inject() (
   }
 
   private def applyTraverse[TU](
-    traverse: Traverse)(implicit targeting: QueryTargeting[TU]): TraceFlow[TU] = {
+    traverse: Traverse)(implicit targeting: QueryTargeting[TU], context: SpanContext): TraceFlow[TU] = {
 
     traverse match {
       case a: EdgeTraverse => {
@@ -198,7 +204,7 @@ class GraphQueryService @Inject() (
     follow:   List[EdgeTypeTraverse],
     target:   List[EdgeTypeTraverse],
     typeHint: Option[NodeType],
-    initial:  Boolean)(implicit targeting: QueryTargeting[TU]): TraceFlow[TU] = {
+    initial:  Boolean)(implicit targeting: QueryTargeting[TU], context: SpanContext): TraceFlow[TU] = {
 
     val edgeIndex = targeting.edgeIndexName
 
@@ -209,7 +215,8 @@ class GraphQueryService @Inject() (
 
     edgeHop(
       allTraverses,
-      nodeHint = typeHint).map {
+      nodeHint = typeHint,
+      recursion = !initial).map {
       case EdgeHop(trace, directedEdge, item) => {
         val nextUnit = targeting.traceHop(trace.terminusId, directedEdge, item)
         val nextTrace = if (initial) {
@@ -230,7 +237,8 @@ class GraphQueryService @Inject() (
 
   private def edgeHop[TU](
     edgeTraverses: List[EdgeTypeTraverse],
-    nodeHint:      Option[NodeType])(implicit targeting: QueryTargeting[TU]): Flow[GraphTrace[TU], EdgeHop[GraphTrace[TU]], Any] = {
+    nodeHint:      Option[NodeType],
+    recursion:     Boolean)(implicit targeting: QueryTargeting[TU], context: SpanContext): Flow[GraphTrace[TU], EdgeHop[GraphTrace[TU]], Any] = {
 
     val edgeHopOrdering = Ordering.by { a: EdgeHop[GraphTrace[TU]] =>
       a.obj.sortKey.mkString("|")
@@ -243,6 +251,7 @@ class GraphQueryService @Inject() (
         // query will scramble the list
         source <- directionEdgeQuery(
           targeting.edgeIndexName,
+          recursion,
           edgeTraverses,
           traces.toList,
           nodeHint)
@@ -255,9 +264,10 @@ class GraphQueryService @Inject() (
 
   private def directionEdgeQuery[T, TU](
     edgeIndex: String,
+    recursion: Boolean,
     traverses: List[EdgeTypeTraverse],
     traces:    List[GraphTrace[TU]],
-    nodeHint:  Option[NodeType])(implicit targeting: QueryTargeting[TU]) = {
+    nodeHint:  Option[NodeType])(implicit targeting: QueryTargeting[TU], context: SpanContext) = {
     val typeMap: Map[String, EdgeTypeTraverse] = traverses.map { i =>
       i.edgeType.edgeType.identifier -> i
     }.toMap
@@ -269,13 +279,28 @@ class GraphQueryService @Inject() (
 
     for {
       source <- ifNonEmpty(traverses) {
-        elasticSearchService.source(
-          edgeIndex,
-          targeting.edgeQuery(traverses, keys, nodeHint),
-          // sort is just for the scrolling
-          // we need to resort later on
-          sort = targeting.edgeSort,
-          scrollSize = SearchScroll) map (_._2)
+        context.withSpan(
+          "query.graph.elasticsearch.initialize",
+          "query.graph.recursion" -> recursion.toString(),
+          "query.graph.count.input" -> keys.size.toString()) { cc =>
+            for {
+              (cnt, src) <- elasticSearchService.source(
+                edgeIndex,
+                targeting.edgeQuery(traverses, keys, nodeHint),
+                // sort is just for the scrolling
+                // we need to resort later on
+                sort = targeting.edgeSort,
+                scrollSize = SearchScroll)
+            } yield {
+              cc.withSpanS(
+                "query.graph.elasticsearch.consume",
+                "query.graph.recursion" -> recursion.toString(),
+                "query.graph.count.input" -> keys.size.toString(),
+                "query.graph.count.output" -> cnt.toString()) { _ =>
+                  src
+                }
+            }
+          }
       }
     } yield {
       source.mapConcat { item =>

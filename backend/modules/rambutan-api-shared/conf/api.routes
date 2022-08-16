@@ -90,7 +90,8 @@ POST    /orgs/:o/parse/srclog/:it                   controllers.QueryController.
 POST    /orgs/:o/query/graph/:it                    controllers.QueryController.graphQuery(o: Int, it: models.IndexType)
 POST    /orgs/:o/query/relational/:it               controllers.QueryController.relationalQuery(o: Int, it: models.IndexType)
 
-POST    /orgs/:o/query/graph/experimental/:it       controllers.QueryController.graphQueryExperimental(o: Int, it: models.IndexType)
+POST    /orgs/:o/query/graph/xp/:it                 controllers.QueryController.graphQueryExperimental(o: Int, it: models.IndexType)
+POST    /orgs/:o/query/relational/xp/:it            controllers.QueryController.relationalQueryExperimental(o: Int, it: models.IndexType)
 
 
 #################
