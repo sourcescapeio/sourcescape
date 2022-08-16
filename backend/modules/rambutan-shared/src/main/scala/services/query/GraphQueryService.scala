@@ -473,13 +473,13 @@ class GraphQueryService @Inject() (
       filters = windTarget)
   }
 
-  private def calculateUnwind[TU](traverse: StatefulTraverse)(implicit targeting: QueryTargeting[TU]) = {
+  private def calculateUnwind[TU](traverse: StatefulTraverse)(implicit targeting: QueryTargeting[TU], tracing: QueryTracing[GraphTrace[TU]]) = {
     Flow[(GraphTrace[TU], Option[JsObject])].mapConcat {
       case (trace, Some(node)) => {
         // assert(node.nodeType =?= traverse.from)
 
         // calculate unwind mappings
-        val unwinds = targeting.calculateUnwindSequence(traverse, trace)
+        val unwinds = tracing.calculateUnwindSequence(traverse, trace)
 
         val names = traverse.teleport.getNames(node)
 

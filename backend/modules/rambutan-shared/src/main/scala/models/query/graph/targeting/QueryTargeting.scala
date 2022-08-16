@@ -54,12 +54,7 @@ trait QueryTargeting[T] {
     nodeHint:  Option[NodeType]): JsObject
 
   def nodeQuery(traces: List[T]): JsObject
-
-  /**
-   * Graph FSM
-   */
-  def calculateUnwindSequence(traverse: StatefulTraverse, trace: GraphTrace[T]): List[EdgeTypeTarget]
-
+  
   /**
    * Relational
    */

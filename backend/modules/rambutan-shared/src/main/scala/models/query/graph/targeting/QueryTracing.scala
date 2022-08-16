@@ -1,6 +1,7 @@
 package models.query
 
 import play.api.libs.json._
+import silvousplay.imports._
 
 // Actual targeting object
 trait QueryTracing[T] {
@@ -22,9 +23,10 @@ trait QueryTracing[T] {
     extractor.unitFromJs(js, edgeOverride)
   }
 
+  def pushExternalKey(trace: T): T
+
   /**
-   * Sorted stuff
-   * @return
+   * Sorting stuff
    */
   def sortKey(trace: T): List[String]
 
@@ -34,7 +36,10 @@ trait QueryTracing[T] {
 
   def ordering: Ordering[T]
 
-  def pushExternalKey(trace: T): T
+  /**
+    * Unwind
+    */
+  def calculateUnwindSequence(traverse: StatefulTraverse, trace: T): List[EdgeTypeTarget]    
 }
 
 object QueryTracing {
@@ -64,6 +69,11 @@ object QueryTracing {
       }
     }
 
+    def pushExternalKey(trace: GraphTrace[GenericGraphUnit]) = trace.copy(
+      externalKeys = trace.externalKeys :+ getKey(GraphTrace(externalKeys = Nil, Nil, SubTrace(Nil, trace.root))),
+      tracesInternal = Nil,
+      terminus = trace.terminus.wipe)    
+
     def traceHop(trace: GraphTrace[GenericGraphUnit], edgeType: GraphEdgeType, edgeJs: JsObject, initial: Boolean): GraphTrace[GenericGraphUnit] = {
       val oppositeId = edgeType.direction.extractOpposite(edgeJs)
 
@@ -88,10 +98,10 @@ object QueryTracing {
       }
     }
 
-    def pushExternalKey(trace: GraphTrace[GenericGraphUnit]) = trace.copy(
-      externalKeys = trace.externalKeys :+ getKey(GraphTrace(externalKeys = Nil, Nil, SubTrace(Nil, trace.root))),
-      tracesInternal = Nil,
-      terminus = trace.terminus.wipe)
+    def calculateUnwindSequence(traverse: StatefulTraverse, trace: GraphTrace[GenericGraphUnit]) = {
+      // Not supported
+      List.empty[EdgeTypeTarget]
+    }
   }
 
   case object Basic extends QueryTracing[GraphTrace[TraceUnit]] {
@@ -115,6 +125,11 @@ object QueryTracing {
         GraphTrace(externalKeys = Nil, Nil, SubTrace(Nil, traceUnit))
       }
     }
+
+    def pushExternalKey(trace: GraphTrace[TraceUnit]) = trace.copy(
+      externalKeys = trace.externalKeys :+ getKey(GraphTrace(externalKeys = Nil, Nil, SubTrace(Nil, trace.root))),
+      tracesInternal = Nil,
+      terminus = trace.terminus.wipe)
 
     def traceHop(trace: GraphTrace[TraceUnit], edgeType: GraphEdgeType, edgeJs: JsObject, initial: Boolean) = {
       val oppositeId = edgeType.direction.extractOpposite(edgeJs)
@@ -142,9 +157,28 @@ object QueryTracing {
       }
     }
 
-    def pushExternalKey(trace: GraphTrace[TraceUnit]) = trace.copy(
-      externalKeys = trace.externalKeys :+ getKey(GraphTrace(externalKeys = Nil, Nil, SubTrace(Nil, trace.root))),
-      tracesInternal = Nil,
-      terminus = trace.terminus.wipe)
+    def calculateUnwindSequence(traverse: StatefulTraverse, trace: GraphTrace[TraceUnit]): List[EdgeTypeTarget] = {
+      (trace.terminus.tracesInternal ++ List(trace.terminusId)).flatMap { e =>
+        // Option[T]
+        for {
+          edgeType <- e.edgeType
+          targets <- traverse.mapping.get(edgeType)
+          edgeTypeTarget <- ifNonEmpty(targets) {
+            Option {
+              EdgeTypeTarget(targets.map { t =>
+                val filter = (e.name, e.index) match {
+                  case (Some(n), _) => Some(EdgeNameFilter(n))
+                  case (_, Some(i)) => Some(EdgeIndexFilter(i))
+                  case _            => None
+                }
+                EdgeTypeTraverse(t, filter)
+              })
+            }
+          }
+        } yield {
+          edgeTypeTarget
+        }
+      }
+    }
   }
 }

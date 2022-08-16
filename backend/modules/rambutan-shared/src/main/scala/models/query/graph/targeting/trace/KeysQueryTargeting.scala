@@ -25,9 +25,6 @@ case class KeysQueryTargeting(
 
   val resultType = QueryResultType.GraphTrace
 
-  //inherits
-  val extractor = implicitly[HasBasicExtraction[TraceUnit]]
-
   val nodeIndexName = indexType.nodeIndexName
   val edgeIndexName = indexType.edgeIndexName
 
@@ -130,43 +127,6 @@ case class KeysQueryTargeting(
         ESQuery.termsSearch("key", traces.map(_.key).distinct),
         ESQuery.termsSearch("path", traces.map(_.path).distinct), // really necessary?
         ESQuery.termsSearch("id", traces.map(_.id))).distinct)
-  }
-
-  def traceHop(unit: TraceUnit, edgeType: GraphEdgeType, edgeJs: JsObject) = {
-    val oppositeId = edgeType.direction.extractOpposite(edgeJs)
-
-    unit.copy(
-      edgeType = Some(edgeType),
-      name = (edgeJs \ "_source" \ "name").asOpt[String],
-      index = (edgeJs \ "_source" \ "index").asOpt[Int],
-      id = oppositeId)
-  }
-
-  /**
-   * Graph FSM
-   */
-  def calculateUnwindSequence(traverse: StatefulTraverse, trace: GraphTrace[TraceUnit]): List[EdgeTypeTarget] = {
-    (trace.terminus.tracesInternal ++ List(trace.terminusId)).flatMap { e =>
-      // Option[T]
-      for {
-        edgeType <- e.edgeType
-        targets <- traverse.mapping.get(edgeType)
-        edgeTypeTarget <- ifNonEmpty(targets) {
-          Option {
-            EdgeTypeTarget(targets.map { t =>
-              val filter = (e.name, e.index) match {
-                case (Some(n), _) => Some(EdgeNameFilter(n))
-                case (_, Some(i)) => Some(EdgeIndexFilter(i))
-                case _            => None
-              }
-              EdgeTypeTraverse(t, filter)
-            })
-          }
-        }
-      } yield {
-        edgeTypeTarget
-      }
-    }
   }
 
   /**

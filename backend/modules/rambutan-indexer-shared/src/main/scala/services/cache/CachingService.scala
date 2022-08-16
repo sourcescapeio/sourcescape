@@ -83,10 +83,11 @@ class CachingService @Inject() (
       // run query internal
       _ = println(targeting)
       queryScroll = QueryScroll(None)
+      tracing = QueryTracing.Basic
       (size, _, progressSource, source) <- relationalQueryService.runQueryInternal(
         adjustedQuery,
         shouldExplain = false,
-        progressUpdates = false)(targeting, queryScroll)
+        progressUpdates = false)(targeting, tracing, queryScroll)
       // we pull these to insert into our progress updates
       // TODO: not dealing with this now
       // existingKeyObjs <- queryCacheService.getCacheKeys(cacheId).map {

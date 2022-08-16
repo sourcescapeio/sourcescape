@@ -78,24 +78,6 @@ case class GenericGraphTargeting(orgId: Int) extends QueryTargeting[GenericGraph
   }
 
   /**
-   * Hydration
-   */
-  def hydrationQuery(items: List[GenericGraphUnit]): JsObject = {
-    ESQuery.bool(
-      filter = ESQuery.bool(
-        must = List(
-          ESQuery.termsSearch("org_id", items.map(_.orgId).toList.distinct),
-          ESQuery.termsSearch("id", items.map(_.id).toList.distinct))) :: Nil)
-  }
-
-  /**
-   * Graph FSM
-   */
-  def calculateUnwindSequence(traverse: StatefulTraverse, trace: GraphTrace[GenericGraphUnit]) = {
-    List.empty[EdgeTypeTarget]
-  }
-
-  /**
    * Relational
    */
   def relationalKeyItem(unit: GenericGraphUnit): RelationalKeyItem = {
