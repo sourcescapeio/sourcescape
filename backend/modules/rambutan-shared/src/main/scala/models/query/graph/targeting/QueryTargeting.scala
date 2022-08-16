@@ -10,8 +10,6 @@ trait HasBasicExtraction[T] {
   self =>
   def getId(unit: T): String
   def getKey(unit: T): String
-
-  def unitFromJs(js: JsObject, edgeOverride: Option[GraphEdgeType] = None): T
 }
 
 trait HasTraceKey[T] {
@@ -54,7 +52,7 @@ trait QueryTargeting[T] {
     nodeHint:  Option[NodeType]): JsObject
 
   def nodeQuery(traces: List[T]): JsObject
-  
+
   /**
    * Relational
    */

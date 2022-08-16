@@ -50,11 +50,11 @@ class RelationalQueryService @Inject() (
     }
   }
 
-  def runQueryInternal[TU](
+  def runQueryInternal[T, TU](
     query: RelationalQuery, 
     shouldExplain: Boolean, 
     progressUpdates: Boolean
-  )(implicit targeting: QueryTargeting[TU], tracing: QueryTracing[GraphTrace[TU]], scroll: QueryScroll) = {
+  )(implicit targeting: QueryTargeting[TU], tracing: QueryTracing[T, TU], scroll: QueryScroll) = {
     // do validation
     query.validate
 
@@ -193,11 +193,11 @@ class RelationalQueryService @Inject() (
   /**
    * Generate the join stream lattice
    */
-  type Joined[TU] = Map[String, GraphTrace[TU]]
+  type Joined[T] = Map[String, T]
 
-  private def createJoinLattice[TU](
-    root:    Source[GraphTrace[TU], Any],
-    query:   RelationalQuery)(implicit targeting: QueryTargeting[TU], tracing: QueryTracing[GraphTrace[TU]], scroll: QueryScroll, explain: RelationalQueryExplain): Source[Joined[TU], Any] = {
+  private def createJoinLattice[T, TU](
+    root:    Source[T, Any],
+    query:   RelationalQuery)(implicit targeting: QueryTargeting[TU], tracing: QueryTracing[T, TU], scroll: QueryScroll, explain: RelationalQueryExplain): Source[Joined[T], Any] = {
     val rootQuery = query.root.query
 
     /**

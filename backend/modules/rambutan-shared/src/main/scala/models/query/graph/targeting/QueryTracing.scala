@@ -4,7 +4,7 @@ import play.api.libs.json._
 import silvousplay.imports._
 
 // Actual targeting object
-trait QueryTracing[T] {
+trait QueryTracing[T, TU] {
   self =>
 
   val extractor: HasBasicExtraction[T]
@@ -19,11 +19,21 @@ trait QueryTracing[T] {
 
   def getKey(unit: T) = extractor.getKey(unit)
 
-  def unitFromJs(js: JsObject, edgeOverride: Option[GraphEdgeType] = None) = {
-    extractor.unitFromJs(js, edgeOverride)
-  }
+  def unitFromJs(js: JsObject, edgeOverride: Option[GraphEdgeType] = None): TU
+
+  def getTraceKey(trace: T): TU
 
   def pushExternalKey(trace: T): T
+
+  def pushCopy(trace: T): T
+
+  def dropHead(trace: T): T
+
+  def injectNew(trace: T, unit: TU): T
+
+  def injectHead(trace: T, unit: TU): T
+
+  def newTrace(unit: TU): T
 
   /**
    * Sorting stuff
@@ -37,13 +47,13 @@ trait QueryTracing[T] {
   def ordering: Ordering[T]
 
   /**
-    * Unwind
-    */
-  def calculateUnwindSequence(traverse: StatefulTraverse, trace: T): List[EdgeTypeTarget]    
+   * Unwind
+   */
+  def calculateUnwindSequence(traverse: StatefulTraverse, trace: T): List[EdgeTypeTarget]
 }
 
 object QueryTracing {
-  case object GenericGraph extends QueryTracing[GraphTrace[GenericGraphUnit]] {
+  case object GenericGraph extends QueryTracing[GraphTrace[GenericGraphUnit], GenericGraphUnit] {
     val extractor = new HasBasicExtraction[GraphTrace[GenericGraphUnit]] {
       // just gets basic id
       def getId(trace: GraphTrace[GenericGraphUnit]): String = {
@@ -55,24 +65,38 @@ object QueryTracing {
         val unit = trace.terminusId
         s"${unit.orgId}/${unit.id}"
       }
+    }
 
-      def unitFromJs(js: JsObject, edgeOverride: Option[GraphEdgeType] = None) = {
-        val id = (js \ "_source" \ "id").as[String]
-        val orgId = (js \ "_source" \ "org_id").as[String]
+    def unitFromJs(js: JsObject, edgeOverride: Option[GraphEdgeType] = None) = {
+      val id = (js \ "_source" \ "id").as[String]
+      val orgId = (js \ "_source" \ "org_id").as[String]
 
-        val unit = GenericGraphUnit(
-          edgeOverride,
-          orgId,
-          id)
+      GenericGraphUnit(
+        edgeOverride,
+        orgId,
+        id)
+    }
 
-        GraphTrace(externalKeys = Nil, Nil, SubTrace(Nil, unit))
-      }
+    def newTrace(unit: GenericGraphUnit) = {
+      GraphTrace(Nil, Nil, SubTrace(Nil, unit))
+    }
+
+    def getTraceKey(trace: GraphTrace[GenericGraphUnit]): GenericGraphUnit = {
+      trace.terminusId
+    }
+
+    def pushCopy(trace: GraphTrace[GenericGraphUnit]): GraphTrace[GenericGraphUnit] = {
+      trace.pushCopy
+    }
+
+    def dropHead(trace: GraphTrace[GenericGraphUnit]): GraphTrace[GenericGraphUnit] = {
+      trace.dropHead
     }
 
     def pushExternalKey(trace: GraphTrace[GenericGraphUnit]) = trace.copy(
       externalKeys = trace.externalKeys :+ getKey(GraphTrace(externalKeys = Nil, Nil, SubTrace(Nil, trace.root))),
       tracesInternal = Nil,
-      terminus = trace.terminus.wipe)    
+      terminus = trace.terminus.wipe)
 
     def traceHop(trace: GraphTrace[GenericGraphUnit], edgeType: GraphEdgeType, edgeJs: JsObject, initial: Boolean): GraphTrace[GenericGraphUnit] = {
       val oppositeId = edgeType.direction.extractOpposite(edgeJs)
@@ -82,10 +106,18 @@ object QueryTracing {
         id = oppositeId)
 
       if (initial) {
-        trace.injectNew(nextUnit)
+        injectNew(trace, nextUnit)
       } else {
-        trace.injectHead(nextUnit)
+        injectHead(trace, nextUnit)
       }
+    }
+
+    def injectNew(trace: GraphTrace[GenericGraphUnit], unit: GenericGraphUnit) = {
+      trace.injectNew(unit)
+    }
+
+    def injectHead(trace: GraphTrace[GenericGraphUnit], unit: GenericGraphUnit) = {
+      trace.injectHead(unit)
     }
 
     def sortKey(trace: GraphTrace[GenericGraphUnit]): List[String] = {
@@ -104,7 +136,7 @@ object QueryTracing {
     }
   }
 
-  case object Basic extends QueryTracing[GraphTrace[TraceUnit]] {
+  case object Basic extends QueryTracing[GraphTrace[TraceUnit], TraceUnit] {
     val extractor = new HasBasicExtraction[GraphTrace[TraceUnit]] {
       def getId(trace: GraphTrace[TraceUnit]) = trace.terminusId.id
 
@@ -112,18 +144,40 @@ object QueryTracing {
         val unit = trace.terminusId
         s"${unit.key}/${unit.path}/${unit.id}"
       }
+    }
 
-      def unitFromJs(js: JsObject, edgeOverride: Option[GraphEdgeType] = None) = {
-        val key = (js \ "_source" \ "key").as[String]
-        val path = (js \ "_source" \ "path").as[String]
-        val id = (js \ "_source" \ "id").as[String]
-        val name = (js \ "_source" \ "name").asOpt[String]
-        val index = (js \ "_source" \ "index").asOpt[Int]
+    def unitFromJs(js: JsObject, edgeOverride: Option[GraphEdgeType] = None) = {
+      val key = (js \ "_source" \ "key").as[String]
+      val path = (js \ "_source" \ "path").as[String]
+      val id = (js \ "_source" \ "id").as[String]
+      val name = (js \ "_source" \ "name").asOpt[String]
+      val index = (js \ "_source" \ "index").asOpt[Int]
 
-        val traceUnit = TraceUnit(edgeOverride, key, path, id, name, index)
+      TraceUnit(edgeOverride, key, path, id, name, index)
+    }
 
-        GraphTrace(externalKeys = Nil, Nil, SubTrace(Nil, traceUnit))
-      }
+    def getTraceKey(trace: GraphTrace[TraceUnit]): TraceUnit = {
+      trace.terminusId
+    }
+
+    def pushCopy(trace: GraphTrace[TraceUnit]): GraphTrace[TraceUnit] = {
+      trace.pushCopy
+    }
+
+    def dropHead(trace: GraphTrace[TraceUnit]): GraphTrace[TraceUnit] = {
+      trace.dropHead
+    }
+
+    def injectNew(trace: GraphTrace[TraceUnit], unit: TraceUnit) = {
+      trace.injectNew(unit)
+    }
+
+    def injectHead(trace: GraphTrace[TraceUnit], unit: TraceUnit) = {
+      trace.injectHead(unit)
+    }
+
+    def newTrace(unit: TraceUnit) = {
+      GraphTrace(Nil, Nil, SubTrace(Nil, unit))
     }
 
     def pushExternalKey(trace: GraphTrace[TraceUnit]) = trace.copy(
@@ -141,9 +195,9 @@ object QueryTracing {
         id = oppositeId)
 
       if (initial) {
-        trace.injectNew(nextUnit)
+        injectNew(trace, nextUnit)
       } else {
-        trace.injectHead(nextUnit)
+        injectHead(trace, nextUnit)
       }
     }
 
