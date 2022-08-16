@@ -7,6 +7,7 @@ import play.api.libs.json._
 import org.joda.time._
 import akka.stream.scaladsl.Source
 import models.graph._
+import silvousplay.api.SpanContext
 
 trait ConsumerService {
 
@@ -17,7 +18,7 @@ trait ConsumerService {
   val logService: LogService
   val clonerQueueService: ClonerQueueService
 
-  protected def getRootId(orgId: Int, repoId: Int, sha: String, includeSelf: Boolean): Future[Option[Int]] = {
+  protected def getRootId(orgId: Int, repoId: Int, sha: String, includeSelf: Boolean)(implicit context: SpanContext): Future[Option[Int]] = {
     for {
       shaObj <- repoIndexDataService.getSHA(repoId, sha).map {
         _.getOrElse(throw new Exception("sha does not exist"))
@@ -51,7 +52,7 @@ trait ConsumerService {
   }
 
   // Either[Index, WorkRecord]
-  def runCleanIndexForSHA(orgId: Int, repoName: String, repoId: Int, sha: String, forceRoot: Boolean): Future[Either[RepoSHAIndex, (RepoSHAIndex, WorkRecord)]] = {
+  def runCleanIndexForSHA(orgId: Int, repoName: String, repoId: Int, sha: String, forceRoot: Boolean)(implicit context: SpanContext): Future[Either[RepoSHAIndex, (RepoSHAIndex, WorkRecord)]] = {
     for {
       currentIndexes <- repoIndexDataService.getIndexesForRepoSHAs(repoId, List(sha))
       clean = currentIndexes.find(a => a.isRoot)

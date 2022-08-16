@@ -11,6 +11,7 @@ import play.api.libs.ws._
 import play.api.libs.json._
 import java.util.Base64
 import akka.stream.scaladsl.{ Source, Sink }
+import silvousplay.api.SpanContext
 
 @Singleton
 class RepoService @Inject() (
@@ -71,7 +72,7 @@ class RepoService @Inject() (
     recursedDirectories.sortBy(_.path) ++ files.sortBy(_.path)
   }
 
-  def getBranchSummary(orgId: Int, repoId: Int, branch: String): Future[List[HydratedRepoSHA]] = {
+  def getBranchSummary(orgId: Int, repoId: Int, branch: String)(implicit context: SpanContext): Future[List[HydratedRepoSHA]] = {
     // returns branch summary
     for {
       branchChain <- repoIndexDataService.getBranchChain(orgId, repoId, branch)

@@ -14,6 +14,7 @@ import akka.stream.scaladsl.{ Source, Sink, Keep }
 import akka.stream.OverflowStrategy
 import play.api.libs.json._
 import akka.util.ByteString
+import silvousplay.api.Telemetry
 
 @Singleton
 class IndexController @Inject() (
@@ -27,7 +28,7 @@ class IndexController @Inject() (
   indexerQueueService:   services.IndexerQueueService,
   socketService:         services.SocketService,
   staticAnalysisService: services.StaticAnalysisService,
-  authService:           services.AuthService)(implicit ec: ExecutionContext, as: ActorSystem) extends API {
+  authService:           services.AuthService)(implicit ec: ExecutionContext, as: ActorSystem) extends API with Telemetry {
 
   def getTreeForIndex(orgId: Int, indexId: Int) = {
     api { implicit request =>
@@ -84,13 +85,15 @@ class IndexController @Inject() (
   def runIndexForSHA(orgId: Int, repoId: Int, sha: String, forceRoot: Boolean) = {
     api { implicit request =>
       authService.authenticatedForOrg(orgId, OrgRole.Admin) {
-        for {
-          repo <- repoDataService.getRepo(repoId).map {
-            _.getOrElse(throw models.Errors.notFound("repo.dne", "Repo not found"))
+        withTelemetry { implicit c =>
+          for {
+            repo <- repoDataService.getRepo(repoId).map {
+              _.getOrElse(throw models.Errors.notFound("repo.dne", "Repo not found"))
+            }
+            _ <- consumerService.runCleanIndexForSHA(orgId, repo.repoName, repoId, sha, forceRoot)
+          } yield {
+            ()
           }
-          _ <- consumerService.runCleanIndexForSHA(orgId, repo.repoName, repoId, sha, forceRoot)
-        } yield {
-          ()
         }
       }
     }

@@ -10,6 +10,8 @@ import play.api.libs.json._
 import org.joda.time._
 import akka.stream.scaladsl.Sink
 import akka.stream.Materializer
+import silvousplay.api.SpanContext
+import silvousplay.api.Telemetry
 
 @Singleton
 class WebhookConsumerService @Inject() (
@@ -24,7 +26,7 @@ class WebhookConsumerService @Inject() (
   val indexerService:       IndexerService,
   val repoIndexDataService: RepoIndexDataService,
   val clonerQueueService:   ClonerQueueService,
-  val logService:           LogService)(implicit val ec: ExecutionContext, mat: Materializer) extends ConsumerService {
+  val logService:           LogService)(implicit val ec: ExecutionContext, mat: Materializer) extends ConsumerService with Telemetry {
 
   val WebhookConcurrency = 4
 
@@ -36,7 +38,9 @@ class WebhookConsumerService @Inject() (
         concurrency = WebhookConcurrency,
         source = webhookConsumerQueueService.source) { item =>
           println("DEQUEUE", item)
-          repoRefresh(item)
+          withTelemetry { implicit c =>
+            repoRefresh(item)
+          }
         } { item =>
           println("COMPLETE + ACK", item)
           webhookConsumerQueueService.ack(item)
@@ -47,17 +51,19 @@ class WebhookConsumerService @Inject() (
   }
 
   def consumeOne() = {
-    for {
-      item <- webhookConsumerQueueService.source.runWith(Sink.head)
-      _ = println(item)
-      _ <- repoRefresh(item)
-      _ <- webhookConsumerQueueService.ack(item)
-    } yield {
-      ()
+    withTelemetry { implicit c =>
+      for {
+        item <- webhookConsumerQueueService.source.runWith(Sink.head)
+        _ = println(item)
+        _ <- repoRefresh(item)
+        _ <- webhookConsumerQueueService.ack(item)
+      } yield {
+        ()
+      }
     }
   }
 
-  private def repoRefresh(item: WebhookConsumerQueueItem): Future[Unit] = {
+  private def repoRefresh(item: WebhookConsumerQueueItem)(implicit context: SpanContext): Future[Unit] = {
     // refresh button for repo
     // this also looks up stuff for repo
     // just do queue here
@@ -112,7 +118,7 @@ class WebhookConsumerService @Inject() (
     ClonerQueueDirty(modified, statusDiff.deleted)
   }
 
-  def runDirtyIndexForSHA(orgId: Int, repoName: String, repoId: Int, sha: String, diff: GitDiff, localPath: String): Future[Either[RepoSHAIndex, (RepoSHAIndex, WorkRecord)]] = {
+  def runDirtyIndexForSHA(orgId: Int, repoName: String, repoId: Int, sha: String, diff: GitDiff, localPath: String)(implicit context: SpanContext): Future[Either[RepoSHAIndex, (RepoSHAIndex, WorkRecord)]] = {
     val dirtyFiles = generateDirtyFiles(localPath, diff)
     for {
       currentIndexes <- repoIndexDataService.getIndexesForRepoSHAs(repoId, List(sha))

@@ -9,6 +9,7 @@ import scala.concurrent.duration._
 import silvousplay.imports._
 import play.api.libs.json._
 import org.joda.time._
+import silvousplay.api.SpanContext
 
 @Singleton
 class SchemaService @Inject() (
@@ -76,7 +77,7 @@ class SchemaService @Inject() (
     dao.SchemaTable.byId.lookup(id)
   }
 
-  def schemaDetails(id: Int): Future[Option[HydratedSchema]] = {
+  def schemaDetails(id: Int)(implicit context: SpanContext): Future[Option[HydratedSchema]] = {
     dao.SchemaTable.byId.lookup(id).flatMap { maybeSchema =>
       withDefined(maybeSchema) { schema =>
         for {

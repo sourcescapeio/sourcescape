@@ -11,6 +11,7 @@ import akka.actor.ActorSystem
 import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.{ Flow, Sink, Source }
 import play.api.libs.json._
+import silvousplay.api.Telemetry
 
 @Singleton
 class LocalRepoController @Inject() (
@@ -20,7 +21,7 @@ class LocalRepoController @Inject() (
   repoDataService: services.RepoDataService,
   socketService:   services.SocketService,
   gitService:      services.GitService,
-  watcherService:  services.WatcherService)(implicit ec: ExecutionContext, as: ActorSystem) extends API {
+  watcherService:  services.WatcherService)(implicit ec: ExecutionContext, as: ActorSystem) extends API with Telemetry {
 
   def openItem(orgId: Int) = {
     api(parse.tolerantJson) { implicit request =>
@@ -42,31 +43,33 @@ class LocalRepoController @Inject() (
   def watcherUpdate(orgId: Int, repoId: Int) = {
     api(parse.tolerantJson) { implicit request =>
       withJson { form: WebhookForm =>
-        val hasChange = form.changedFiles.exists { f =>
-          IndexType.all.exists(_.isValidBlob(f)) || GitFiles.contains(f)
-        }
-        val gitUpdate = form.changedFiles.exists { f =>
-          GitFiles.contains(f)
-        }
-        val shouldUpdate = form.defaultedForce || hasChange
+        withTelemetry { implicit c =>
+          val hasChange = form.changedFiles.exists { f =>
+            IndexType.all.exists(_.isValidBlob(f)) || GitFiles.contains(f)
+          }
+          val gitUpdate = form.changedFiles.exists { f =>
+            GitFiles.contains(f)
+          }
+          val shouldUpdate = form.defaultedForce || hasChange
 
-        withFlag(!shouldUpdate) {
-          println("Discarded: ")
-          form.changedFiles.foreach(println)
-        }
-        withFlag(shouldUpdate) {
-          for {
-            repo <- repoDataService.getRepoWithSettings(orgId, repoId).map { f =>
-              f.getOrElse(throw Errors.notFound("repo.dne", "Repo not found"))
+          withFlag(!shouldUpdate) {
+            println("Discarded: ")
+            form.changedFiles.foreach(println)
+          }
+          withFlag(shouldUpdate) {
+            for {
+              repo <- repoDataService.getRepoWithSettings(orgId, repoId).map { f =>
+                f.getOrElse(throw Errors.notFound("repo.dne", "Repo not found"))
+              }
+              gitInfo <- gitService.withRepo(repo.repo)(_.getRepoInfo)
+              maybeDirty = if (gitInfo.isClean) None else Some(gitInfo.statusDiff)
+              _ <- repoSyncService.repoSHARefreshSync(repo, gitInfo.sha, maybeDirty)
+              _ <- withFlag(gitUpdate) {
+                socketService.localRepoUpdate(orgId, repoId)
+              }
+            } yield {
+              ()
             }
-            gitInfo <- gitService.withRepo(repo.repo)(_.getRepoInfo)
-            maybeDirty = if (gitInfo.isClean) None else Some(gitInfo.statusDiff)
-            _ <- repoSyncService.repoSHARefreshSync(repo, gitInfo.sha, maybeDirty)
-            _ <- withFlag(gitUpdate) {
-              socketService.localRepoUpdate(orgId, repoId)
-            }
-          } yield {
-            ()
           }
         }
       }

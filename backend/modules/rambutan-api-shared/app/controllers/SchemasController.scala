@@ -8,6 +8,7 @@ import silvousplay.imports._
 import play.api.mvc.WebSocket
 import play.api.libs.json._
 import models._
+import silvousplay.api.Telemetry
 
 @Singleton
 class SchemasController @Inject() (
@@ -17,7 +18,7 @@ class SchemasController @Inject() (
   schemaService:        services.SchemaService,
   snapshotService:      services.SnapshotService,
   documentationService: services.DocumentationService,
-  repoIndexDataService: services.RepoIndexDataService)(implicit ec: ExecutionContext, as: akka.actor.ActorSystem) extends API with StreamResults {
+  repoIndexDataService: services.RepoIndexDataService)(implicit ec: ExecutionContext, as: akka.actor.ActorSystem) extends API with StreamResults with Telemetry {
 
   def createSchema(orgId: Int) = {
     api(parse.tolerantJson) { implicit request =>
@@ -48,7 +49,9 @@ class SchemasController @Inject() (
   def schemaDetails(orgId: Int, schemaId: Int) = {
     api { implicit request =>
       authService.authenticatedSuperUser {
-        schemaService.schemaDetails(schemaId).map(_.map(_.dto))
+        withTelemetry { implicit c =>
+          schemaService.schemaDetails(schemaId).map(_.map(_.dto))
+        }
       }
     }
   }
@@ -141,10 +144,12 @@ class SchemasController @Inject() (
   def getSnapshotDataForIndex(orgId: Int, schemaId: Int, indexId: Int) = {
     api { implicit request =>
       authService.authenticatedSuperUser {
-        for {
-          (header, source) <- snapshotService.getSnapshotDataForIndex(orgId, schemaId, indexId)
-        } yield {
-          streamQuery(header, source)
+        withTelemetry { implicit c =>
+          for {
+            (header, source) <- snapshotService.getSnapshotDataForIndex(orgId, schemaId, indexId)
+          } yield {
+            streamQuery(header, source)
+          }
         }
       }
     }
@@ -153,10 +158,12 @@ class SchemasController @Inject() (
   def deleteSnapshotForIndex(orgId: Int, schemaId: Int, indexId: Int) = {
     api { implicit request =>
       authService.authenticatedSuperUser {
-        for {
-          _ <- snapshotService.deleteSnapshotForIndex(orgId, schemaId, indexId)
-        } yield {
-          ()
+        withTelemetry { implicit c =>
+          for {
+            _ <- snapshotService.deleteSnapshotForIndex(orgId, schemaId, indexId)
+          } yield {
+            ()
+          }
         }
       }
     }

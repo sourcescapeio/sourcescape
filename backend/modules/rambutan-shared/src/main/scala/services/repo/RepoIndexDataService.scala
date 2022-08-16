@@ -12,6 +12,7 @@ import play.api.mvc.Results._
 import play.api.libs.ws._
 import play.api.libs.json._
 import akka.stream.scaladsl.Source
+import silvousplay.api.SpanContext
 
 @Singleton
 class RepoIndexDataService @Inject() (
@@ -50,7 +51,7 @@ class RepoIndexDataService @Inject() (
   //   }
   // }
 
-  def getBranchChain(orgId: Int, repoId: Int, branch: String, limit: Int = 20): Future[List[RepoSHA]] = {
+  def getBranchChain(orgId: Int, repoId: Int, branch: String, limit: Int = 20)(implicit context: SpanContext): Future[List[RepoSHA]] = {
     implicit val targeting = GenericGraphTargeting(orgId)
 
     val A = "A"
@@ -72,7 +73,7 @@ class RepoIndexDataService @Inject() (
               GraphPropertyCondition(
                 GenericGraphProperty("limit", limit.toString()) :: Nil)), modifier = None)),
         root = None,
-        selected = Nil))(targeting)
+        selected = Nil))
       items <- source.runWith(Sinks.ListAccum)
       results <- getSHAs(repoId, List(B, C), items)
     } yield {
@@ -80,7 +81,7 @@ class RepoIndexDataService @Inject() (
     }
   }
 
-  def getChain(orgId: Int, repoId: Int, nodes: List[NodeClause], edges: List[EdgeClause], predicate: GenericEdgePredicate, leading: String) = {
+  def getChain(orgId: Int, repoId: Int, nodes: List[NodeClause], edges: List[EdgeClause], predicate: GenericEdgePredicate, leading: String)(implicit context: SpanContext) = {
     implicit val targeting = GenericGraphTargeting(orgId)
 
     val A = "A"
@@ -120,7 +121,7 @@ class RepoIndexDataService @Inject() (
                   GraphPropertyCondition(
                     GenericGraphProperty("limit", Grouping.toString()) :: Nil)), modifier = None)),
             root = None,
-            selected = Nil))(targeting)
+            selected = Nil))
           chainData <- source.runWith(Sinks.ListAccum)
           shas <- getSHAs(repoId, List(Final), chainData)
         } yield {
@@ -139,7 +140,7 @@ class RepoIndexDataService @Inject() (
     }.mapConcat(i => i._2)
   }
 
-  def getBelowChain(orgId: Int, repoId: Int, sha: String): Future[List[RepoSHA]] = {
+  def getBelowChain(orgId: Int, repoId: Int, sha: String)(implicit context: SpanContext): Future[List[RepoSHA]] = {
     implicit val targeting = GenericGraphTargeting(orgId)
 
     val A = "A"
@@ -160,7 +161,7 @@ class RepoIndexDataService @Inject() (
               GraphPropertyCondition(
                 GenericGraphProperty("limit", Limit.toString()) :: Nil)), modifier = None)),
         root = None,
-        selected = Nil))(targeting)
+        selected = Nil))
       items <- source.runWith(Sinks.ListAccum)
       results <- getSHAs(repoId, List(B), items)
     } yield {
@@ -168,7 +169,7 @@ class RepoIndexDataService @Inject() (
     }
   }
 
-  def getAboveChain(orgId: Int, repoId: Int, sha: String): Future[List[RepoSHA]] = {
+  def getAboveChain(orgId: Int, repoId: Int, sha: String)(implicit context: SpanContext): Future[List[RepoSHA]] = {
     implicit val targeting = GenericGraphTargeting(orgId)
 
     val A = "A"
@@ -189,7 +190,7 @@ class RepoIndexDataService @Inject() (
               GraphPropertyCondition(
                 GenericGraphProperty("limit", Limit.toString()) :: Nil)), modifier = None)),
         root = None,
-        selected = Nil))(targeting)
+        selected = Nil))
       items <- source.runWith(Sinks.ListAccum)
       results <- getSHAs(repoId, List(B), items)
     } yield {

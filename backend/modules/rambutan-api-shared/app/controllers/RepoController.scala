@@ -11,6 +11,7 @@ import akka.actor.ActorSystem
 import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.{ Flow, Sink, Source }
 import play.api.libs.json._
+import silvousplay.api.Telemetry
 
 @Singleton
 class RepoController @Inject() (
@@ -21,7 +22,7 @@ class RepoController @Inject() (
   repoSyncService:      services.RepoSyncService,
   repoDataService:      services.RepoDataService,
   repoIndexDataService: services.RepoIndexDataService,
-  socketService:        services.SocketService)(implicit ec: ExecutionContext, as: ActorSystem) extends API {
+  socketService:        services.SocketService)(implicit ec: ExecutionContext, as: ActorSystem) extends API with Telemetry {
 
   def getRepoSummary(orgId: Int) = {
     api { implicit request =>
@@ -40,7 +41,9 @@ class RepoController @Inject() (
   def getBranchSummary(orgId: Int, repoId: Int, branch: String) = {
     api { implicit request =>
       authService.authenticatedForRepo(orgId, repoId, RepoRole.Pull) {
-        repoService.getBranchSummary(orgId, repoId, java.net.URLDecoder.decode(branch, "UTF-8")).map(_.map(_.dto))
+        withTelemetry { implicit c =>
+          repoService.getBranchSummary(orgId, repoId, java.net.URLDecoder.decode(branch, "UTF-8")).map(_.map(_.dto))
+        }
       }
     }
   }

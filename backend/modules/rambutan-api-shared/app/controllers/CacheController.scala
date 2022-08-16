@@ -13,6 +13,7 @@ import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.{ Source, Sink, Merge }
 import play.api.libs.json._
 import akka.util.ByteString
+import silvousplay.api.Telemetry
 
 @Singleton
 class CacheController @Inject() (
@@ -21,7 +22,7 @@ class CacheController @Inject() (
   savedQueryService:    services.SavedQueryService,
   queryCacheService:    services.QueryCacheService,
   cachingQueueService:  services.CachingQueueService,
-  repoIndexDataService: services.RepoIndexDataService)(implicit ec: ExecutionContext, as: ActorSystem) extends API with StreamResults {
+  repoIndexDataService: services.RepoIndexDataService)(implicit ec: ExecutionContext, as: ActorSystem) extends API with StreamResults with Telemetry {
 
   def createCache(orgId: Int) = {
     api(parse.tolerantJson) { implicit request =>
@@ -99,14 +100,16 @@ class CacheController @Inject() (
   def getCacheData(orgId: Int, cacheId: Int, start: Int, end: Int, keys: List[String]) = {
     api { implicit request =>
       authService.authenticatedForOrg(orgId, OrgRole.ReadOnly) {
-        for {
-          queryPlan <- queryCacheService.getQueryPlan(orgId, cacheId, start, end, keys).map {
-            _.getOrElse(throw models.Errors.badRequest("invalid.plan", "No query plan can be derived"))
+        withTelemetry { implicit context =>
+          for {
+            queryPlan <- queryCacheService.getQueryPlan(orgId, cacheId, start, end, keys).map {
+              _.getOrElse(throw models.Errors.badRequest("invalid.plan", "No query plan can be derived"))
+            }
+            _ <- queryCacheService.updateLastModified(cacheId, keys)
+            result <- queryCacheService.executeQueryPlan(queryPlan)
+          } yield {
+            streamResult(result)
           }
-          _ <- queryCacheService.updateLastModified(cacheId, keys)
-          result <- queryCacheService.executeQueryPlan(queryPlan)
-        } yield {
-          streamResult(result)
         }
       }
     }

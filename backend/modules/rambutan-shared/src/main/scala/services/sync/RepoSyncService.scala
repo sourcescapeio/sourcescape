@@ -3,6 +3,7 @@ package services
 import models._
 import scala.concurrent.{ ExecutionContext, Future }
 import silvousplay.imports._
+import silvousplay.api.SpanContext
 
 trait RepoSyncService {
 
@@ -11,7 +12,7 @@ trait RepoSyncService {
   val logService: LogService
   val repoIndexDataService: RepoIndexDataService
 
-  def repoSHARefreshSync(repo: RepoWithSettings, sha: String, maybeDirty: Option[GitDiff]): Future[(RepoSHAIndex, Option[WorkRecord])] = {
+  def repoSHARefreshSync(repo: RepoWithSettings, sha: String, maybeDirty: Option[GitDiff])(implicit context: SpanContext): Future[(RepoSHAIndex, Option[WorkRecord])] = {
     val orgId = repo.repo.orgId
     val repoId = repo.repo.repoId
     val repoName = repo.repo.repoName
@@ -49,7 +50,7 @@ trait RepoSyncService {
   }
 
   // Highly specific impl
-  def repoRefreshDirect(repo: RepoWithSettings, sha: String, maybeDirty: Option[GitDiff]): Future[(RepoSHAIndex, Option[WorkRecord])]
+  def repoRefreshDirect(repo: RepoWithSettings, sha: String, maybeDirty: Option[GitDiff])(implicit context: SpanContext): Future[(RepoSHAIndex, Option[WorkRecord])]
 
   // unify interface here for clarity, even though not strictly necessary
   def repoRefreshAsync(orgId: Int, repoId: Int): Future[Unit]
