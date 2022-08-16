@@ -27,8 +27,8 @@ class QueryController @Inject() (
   relationalQueryService: services.RelationalQueryService,
   srcLogService:          services.SrcLogCompilerService,
   // experimental
-  graphQueryServiceExperimental:      services.gq6.GraphQueryService,
-  relationalQueryServiceExperimental: services.gq6.RelationalQueryService)(implicit ec: ExecutionContext, as: ActorSystem) extends API with StreamResults with Telemetry {
+  graphQueryServiceExperimental:      services.GraphQueryService,
+  relationalQueryServiceExperimental: services.RelationalQueryService)(implicit ec: ExecutionContext, as: ActorSystem) extends API with StreamResults with Telemetry {
 
   /**
    * Get grammars
@@ -440,7 +440,8 @@ class QueryController @Inject() (
                     targetingRequest.getOrElse(QueryTargetingRequest.AllLatest(None)))
                 }
                 (tableHeader, source) <- context.withSpan("query-initial") { cc =>
-                  graphQueryServiceExperimental.runQuery(query)(targeting, cc) // use top level context
+                  graphQueryServiceExperimental.runQuery(query)(targeting) // use top level context
+                  //cc
                 }
               } yield {
                 streamQuery(tableHeader, source.map(_.dto))
@@ -473,7 +474,7 @@ class QueryController @Inject() (
                   relationalQueryServiceExperimental.runQuery(
                     query,
                     explain = true,
-                    progressUpdates = true)(targeting, cc, scroll)
+                    progressUpdates = true)(targeting, scroll) // cc
                 }
                 tableHeader = Json.obj(
                   "results" -> result.header,

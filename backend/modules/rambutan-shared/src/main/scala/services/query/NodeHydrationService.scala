@@ -41,6 +41,7 @@ class NodeHydrationService @Inject() (
   def rehydrateNodeMap[TU, IN](base: Source[Map[String, GraphTrace[TU]], Any])(
     implicit
     targeting:   QueryTargeting[TU],
+    tracing:     QueryTracing[GraphTrace[TU]],
     hasTraceKey: HasTraceKey[TU],
     mapper:      HydrationMapper[TraceKey, JsObject, Map[String, GraphTrace[TU]], Map[String, GraphTrace[IN]]]): Source[Map[String, GraphTrace[IN]], Any] = {
     joinNodes[Map[String, GraphTrace[TU]], Map[String, GraphTrace[IN]], TU](base)
@@ -63,6 +64,7 @@ class NodeHydrationService @Inject() (
   def rehydrate[TU, IN, NO](base: Source[GraphTrace[TU], Any])(
     implicit
     targeting:        QueryTargeting[TU],
+    tracing:          QueryTracing[GraphTrace[TU]],
     hasTraceKey:      HasTraceKey[TU],
     fileKeyExtractor: FileKeyExtractor[IN],
     node:             HydrationMapper[TraceKey, JsObject, GraphTrace[TU], GraphTrace[IN]],
@@ -77,6 +79,7 @@ class NodeHydrationService @Inject() (
   def rehydrateMap[TU, IN, NO](base: Source[Map[String, GraphTrace[TU]], Any])(
     implicit
     targeting:        QueryTargeting[TU],
+    tracing:          QueryTracing[GraphTrace[TU]],
     hasTraceKey:      HasTraceKey[TU],
     fileKeyExtractor: FileKeyExtractor[IN],
     node:             HydrationMapper[TraceKey, JsObject, Map[String, GraphTrace[TU]], Map[String, GraphTrace[IN]]],
@@ -91,6 +94,7 @@ class NodeHydrationService @Inject() (
   private def rehydrateInternal[A, B, C, TU, IN, NO](base: Source[A, Any])(
     implicit
     targeting:        QueryTargeting[TU],
+    tracing:          QueryTracing[GraphTrace[TU]],
     hasTraceKey:      HasTraceKey[TU],
     nodeFlattener:    HydrationFlattener[A, TU],
     codeFlattener:    HydrationFlattener[B, IN],
@@ -109,7 +113,7 @@ class NodeHydrationService @Inject() (
   private def joinNodes[From, To, TU](base: Source[From, Any])(
     implicit
     targeting:       QueryTargeting[TU],
-    basicExtraction: HasBasicExtraction[TU],
+    tracing:         QueryTracing[GraphTrace[TU]],
     traceExtraction: HasTraceKey[TU],
     flattener:       HydrationFlattener[From, TU],
     mapper:          HydrationMapper[TraceKey, JsObject, From, To]): Source[To, _] = {
@@ -124,7 +128,7 @@ class NodeHydrationService @Inject() (
           scrollSize = NodeHydrationBatchSize)
         nodeMap <- source.runWith(Sink.fold(Map.empty[TraceKey, JsObject]) {
           case (acc, item) => {
-            val key = traceExtraction.traceKey(basicExtraction.unitFromJs(item))
+            val key = traceExtraction.traceKey(tracing.unitFromJs(item).terminusId)
             val obj = (item \ "_source").as[JsObject]
             acc + (key -> obj)
           }

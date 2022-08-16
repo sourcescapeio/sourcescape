@@ -72,22 +72,25 @@ class GraphQueryService @Inject() (
   }
 
   def runQuery(query: GraphQuery)(implicit targeting: QueryTargeting[TraceUnit]) = {
+    implicit val tracing = QueryTracing.Basic
     runQueryGeneric[TraceUnit, (String, GraphNode), QueryNode](query)
   }
 
   def runQueryGenericGraph(query: GraphQuery)(implicit targeting: QueryTargeting[GenericGraphUnit]) = {
+    implicit val tracing = QueryTracing.GenericGraph
     runQueryGeneric[GenericGraphUnit, GenericGraphNode, GenericGraphNode](query)
   }
 
   private def runQueryGeneric[TU, IN, NO](query: GraphQuery)(
     implicit
     targeting:        QueryTargeting[TU],
+    tracing:          QueryTracing[GraphTrace[TU]],
     hasTraceKey:      HasTraceKey[TU],
     fileKeyExtractor: FileKeyExtractor[IN],
     node:             HydrationMapper[TraceKey, JsObject, GraphTrace[TU], GraphTrace[IN]],
     code:             HydrationMapper[FileKey, String, GraphTrace[IN], GraphTrace[NO]]): Future[(QueryResultHeader, Source[GraphTrace[NO], Any])] = {
     for {
-      (sizeEstimate, _, traversed) <- executeUnit[TU](query, progressUpdates = false, cursor = None)(targeting)
+      (sizeEstimate, _, traversed) <- executeUnit[TU](query, progressUpdates = false, cursor = None)
       rehydrated = nodeHydrationService.rehydrate[TU, IN, NO](traversed)
       traceColumns = query.traverses.filter(_.isColumn).zipWithIndex.map {
         case (_, idx) => QueryColumnDefinition(
@@ -112,7 +115,7 @@ class GraphQueryService @Inject() (
   def executeUnit[TU](
     query:           GraphQuery,
     progressUpdates: Boolean,
-    cursor:          Option[RelationalKeyItem])(implicit targeting: QueryTargeting[TU]): Future[(Long, Source[Long, Any], Source[GraphTrace[TU], Any])] = {
+    cursor:          Option[RelationalKeyItem])(implicit targeting: QueryTargeting[TU], tracing: QueryTracing[GraphTrace[TU]]): Future[(Long, Source[Long, Any], Source[GraphTrace[TU], Any])] = {
     val nodeIndex = targeting.nodeIndexName
     val edgeIndex = targeting.edgeIndexName
 
@@ -134,7 +137,7 @@ class GraphQueryService @Inject() (
 
         val newSource = rootSource.alsoTo {
           Flow[GraphTrace[TU]].map { v =>
-            targeting.getId(v.terminusId)
+            tracing.getId(v)
           }.groupedWithin(2000, 600.milliseconds).scan((0L, "")) {
             case ((count, latestId), ids) => {
               val greater = ids.filter(_ > latestId)
@@ -169,16 +172,16 @@ class GraphQueryService @Inject() (
    * Assume sorted by root, sort by (root, dest)
    */
   type TraceFlow[TU] = Flow[GraphTrace[TU], GraphTrace[TU], Any]
-  private def sortBySecondary[TU](implicit targeting: QueryTargeting[TU]) = {
+  private def sortBySecondary[TU](implicit targeting: QueryTargeting[TU], tracing: QueryTracing[GraphTrace[TU]]) = {
     sortBySecondaryGeneric[GraphTrace[TU], TU](i => i)
   }
-  private def sortBySecondaryStateful[TU](implicit targeting: QueryTargeting[TU]) = {
+  private def sortBySecondaryStateful[TU](implicit targeting: QueryTargeting[TU], tracing: QueryTracing[GraphTrace[TU]]) = {
     sortBySecondaryGeneric[StatefulTraverseUnwind[TU], TU](_.trace)
   }
-  private def sortBySecondaryGeneric[T, TU](f: T => GraphTrace[TU])(implicit targeting: QueryTargeting[TU]) = {
+  private def sortBySecondaryGeneric[T, TU](f: T => GraphTrace[TU])(implicit targeting: QueryTargeting[TU], tracing: QueryTracing[GraphTrace[TU]]) = {
     // This is important!
     val secondaryOrdering = Ordering.by { a: T =>
-      f(a).joinKey.mkString("|")
+      tracing.joinKey(f(a)).mkString("|")
     }
 
     val withTerminal = Flow[T].map(Right.apply).concat(Source(Left(()) :: Nil))
@@ -190,7 +193,7 @@ class GraphQueryService @Inject() (
 
       {
         case Right(element) => {
-          val rootId = f(element).sortKey
+          val rootId = tracing.sortKey(f(element))
 
           if (Option(rootId) =?= currentRootId) {
             collect += element
@@ -216,7 +219,7 @@ class GraphQueryService @Inject() (
     }
   }
 
-  def executeTrace[TU](traverses: List[Traverse])(implicit targeting: QueryTargeting[TU]): TraceFlow[TU] = {
+  def executeTrace[TU](traverses: List[Traverse])(implicit targeting: QueryTargeting[TU], tracing: QueryTracing[GraphTrace[TU]]): TraceFlow[TU] = {
     traverses match {
       case Nil => {
         Flow[GraphTrace[TU]]
@@ -240,7 +243,7 @@ class GraphQueryService @Inject() (
    */
   private def rootSearch[TU](
     root:   GraphRoot,
-    cursor: Option[RelationalKeyItem])(implicit targeting: QueryTargeting[TU]): Future[(Long, Source[GraphTrace[TU], _])] = {
+    cursor: Option[RelationalKeyItem])(implicit targeting: QueryTargeting[TU], tracing: QueryTracing[GraphTrace[TU]]): Future[(Long, Source[GraphTrace[TU], _])] = {
     for {
       (size, source) <- elasticSearchService.source(
         targeting.nodeIndexName,
@@ -250,14 +253,13 @@ class GraphQueryService @Inject() (
         scrollSize = SearchScroll)
     } yield {
       (size, source.map { i =>
-        val traceUnit = targeting.unitFromJs(i)
-        GraphTrace(externalKeys = Nil, Nil, SubTrace(Nil, traceUnit))
+        tracing.unitFromJs(i)
       })
     }
   }
 
   private def applyTraverse[TU](
-    traverse: Traverse)(implicit targeting: QueryTargeting[TU]): TraceFlow[TU] = {
+    traverse: Traverse)(implicit targeting: QueryTargeting[TU], tracing: QueryTracing[GraphTrace[TU]]): TraceFlow[TU] = {
 
     traverse match {
       case a: EdgeTraverse => {
@@ -295,13 +297,13 @@ class GraphQueryService @Inject() (
    */
   private def nodeTraverse[TU](
     filters: List[NodeFilter],
-    follow:  List[EdgeTypeTraverse])(implicit targeting: QueryTargeting[TU]): TraceFlow[TU] = {
+    follow:  List[EdgeTypeTraverse])(implicit targeting: QueryTargeting[TU], tracing: QueryTracing[GraphTrace[TU]]): TraceFlow[TU] = {
     nodeTraverseInner(filters, follow).map(_._1)
   }
 
   private def nodeTraverseInner[TU](
     filters: List[NodeFilter],
-    follow:  List[EdgeTypeTraverse])(implicit targeting: QueryTargeting[TU]): Flow[GraphTrace[TU], (GraphTrace[TU], Option[JsObject]), Any] = {
+    follow:  List[EdgeTypeTraverse])(implicit targeting: QueryTargeting[TU], tracing: QueryTracing[GraphTrace[TU]]): Flow[GraphTrace[TU], (GraphTrace[TU], Option[JsObject]), Any] = {
 
     val nodeIndex = targeting.nodeIndexName
     val edgeIndex = targeting.edgeIndexName
@@ -310,7 +312,7 @@ class GraphQueryService @Inject() (
     val initialHop = nodeCheck(nodeIndex, filters)
 
     implicit val ordering = Ordering.by { a: (GraphTrace[TU], Option[JsObject]) =>
-      a._1.sortKey.mkString("|")
+      tracing.sortKey(a._1).mkString("|")
     }
 
     initialHop.via {
@@ -324,18 +326,17 @@ class GraphQueryService @Inject() (
   }
 
   private def repeatedEdgeTraverse[TU](
-    traverse: RepeatedEdgeTraverse[TU])(implicit targeting: QueryTargeting[TU]): TraceFlow[TU] = {
+    traverse: RepeatedEdgeTraverse[TU])(implicit targeting: QueryTargeting[TU], tracing: QueryTracing[GraphTrace[TU]]): TraceFlow[TU] = {
     val follow = traverse.follow.traverses
     val edgeIndex = targeting.edgeIndexName
 
-    implicit val ordering = targeting.ordering
+    implicit val ordering = tracing.ordering
 
     edgeHop(
       follow,
       nodeHint = None).mapConcat {
       case EdgeHop(trace, directedEdge, item) => {
-        val nextUnit = targeting.traceHop(trace.terminusId, directedEdge, item)
-        val nextTrace = trace.injectNew(nextUnit)
+        val nextTrace = tracing.traceHop(trace, directedEdge, item, initial = true)
 
         val isTerminal = traverse.shouldTerminate(nextTrace)
         if (isTerminal) {
@@ -357,11 +358,11 @@ class GraphQueryService @Inject() (
     follow:   List[EdgeTypeTraverse],
     target:   List[EdgeTypeTraverse],
     typeHint: Option[NodeType],
-    initial:  Boolean)(implicit targeting: QueryTargeting[TU]): TraceFlow[TU] = {
+    initial:  Boolean)(implicit targeting: QueryTargeting[TU], tracing: QueryTracing[GraphTrace[TU]]): TraceFlow[TU] = {
 
     val edgeIndex = targeting.edgeIndexName
 
-    implicit val ordering = targeting.ordering
+    implicit val ordering = tracing.ordering
 
     val allTraverses = follow ++ target
     val targetSet: Set[GraphEdgeType] = target.map(_.edgeType).toSet
@@ -370,13 +371,7 @@ class GraphQueryService @Inject() (
       allTraverses,
       nodeHint = typeHint).map {
       case EdgeHop(trace, directedEdge, item) => {
-        val nextUnit = targeting.traceHop(trace.terminusId, directedEdge, item)
-        val nextTrace = if (initial) {
-          trace.injectNew(nextUnit)
-        } else {
-          trace.injectHead(nextUnit)
-        }
-
+        val nextTrace = tracing.traceHop(trace, directedEdge, item, initial)
         val isTerminal = targetSet.contains(directedEdge)
         (nextTrace, isTerminal)
       }
@@ -389,23 +384,18 @@ class GraphQueryService @Inject() (
 
   private def onehopTraverse[TU](
     follow:  List[EdgeTypeTraverse],
-    initial: Boolean)(implicit targeting: QueryTargeting[TU]): TraceFlow[TU] = {
+    initial: Boolean)(implicit targeting: QueryTargeting[TU], tracing: QueryTracing[GraphTrace[TU]]): TraceFlow[TU] = {
 
     edgeHop(
       follow,
       nodeHint = None) map {
       case EdgeHop(trace, directedEdge, item) => {
-        val nextUnit = targeting.traceHop(trace.terminusId, directedEdge, item)
-        if (initial) {
-          trace.injectNew(nextUnit)
-        } else {
-          trace.injectHead(nextUnit)
-        }
+        tracing.traceHop(trace, directedEdge, item, initial)
       }
     }
   }
 
-  private def filterTraverse[TU](traverses: List[Traverse])(implicit targeting: QueryTargeting[TU]): TraceFlow[TU] = {
+  private def filterTraverse[TU](traverses: List[Traverse])(implicit targeting: QueryTargeting[TU], tracing: QueryTracing[GraphTrace[TU]]): TraceFlow[TU] = {
     val dropRange = collection.immutable.Range(0, traverses.filter(_.isColumn).length)
 
     executeTrace(traverses).map {
@@ -415,7 +405,7 @@ class GraphQueryService @Inject() (
     }
   }
 
-  private def reverseTraverse[TU](traverse: ReverseTraverse)(implicit targeting: QueryTargeting[TU]): TraceFlow[TU] = {
+  private def reverseTraverse[TU](traverse: ReverseTraverse)(implicit targeting: QueryTargeting[TU], tracing: QueryTracing[GraphTrace[TU]]): TraceFlow[TU] = {
     val traverses = traverse.traverses
     val initial = Flow[GraphTrace[TU]].map(_.pushCopy) -> traverse.follow
 
@@ -465,7 +455,7 @@ class GraphQueryService @Inject() (
     // }
   }
 
-  private def statefulTraverse[TU](traverse: StatefulTraverse)(implicit targeting: QueryTargeting[TU]): TraceFlow[TU] = {
+  private def statefulTraverse[TU](traverse: StatefulTraverse)(implicit targeting: QueryTargeting[TU], tracing: QueryTracing[GraphTrace[TU]]): TraceFlow[TU] = {
     Flow[GraphTrace[TU]]
       .map(_.pushCopy)
       .via(performWind(traverse))
@@ -474,7 +464,7 @@ class GraphQueryService @Inject() (
       .via(performUnwind(traverse.follow, traverse.target))
   }
 
-  private def performWind[TU](traverse: StatefulTraverse)(implicit targeting: QueryTargeting[TU]) = {
+  private def performWind[TU](traverse: StatefulTraverse)(implicit targeting: QueryTargeting[TU], tracing: QueryTracing[GraphTrace[TU]]) = {
     val windTarget = NodeTypeFilter(traverse.from) :: Nil
     val windFollow = traverse.mapping.keySet.toList.map(EdgeTypeTraverse.basic)
 
@@ -505,7 +495,7 @@ class GraphQueryService @Inject() (
     }
   }
 
-  private def performTeleport[TU](traverse: StatefulTraverse)(implicit targeting: QueryTargeting[TU]) = {
+  private def performTeleport[TU](traverse: StatefulTraverse)(implicit targeting: QueryTargeting[TU], tracing: QueryTracing[GraphTrace[TU]]) = {
     Flow[StatefulTraverseUnwind[TU]].groupedWithin(StatefulBatchSize, 100.milliseconds).mapAsync(1) { statefulTeleports =>
       val nodeIndex = targeting.nodeIndexName
 
@@ -536,8 +526,11 @@ class GraphQueryService @Inject() (
         for {
           s <- statefulTeleports.toList
           node <- traverse.teleport.doJoin(s.node, s.names, collectedMap)
-          unit = targeting.unitFromJs(node, edgeOverride = Some(GraphEdgeTypeTeleport.teleportTo(traverse.to)))
         } yield {
+          // TODO: Janky
+          val unit = tracing.unitFromJs(
+            node,
+            edgeOverride = Some(GraphEdgeTypeTeleport.teleportTo(traverse.to))).terminusId
           s.copy(
             trace = s.trace.injectNew(unit))
         }
@@ -546,7 +539,7 @@ class GraphQueryService @Inject() (
   }
 
   // Key assumption is that these are generally quite small
-  private def performUnwind[TU](follows: List[GraphEdgeType], targets: List[GraphEdgeType])(implicit targeting: QueryTargeting[TU]) = {
+  private def performUnwind[TU](follows: List[GraphEdgeType], targets: List[GraphEdgeType])(implicit targeting: QueryTargeting[TU], tracing: QueryTracing[GraphTrace[TU]]) = {
     Flow[StatefulTraverseUnwind[TU]].groupedWithin(StatefulBatchSize, 100.milliseconds).flatMapConcat { statefulTeleports =>
 
       // group into distinct unwinds
@@ -600,7 +593,7 @@ class GraphQueryService @Inject() (
 
       allTraverseGroups.foldLeft(Source.empty[GraphTrace[TU]]) {
         case (acc, next) => {
-          acc.mergeSorted(next)(targeting.ordering)
+          acc.mergeSorted(next)(tracing.ordering)
         }
       }
     } // do we need to sort?
@@ -611,13 +604,13 @@ class GraphQueryService @Inject() (
     edgeIndex: String,
     traverses: List[EdgeTypeTraverse],
     traces:    List[GraphTrace[TU]],
-    nodeHint:  Option[NodeType])(implicit targeting: QueryTargeting[TU]) = {
+    nodeHint:  Option[NodeType])(implicit targeting: QueryTargeting[TU], tracing: QueryTracing[GraphTrace[TU]]) = {
     val typeMap: Map[String, EdgeTypeTraverse] = traverses.map { i =>
       i.edgeType.edgeType.identifier -> i
     }.toMap
 
     val traceMap = traces.groupBy { trace =>
-      targeting.getId(trace.terminusId)
+      tracing.getId(trace)
     } // id is unique so this is okay-ish
     val keys = traces.map(_.terminusId).distinct
 
@@ -644,7 +637,7 @@ class GraphQueryService @Inject() (
 
   private def nodeCheck[TU](
     nodeIndex: String,
-    filters:   List[NodeFilter])(implicit targeting: QueryTargeting[TU]) = {
+    filters:   List[NodeFilter])(implicit targeting: QueryTargeting[TU], tracing: QueryTracing[GraphTrace[TU]]) = {
     Flow[GraphTrace[TU]].groupedWithin(NodeHopSize, 100.milliseconds).mapAsync(1) { traces =>
       val query = targeting.nodeQuery(traces.map(_.terminusId).toList)
 
@@ -663,7 +656,7 @@ class GraphQueryService @Inject() (
         }.toMap
       } yield {
         traces.map { item =>
-          val id = targeting.getId(item.terminusId)
+          val id = tracing.getId(item)
           val graphNode = sourceMap.get(id)
           ((item, graphNode), graphNode.isDefined)
         }
@@ -675,10 +668,10 @@ class GraphQueryService @Inject() (
 
   private def edgeHop[TU](
     edgeTraverses: List[EdgeTypeTraverse],
-    nodeHint:      Option[NodeType])(implicit targeting: QueryTargeting[TU]): Flow[GraphTrace[TU], EdgeHop[GraphTrace[TU]], Any] = {
+    nodeHint:      Option[NodeType])(implicit targeting: QueryTargeting[TU], tracing: QueryTracing[GraphTrace[TU]]): Flow[GraphTrace[TU], EdgeHop[GraphTrace[TU]], Any] = {
 
     val edgeHopOrdering = Ordering.by { a: EdgeHop[GraphTrace[TU]] =>
-      a.obj.sortKey.mkString("|")
+      tracing.sortKey(a.obj).mkString("|")
     }
 
     Flow[GraphTrace[TU]].groupedWithin(EdgeHopInputSize, 100.milliseconds).mapAsync(1) { traces =>

@@ -54,7 +54,7 @@ class RelationalQueryService @Inject() (
     query: RelationalQuery, 
     shouldExplain: Boolean, 
     progressUpdates: Boolean
-  )(implicit targeting: QueryTargeting[TU], scroll: QueryScroll) = {
+  )(implicit targeting: QueryTargeting[TU], tracing: QueryTracing[GraphTrace[TU]], scroll: QueryScroll) = {
     // do validation
     query.validate
 
@@ -88,7 +88,7 @@ class RelationalQueryService @Inject() (
       } else {
         createJoinLattice(
           base,
-          query)(targeting, scroll, explain)
+          query)(targeting, tracing, scroll, explain)
       }
       filtered = joined filterNot { i =>
         // filter out violations
@@ -107,7 +107,7 @@ class RelationalQueryService @Inject() (
         val intersectionMiss = {
           query.intersect.exists { inter => 
             inter.map { k =>
-              i.get(k).map { v => targeting.getId(v.terminusId)}
+              i.get(k).map { v => tracing.getId(v)}
             }.distinct.length =/= 1
           }
         }
@@ -149,15 +149,18 @@ class RelationalQueryService @Inject() (
   }
 
   def runQuery(query: RelationalQuery, explain: Boolean, progressUpdates: Boolean)(implicit targeting: QueryTargeting[TraceUnit], scroll: QueryScroll): Future[RelationalQueryResult] = {
+    implicit val tracing = QueryTracing.Basic    
     runQueryGeneric[TraceUnit, (String, GraphNode), QueryNode](query, explain, progressUpdates)
   }
 
   def runQueryGenericGraph(query: RelationalQuery, explain: Boolean, progressUpdates: Boolean)(implicit targeting: QueryTargeting[GenericGraphUnit], scroll: QueryScroll): Future[RelationalQueryResult] = {
+    implicit val tracing = QueryTracing.GenericGraph    
     runQueryGeneric[GenericGraphUnit, GenericGraphNode, GenericGraphNode](query, explain, progressUpdates)
   }
 
   private def runQueryGeneric[TU, IN, NO](query: RelationalQuery, explain: Boolean, progressUpdates: Boolean)(
     implicit targeting: QueryTargeting[TU],
+    tracing: QueryTracing[GraphTrace[TU]],
     hasTraceKey: HasTraceKey[TU],
     node:          HydrationMapper[TraceKey, JsObject, Map[String, GraphTrace[TU]], Map[String, GraphTrace[IN]]],
     code:          HydrationMapper[FileKey, String, Map[String, GraphTrace[IN]], Map[String, GraphTrace[NO]]],
@@ -194,7 +197,7 @@ class RelationalQueryService @Inject() (
 
   private def createJoinLattice[TU](
     root:    Source[GraphTrace[TU], Any],
-    query:   RelationalQuery)(implicit targeting: QueryTargeting[TU], scroll: QueryScroll, explain: RelationalQueryExplain): Source[Joined[TU], Any] = {
+    query:   RelationalQuery)(implicit targeting: QueryTargeting[TU], tracing: QueryTracing[GraphTrace[TU]], scroll: QueryScroll, explain: RelationalQueryExplain): Source[Joined[TU], Any] = {
     val rootQuery = query.root.query
 
     /**
@@ -312,7 +315,7 @@ class RelationalQueryService @Inject() (
   private def applyTraceToGraph[TU](
     trace:        KeyedQuery[TraceQuery],
     broadcastMap: Map[String, UniformFanOutShape[GraphTrace[TU], GraphTrace[TU]]],
-    joincastMap:  Map[String, UniformFanOutShape[Joined[TU], Joined[TU]]])(implicit builder: GraphDSL.Builder[Any], targeting: QueryTargeting[TU], explain: RelationalQueryExplain): Option[(String, UniformFanOutShape[Joined[TU], Joined[TU]])] = {
+    joincastMap:  Map[String, UniformFanOutShape[Joined[TU], Joined[TU]]])(implicit builder: GraphDSL.Builder[Any], targeting: QueryTargeting[TU], tracing: QueryTracing[GraphTrace[TU]], explain: RelationalQueryExplain): Option[(String, UniformFanOutShape[Joined[TU], Joined[TU]])] = {
     val fromKey = trace.query.fromName
     val toKey = trace.key
 
@@ -360,7 +363,7 @@ class RelationalQueryService @Inject() (
 
       fromCast ~> Flow[GraphTrace[TU]].map { t =>
         pushExplain(("buffer", Json.obj("action" -> "trace-in", "key" -> toKey)))
-        t.pushExternalKey
+        tracing.pushExternalKey(t)
       } ~> flow.log(s"flow[$fromKey,$toKey]").map { t => 
         pushExplain(("buffer", Json.obj("action" -> "trace-out", "key" -> toKey)))
         t
@@ -379,9 +382,9 @@ class RelationalQueryService @Inject() (
           val fromItem = joined.get(fromKey).getOrElse {
             throw Errors.streamError("invalid merged item")
           }
-          fromItem.joinKey
+          tracing.joinKey(fromItem)
         },
-        { _.sortKey })
+        { v => tracing.sortKey(v) })
 
       /**
        * Link join output to join broadcast. Left joins have separate thing
@@ -492,7 +495,7 @@ private case class JoinTerminus[TU](key: String, cast: UniformFanOutShape[Joined
   val isLeft = leftJoin
 }
 
-private case class JoinTree[TU](joinKey: String, a: JoinUnit[TU], b: JoinUnit[TU])(implicit targeting: QueryTargeting[TU]) extends JoinUnit[TU] {
+private case class JoinTree[TU](joinKey: String, a: JoinUnit[TU], b: JoinUnit[TU])(implicit targeting: QueryTargeting[TU], tracing: QueryTracing[GraphTrace[TU]]) extends JoinUnit[TU] {
 
   val key = joinKey
 
@@ -501,7 +504,7 @@ private case class JoinTree[TU](joinKey: String, a: JoinUnit[TU], b: JoinUnit[TU
   def merge(query: RelationalQuery)(implicit builder: GraphDSL.Builder[Any], explain: RelationalQueryExplain) = {
     val getKey = { item: Joined[TU] =>
       val fromItem = item.getOrElse(joinKey, throw new Exception("invalid merged item"))
-      fromItem.joinKey
+      tracing.joinKey(fromItem)
     }
 
     val isLeft = a.isLeft || b.isLeft
@@ -539,7 +542,7 @@ private case class JoinTree[TU](joinKey: String, a: JoinUnit[TU], b: JoinUnit[TU
     query:                 RelationalQuery,
     joincastMap:           Map[String, UniformFanOutShape[Joined[TU], Joined[TU]]],
     leftJoinMap:           Map[String, UniformFanOutShape[Joined[TU], Joined[TU]]]
-  )(implicit builder: GraphDSL.Builder[Any], targeting: QueryTargeting[TU], explain: RelationalQueryExplain) = {
+  )(implicit builder: GraphDSL.Builder[Any], targeting: QueryTargeting[TU], tracing: QueryTracing[GraphTrace[TU]], explain: RelationalQueryExplain) = {
 
     val joinTree = getFinalJoinTree(query, joincastMap, leftJoinMap)
 
@@ -598,7 +601,7 @@ private case class JoinTree[TU](joinKey: String, a: JoinUnit[TU], b: JoinUnit[TU
     query: RelationalQuery,
     joincastMap:           Map[String, UniformFanOutShape[Joined[TU], Joined[TU]]],
     leftJoinMap:           Map[String, UniformFanOutShape[Joined[TU], Joined[TU]]]
-  )(implicit targeting: QueryTargeting[TU]) = {
+  )(implicit targeting: QueryTargeting[TU], tracing: QueryTracing[GraphTrace[TU]]) = {
     val traceQueries = query.traces
 
     val toLookup = traceQueries.map { trace => 

@@ -62,7 +62,7 @@ case class SpanContext(tracer: Tracer, span: Span) {
     attrib.foreach {
       case (k, v) => newSpan.setAttribute(k, v)
     }
-    
+
     newSpan.end()
   }
 }

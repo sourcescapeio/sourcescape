@@ -45,6 +45,7 @@ class RelationalResultsService @Inject() (
     named:   List[String])(
     implicit
     targeting:   QueryTargeting[TU],
+    tracing:     QueryTracing[GraphTrace[TU]],
     hasTraceKey: HasTraceKey[TU],
     groupable:   Groupable[IN],
     node:        HydrationMapper[TraceKey, JsObject, Map[String, GraphTrace[TU]], Map[String, GraphTrace[IN]]]): Source[Map[String, GraphTrace[IN]], Any] = {
@@ -143,6 +144,7 @@ class RelationalResultsService @Inject() (
   private def hydrate[TU, IN, NO](in: Source[Map[String, GraphTrace[TU]], Any])(
     implicit
     targeting:        QueryTargeting[TU],
+    tracing:          QueryTracing[GraphTrace[TU]],
     hasTraceKey:      HasTraceKey[TU],
     node:             HydrationMapper[TraceKey, JsObject, Map[String, GraphTrace[TU]], Map[String, GraphTrace[IN]]],
     code:             HydrationMapper[FileKey, String, Map[String, GraphTrace[IN]], Map[String, GraphTrace[NO]]],
@@ -158,6 +160,7 @@ class RelationalResultsService @Inject() (
     query:  RelationalQuery)(
     implicit
     targeting:        QueryTargeting[TU],
+    tracing:          QueryTracing[GraphTrace[TU]],
     hasTraceKey:      HasTraceKey[TU],
     node:             HydrationMapper[TraceKey, JsObject, Map[String, GraphTrace[TU]], Map[String, GraphTrace[IN]]],
     code:             HydrationMapper[FileKey, String, Map[String, GraphTrace[IN]], Map[String, GraphTrace[NO]]],
