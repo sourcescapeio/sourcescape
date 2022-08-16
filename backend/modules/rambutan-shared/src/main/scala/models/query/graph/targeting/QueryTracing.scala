@@ -3,8 +3,11 @@ package models.query
 import play.api.libs.json._
 import silvousplay.imports._
 
-// Actual targeting object
-trait QueryTracing[T, TU] {
+trait QueryTracingBasic[TU] {
+  def unitFromJs(js: JsObject, edgeOverride: Option[GraphEdgeType] = None): TU
+}
+
+trait QueryTracing[T, TU] extends QueryTracingBasic[TU] {
   self =>
 
   val extractor: HasBasicExtraction[T]
@@ -18,8 +21,6 @@ trait QueryTracing[T, TU] {
   def getId(unit: T) = extractor.getId(unit)
 
   def getKey(unit: T) = extractor.getKey(unit)
-
-  def unitFromJs(js: JsObject, edgeOverride: Option[GraphEdgeType] = None): TU
 
   def getTraceKey(trace: T): TU
 

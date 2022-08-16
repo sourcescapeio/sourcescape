@@ -39,16 +39,17 @@ class RelationalResultsService @Inject() (
     }
   }
 
-  private def runDistinct[TU, IN](
-    source:  Source[Map[String, GraphTrace[TU]], Any],
+  private def runDistinct[T, TU, IN](
+    source:  Source[Map[String, T], Any],
     columns: List[String],
     named:   List[String])(
     implicit
     targeting:   QueryTargeting[TU],
-    tracing:     QueryTracing[GraphTrace[TU]],
+    flattener:   HydrationFlattener[Map[String, T], TU],
+    tracing:     QueryTracing[T, TU],
     hasTraceKey: HasTraceKey[TU],
     groupable:   Groupable[IN],
-    node:        HydrationMapper[TraceKey, JsObject, Map[String, GraphTrace[TU]], Map[String, GraphTrace[IN]]]): Source[Map[String, GraphTrace[IN]], Any] = {
+    node:        HydrationMapper[TraceKey, JsObject, Map[String, T], Map[String, GraphTrace[IN]]]): Source[Map[String, GraphTrace[IN]], Any] = {
 
     val cSet = columns.toSet
     val nSet = named.toSet
@@ -57,13 +58,11 @@ class RelationalResultsService @Inject() (
     }.map { m =>
       // we only need terminus
       m.map {
-        case (k, v) => k -> v.copy(
-          tracesInternal = Nil,
-          terminus = v.terminus.copy(tracesInternal = Nil))
+        case (k, v) => k -> tracing.newTrace(tracing.getTraceKey(v))
       }
     }
 
-    val nodeJoined = nodeHydrationService.rehydrateNodeMap[TU, IN](filtered)
+    val nodeJoined = nodeHydrationService.rehydrateNodeMap[T, TU, IN](filtered)
 
     nodeJoined.statefulMapConcat { () =>
       val existing = collection.mutable.Set.empty[Map[String, String]]
@@ -84,10 +83,10 @@ class RelationalResultsService @Inject() (
     }
   }
 
-  private def runGroupedCount[TU, IN](
-    source:   Source[Map[String, GraphTrace[TU]], Any],
+  private def runGroupedCount[T, TU, IN](
+    source:   Source[Map[String, T], Any],
     grouping: RelationalSelect.GroupedCount)(
-    hydrateCount: Source[Map[String, GraphTrace[TU]], Any] => Source[Map[String, GraphTrace[IN]], Any])(
+    hydrateCount: Source[Map[String, T], Any] => Source[Map[String, GraphTrace[IN]], Any])(
     implicit
     groupable: Groupable[IN]): Source[Map[String, JsValue], Any] = {
 
@@ -141,28 +140,30 @@ class RelationalResultsService @Inject() (
     }
   }
 
-  private def hydrate[TU, IN, NO](in: Source[Map[String, GraphTrace[TU]], Any])(
+  private def hydrate[T, TU, IN, NO](in: Source[Map[String, T], Any])(
     implicit
     targeting:        QueryTargeting[TU],
-    tracing:          QueryTracing[GraphTrace[TU]],
+    tracing:          QueryTracing[T, TU],
     hasTraceKey:      HasTraceKey[TU],
-    node:             HydrationMapper[TraceKey, JsObject, Map[String, GraphTrace[TU]], Map[String, GraphTrace[IN]]],
+    flattener:        HydrationFlattener[Map[String, T], TU],
+    node:             HydrationMapper[TraceKey, JsObject, Map[String, T], Map[String, GraphTrace[IN]]],
     code:             HydrationMapper[FileKey, String, Map[String, GraphTrace[IN]], Map[String, GraphTrace[NO]]],
     fileKeyExtractor: FileKeyExtractor[IN],
     writes:           Writes[NO]): Source[Map[String, JsValue], Any] = {
-    nodeHydrationService.rehydrateMap[TU, IN, NO](in).map { src =>
+    nodeHydrationService.rehydrateMap[T, TU, IN, NO](in).map { src =>
       src.view.mapValues(_.json).toMap
     }
   }
 
-  def hydrateResults[TU, IN, NO](
-    source: Source[Map[String, GraphTrace[TU]], Any],
+  def hydrateResults[T, TU, IN, NO](
+    source: Source[Map[String, T], Any],
     query:  RelationalQuery)(
     implicit
     targeting:        QueryTargeting[TU],
-    tracing:          QueryTracing[GraphTrace[TU]],
+    tracing:          QueryTracing[T, TU],
     hasTraceKey:      HasTraceKey[TU],
-    node:             HydrationMapper[TraceKey, JsObject, Map[String, GraphTrace[TU]], Map[String, GraphTrace[IN]]],
+    flattener:        HydrationFlattener[Map[String, T], TU],
+    node:             HydrationMapper[TraceKey, JsObject, Map[String, T], Map[String, GraphTrace[IN]]],
     code:             HydrationMapper[FileKey, String, Map[String, GraphTrace[IN]], Map[String, GraphTrace[NO]]],
     fileKeyExtractor: FileKeyExtractor[IN],
     groupable:        Groupable[IN],
@@ -183,14 +184,14 @@ class RelationalResultsService @Inject() (
         runCount(source)
       }
       case d @ RelationalSelect.Distinct(c, n) => {
-        val distinct = runDistinct[TU, IN](source, c, n)
+        val distinct = runDistinct[T, TU, IN](source, c, n)
 
         nodeHydrationService.rehydrateCodeMap(distinct).map { src =>
           src.view.mapValues(_.json).toMap
         }
       }
       case g @ RelationalSelect.GroupedCount(_, _, _) => {
-        runGroupedCount[TU, IN](source, g) { in =>
+        runGroupedCount[T, TU, IN](source, g) { in =>
           nodeHydrationService.rehydrateNodeMap(in)
         }
       }

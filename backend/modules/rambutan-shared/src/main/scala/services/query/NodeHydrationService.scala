@@ -38,13 +38,14 @@ class NodeHydrationService @Inject() (
   /**
    * Partial rehydrates
    */
-  def rehydrateNodeMap[TU, IN](base: Source[Map[String, GraphTrace[TU]], Any])(
+  def rehydrateNodeMap[T, TU, IN](base: Source[Map[String, T], Any])(
     implicit
     targeting:   QueryTargeting[TU],
-    tracing:     QueryTracing[Map[String, GraphTrace[TU]], TU],
+    tracing:     QueryTracingBasic[TU],
     hasTraceKey: HasTraceKey[TU],
-    mapper:      HydrationMapper[TraceKey, JsObject, Map[String, GraphTrace[TU]], Map[String, GraphTrace[IN]]]): Source[Map[String, GraphTrace[IN]], Any] = {
-    joinNodes[Map[String, GraphTrace[TU]], Map[String, GraphTrace[IN]], TU](base)
+    flattener:   HydrationFlattener[Map[String, T], TU],
+    mapper:      HydrationMapper[TraceKey, JsObject, Map[String, T], Map[String, GraphTrace[IN]]]): Source[Map[String, GraphTrace[IN]], Any] = {
+    joinNodes[Map[String, T], Map[String, GraphTrace[IN]], TU](base)
   }
 
   def rehydrateCodeMap[IN, NO](base: Source[Map[String, GraphTrace[IN]], Any])(
@@ -64,7 +65,7 @@ class NodeHydrationService @Inject() (
   def rehydrate[T, TU, IN, NO](base: Source[T, Any])(
     implicit
     targeting:        QueryTargeting[TU],
-    tracing:          QueryTracing[T, TU],
+    tracing:          QueryTracingBasic[TU],
     hasTraceKey:      HasTraceKey[TU],
     fileKeyExtractor: FileKeyExtractor[IN],
     flattener:        HydrationFlattener[T, TU],
@@ -77,15 +78,16 @@ class NodeHydrationService @Inject() (
     rehydrateInternal[T, B, C, TU, IN, NO](base)
   }
 
-  def rehydrateMap[TU, IN, NO](base: Source[Map[String, GraphTrace[TU]], Any])(
+  def rehydrateMap[T, TU, IN, NO](base: Source[Map[String, T], Any])(
     implicit
     targeting:        QueryTargeting[TU],
-    tracing:          QueryTracing[Map[String, GraphTrace[TU]], TU],
+    tracing:          QueryTracingBasic[TU],
     hasTraceKey:      HasTraceKey[TU],
     fileKeyExtractor: FileKeyExtractor[IN],
-    node:             HydrationMapper[TraceKey, JsObject, Map[String, GraphTrace[TU]], Map[String, GraphTrace[IN]]],
+    flattener:        HydrationFlattener[Map[String, T], TU],
+    node:             HydrationMapper[TraceKey, JsObject, Map[String, T], Map[String, GraphTrace[IN]]],
     code:             HydrationMapper[FileKey, String, Map[String, GraphTrace[IN]], Map[String, GraphTrace[NO]]]): Source[Map[String, GraphTrace[NO]], Any] = {
-    type A = Map[String, GraphTrace[TU]]
+    type A = Map[String, T]
     type B = Map[String, GraphTrace[IN]]
     type C = Map[String, GraphTrace[NO]]
 
@@ -95,7 +97,7 @@ class NodeHydrationService @Inject() (
   private def rehydrateInternal[A, B, C, TU, IN, NO](base: Source[A, Any])(
     implicit
     targeting:        QueryTargeting[TU],
-    tracing:          QueryTracing[A, TU],
+    tracing:          QueryTracingBasic[TU],
     hasTraceKey:      HasTraceKey[TU],
     nodeFlattener:    HydrationFlattener[A, TU],
     codeFlattener:    HydrationFlattener[B, IN],
@@ -114,7 +116,7 @@ class NodeHydrationService @Inject() (
   private def joinNodes[From, To, TU](base: Source[From, Any])(
     implicit
     targeting:       QueryTargeting[TU],
-    tracing:         QueryTracing[From, TU],
+    tracing:         QueryTracingBasic[TU],
     traceExtraction: HasTraceKey[TU],
     flattener:       HydrationFlattener[From, TU],
     mapper:          HydrationMapper[TraceKey, JsObject, From, To]): Source[To, _] = {
