@@ -55,9 +55,14 @@ case class SpanContext(tracer: Tracer, span: Span) {
     })
   }
 
-  def event(name: String) = {
+  def event(name: String, attrib: (String, String)*) = {
     val newSpan = this.tracer.spanBuilder(name).setParent(
       Context.current().`with`(this.span)).startSpan()
+
+    attrib.foreach {
+      case (k, v) => newSpan.setAttribute(k, v)
+    }
+    
     newSpan.end()
   }
 }

@@ -36,6 +36,7 @@ class GraphQueryService @Inject() (
     targeting:        QueryTargeting[TU],
     context:          SpanContext,
     hasTraceKey:      HasTraceKey[TU],
+    // for hydration
     fileKeyExtractor: FileKeyExtractor[IN],
     node:             HydrationMapper[TraceKey, JsObject, GraphTrace[TU], GraphTrace[IN]],
     code:             HydrationMapper[FileKey, String, GraphTrace[IN], GraphTrace[NO]]): Future[(QueryResultHeader, Source[GraphTrace[NO], Any])] = {

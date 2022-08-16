@@ -205,14 +205,13 @@ class RelationalQueryService @Inject() (
     /**
      * Prelim info
      */
-    val queryDependencyCounts: Map[String, Int] = {
-      calculateQueryDependencyCounts(query)
-    }
-
     // Find terminal join nodes
     // Use reverse topologicalSort ordering
     // "for every directed edge uv from vertex u to vertex v, u comes before v in the ordering"
     // This guarantees right ordering of final joins
+
+    val rootKey = query.root.key
+
     val joinLattice = Flow.fromGraph(GraphDSL.create() { implicit builder =>
       /**
        * Calculate all the broadcasts.
@@ -220,35 +219,24 @@ class RelationalQueryService @Inject() (
        * - Its size depends on the number of edges to other nodes
        * - But also need to add 1 for pushing to a joiner
        */
+      val queryDependencyCounts: Map[String, Int] = {
+        calculateQueryDependencyCounts(query)
+      }
+      context.event("query.relational.dependency", 
+        "query.dependencies" -> Json.stringify(Json.toJson(queryDependencyCounts))
+      )
       val broadcastMap = queryDependencyCounts.map {
         case (k, size) => {
-          // add one to route to joiner
-          k -> builder.add(Broadcast[GraphTrace[TU]](size + 1))
-        }
-      }
-
-      // broadcasts for each of the joins
-      // Need to broadcast join to new flow as well as other joins
-      val joincastMap = queryDependencyCounts.map {
-        case (k, size) => {
-          // if none, then route to exit
-          k -> builder.add(Broadcast[Joined[TU]](math.max(size, 1)))
+          k -> builder.add(Broadcast[Joined[TU]](size))
         }
       }
 
       /**
        * Link the root with its join broadcast
        */
-      val rootKey = query.root.key
       val rootCast = broadcastMap.get(rootKey).getOrElse {
         throw new Exception("could not find root cast")
       }
-      val rootJoin = joincastMap.get(rootKey).getOrElse {
-        throw new Exception("could not find root join")
-      }
-      rootCast ~> Flow[GraphTrace[TU]].map { item =>
-        Map(rootKey -> item)
-      } ~> rootJoin
 
       /**
        * Link the node broadcasts together
@@ -258,8 +246,7 @@ class RelationalQueryService @Inject() (
       val leftJoins = query.traces.flatMap { trace =>
         applyTraceToGraph(
           trace,
-          broadcastMap,
-          joincastMap)
+          broadcastMap)
       }.toMap
 
       /**
@@ -269,7 +256,7 @@ class RelationalQueryService @Inject() (
       // fold across, joining at shared common node in tree
       val finalMerge = calculateFinalMerge(
         query,
-        joincastMap,
+        broadcastMap,
         leftJoins)
 
       akka.stream.FlowShape(rootCast.in, finalMerge.out(0))
@@ -278,46 +265,41 @@ class RelationalQueryService @Inject() (
       onFinish = Attributes.LogLevels.Warning,
       onFailure = Attributes.LogLevels.Error))
 
-    root.via(joinLattice)
+    root.map { item =>
+      Map(rootKey -> item)
+    }.via(joinLattice)
   }
 
   /**
    * Helpers
    */
-  // TODO: better name
   private def calculateQueryDependencyCounts(query: RelationalQuery): Map[String, Int] = {
-    val allKeys = query.allKeys
     val allFroms: Map[String, Int] = {
-      query.traces.map(_.query.fromName -> 1).groupBy(_._1).view.mapValues(_.length).toMap
+      val base: List[(String, Int)] = query.traces.map { trace =>
+        val dependencies = if (trace.query.from.leftJoin) {
+          2
+        } else {
+          1
+        }
+        trace.query.fromName -> dependencies
+      }
+
+      base.groupBy(_._1).map {
+        case (k, v) => k -> v.map(_._2).sum
+      }
     }
 
-    // this is important
+    // we MUST have an exhaustive map
+    val allKeys = query.allKeys
     allKeys.map { k =>
       k -> allFroms.getOrElse(k, 0)
     }.toMap
   }
 
-  /**
-                                                 [to other cast]
-  +----------+    queryFlow     +---------+      (like fromCast)
-  | fromCast +----------------->+ outCast +-------------->
-  +---+------+                  +----+----+
-      |                              |
-                                     +---------+
-      |                                        |                              [to other join]
-              +----------+   joinFlow      +---v----+  passNext  +--------+   (like fromJoin)
-      +- - - -> fromJoin +-----------------> joiner +-----+----->+joinCast+--------->
-    linked    +----------+                 +--------+     |      +--------+
-    thru                                                  |
-    previous                                              |    +----------+  [returned]
-    trace                                                 +--->+ leftCast |--------->
-    apply                                                      +----------+
-                                                       maybeLeft
-  */
+
   private def applyTraceToGraph[TU](
     trace:        KeyedQuery[TraceQuery],
-    broadcastMap: Map[String, UniformFanOutShape[GraphTrace[TU], GraphTrace[TU]]],
-    joincastMap:  Map[String, UniformFanOutShape[Joined[TU], Joined[TU]]])(implicit builder: GraphDSL.Builder[Any], targeting: QueryTargeting[TU], context: SpanContext, explain: RelationalQueryExplain): Option[(String, UniformFanOutShape[Joined[TU], Joined[TU]])] = {
+    broadcastMap:  Map[String, UniformFanOutShape[Joined[TU], Joined[TU]]])(implicit builder: GraphDSL.Builder[Any], targeting: QueryTargeting[TU], context: SpanContext, explain: RelationalQueryExplain): Option[(String, UniformFanOutShape[Joined[TU], Joined[TU]])] = {
     val fromKey = trace.query.fromName
     val toKey = trace.key
 
@@ -325,16 +307,10 @@ class RelationalQueryService @Inject() (
     val fromCast = broadcastMap.get(fromKey).getOrElse {
       throw new Exception("could not find input:" + fromKey)
     }
-    val fromJoin = joincastMap.get(fromKey).getOrElse {
-      throw new Exception("could not find input:join:" + fromKey)
-    }
 
     // current node
-    val outCast = broadcastMap.get(toKey).getOrElse {
+    val toCast = broadcastMap.get(toKey).getOrElse {
       throw new Exception("could not find output:" + toKey)
-    }
-    val joinCast = joincastMap.get(toKey).getOrElse {
-      throw new Exception("could not find output:join:" + toKey)
     }
 
     /**
@@ -344,87 +320,35 @@ class RelationalQueryService @Inject() (
      * Build up MergeJoin [(from.join, to) -> joiner]
      */
     val isLeftJoin = trace.query.from.leftJoin
-    
-    if (trace.query.traverses.isEmpty && !isLeftJoin) {
-      // Don't build a whole join thing if we're just passing through
-      passthroughJoin(
-        fromCast,
-        outCast,
-        fromJoin,
-        joinCast,
-        fromKey,
-        toKey
-      )
 
-      None
-    } else {
-      val flow = context.withSpanF(s"query.relational.trace", "key" -> toKey) { fc =>
-        graphQueryService.executeTrace(
-          trace.query.traverses)(targeting, fc)
-      }
-
-      val pushExplain = explain.pusher(toKey)
-
-      fromCast ~> Flow[GraphTrace[TU]].map { t =>
-        pushExplain(("buffer", Json.obj("action" -> "trace-in", "key" -> toKey)))
-        t.pushExternalKey
-      } ~> flow.log(s"flow[$fromKey,$toKey]").map { t => 
-        pushExplain(("buffer", Json.obj("action" -> "trace-out", "key" -> toKey)))
-        t
-      } ~> outCast
-
-      explain.link(fromKey, toKey)
-
-      val joiner = buildMergeJoin(
-        fromJoin,
-        outCast,
-        // explain.pusher(toKey),
-        pushExplain,
-        leftOuter = isLeftJoin,
-        rightOuter = false)(
-        { joined =>
-          val fromItem = joined.get(fromKey).getOrElse {
-            throw Errors.streamError("invalid merged item")
-          }
-          fromItem.joinKey
-        },
-        { _.sortKey })
-
-      /**
-       * Link join output to join broadcast. Left joins have separate thing
-       * [joiner -> to.join]
-       */
-      if (isLeftJoin) {
-        Option(linkJoinToNextWithLeftJoin(joiner, toKey, joinCast, explain.pusher(toKey)))
-      } else {
-        linkJoinToNext(joiner, toKey, joinCast, explain.pusher(toKey))
-        None
-      }
+    val flow = context.withSpanF(s"query.relational.trace", "key" -> toKey) { fc =>
+      graphQueryService.executeTrace(
+        trace.query.traverses)(targeting, fc)
     }
-  }
 
-  private def passthroughJoin[TU](
-    fromCast: UniformFanOutShape[GraphTrace[TU], GraphTrace[TU]],
-    outCast: UniformFanOutShape[GraphTrace[TU], GraphTrace[TU]],
-    fromJoin: UniformFanOutShape[Joined[TU], Joined[TU]],
-    joinCast: UniformFanOutShape[Joined[TU], Joined[TU]],
-    fromKey: String,
-    toKey: String
-  )(implicit builder: GraphDSL.Builder[Any]) = {
-    val merge = builder.add(Merge[Joined[TU]](2))
-    // to keep dependency counts clean, we'll just pass through both broadcasts
-    fromCast ~> outCast ~> Flow[GraphTrace[TU]].mapConcat { _ => 
-      List.empty[Joined[TU]]
-    } ~> merge
+    val pushExplain = explain.pusher(toKey)
 
-    // remap directly from join stream
-    fromJoin ~> Flow[Joined[TU]].map {
-      case items => {
-        items ++ items.get(fromKey).map(toKey -> _).toMap
-      }
-    } ~> merge
+    fromCast ~> Flow[TU].map { t =>
+      pushExplain(("buffer", Json.obj("action" -> "trace-in", "key" -> toKey)))
+      t
+    } ~> flow.log(s"flow[$fromKey,$toKey]").map { t => 
+      pushExplain(("buffer", Json.obj("action" -> "trace-out", "key" -> toKey)))
+      t
+    } ~> toCast
 
-    merge ~> joinCast
+    explain.link(fromKey, toKey)
+
+    /**
+     * Link join output to join broadcast. Left joins have separate thing
+     * [joiner -> to.join]
+     */
+    if (isLeftJoin) {
+      // generate left join
+      Option(linkJoinToNextWithLeftJoin(joiner, toKey, joinCast, explain.pusher(toKey)))
+    } else {
+      // linkJoinToNext(joiner, toKey, joinCast, explain.pusher(toKey))
+      None
+    }
   }
 
   type JoinOutput[TU] = (Option[Joined[TU]], Option[GraphTrace[TU]])
