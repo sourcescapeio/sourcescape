@@ -51,7 +51,8 @@ class GraphQueryService @Inject() (
    */
   val SearchScroll = 10000
   val NodeHopSize = 2000
-  val EdgeHopInputSize = 200
+  // val EdgeHopInputSize = 200
+  val EdgeHopInputSize = 2000
   val RecursionSize = 10000
   val ExportHopSize = 10000
 
@@ -144,7 +145,7 @@ class GraphQueryService @Inject() (
 
         val newSource = rootSource.alsoTo {
           Flow[T].map { v =>
-            tracing.getId(v)
+            tracing.getId(tracing.getTerminus(v))
           }.groupedWithin(2000, 600.milliseconds).scan((0L, "")) {
             case ((count, latestId), ids) => {
               val greater = ids.filter(_ > latestId)
@@ -624,9 +625,9 @@ class GraphQueryService @Inject() (
     }.toMap
 
     val traceMap = traces.groupBy { trace =>
-      tracing.getId(trace)
+      tracing.getId(tracing.getTerminus(trace))
     } // id is unique so this is okay-ish
-    val keys = traces.map(tracing.getTraceKey).distinct
+    val keys = traces.map(tracing.getTerminus).distinct
 
     for {
       source <- ifNonEmpty(traverses) {
@@ -668,7 +669,7 @@ class GraphQueryService @Inject() (
     nodeIndex: String,
     filters:   List[NodeFilter])(implicit targeting: QueryTargeting[TU], tracing: QueryTracing[T, TU]) = {
     Flow[T].groupedWithin(NodeHopSize, 100.milliseconds).mapAsync(1) { traces =>
-      val query = targeting.nodeQuery(traces.map(tracing.getTraceKey).toList)
+      val query = targeting.nodeQuery(traces.map(tracing.getTerminus).toList)
 
       for {
         (total, source) <- elasticSearchService.source(
@@ -685,7 +686,7 @@ class GraphQueryService @Inject() (
         }.toMap
       } yield {
         traces.map { item =>
-          val id = tracing.getId(item)
+          val id = tracing.getId(tracing.getTerminus(item))
           val graphNode = sourceMap.get(id)
           ((item, graphNode), graphNode.isDefined)
         }

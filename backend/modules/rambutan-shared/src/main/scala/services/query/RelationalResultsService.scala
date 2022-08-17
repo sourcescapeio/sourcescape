@@ -58,7 +58,7 @@ class RelationalResultsService @Inject() (
     }.map { m =>
       // we only need terminus
       m.map {
-        case (k, v) => k -> tracing.newTrace(tracing.getTraceKey(v))
+        case (k, v) => k -> tracing.newTrace(tracing.getTerminus(v))
       }
     }
 

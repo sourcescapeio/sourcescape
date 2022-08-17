@@ -3,26 +3,106 @@ package models.query
 import play.api.libs.json._
 import silvousplay.imports._
 
+//
+case class MapTracing[T, TU](inner: QueryTracing[T, TU], fromKey: String, toKey: String) extends QueryTracing[Map[String, T], TU] {
+
+  /**
+   * Unit level
+   */
+  def getId(unit: TU) = inner.getId(unit)
+
+  def getKey(unit: TU) = inner.getKey(unit)
+
+  def unitFromJs(js: JsObject, edgeOverride: Option[GraphEdgeType] = None) = {
+    inner.unitFromJs(js, edgeOverride)
+  }
+
+  /**
+   *
+   */
+  private def getToTrace(trace: Map[String, T]) = trace.getOrElse(toKey, throw new Exception("invalid toKey"))
+
+  private def getFromTrace(trace: Map[String, T]) = trace.getOrElse(fromKey, throw new Exception("invalid fromKey"))
+
+  private def operateOnTo[R](trace: Map[String, T])(f: T => T) = {
+    val toTrace = getToTrace(trace)
+
+    trace ++ Map(
+      toKey -> f(toTrace))
+  }
+
+  def getTerminus(trace: Map[String, T]): TU = {
+    inner.getTerminus(getToTrace(trace))
+  }
+
+  def pushExternalKey(trace: Map[String, T]): Map[String, T] = {
+    val fromTrace = getFromTrace(trace)
+
+    trace ++ Map(
+      toKey -> inner.pushExternalKey(fromTrace))
+  }
+
+  def traceHop(trace: Map[String, T], edgeType: GraphEdgeType, edgeJs: JsObject, initial: Boolean): Map[String, T] = {
+    operateOnTo(trace) { toTrace =>
+      inner.traceHop(toTrace, edgeType, edgeJs, initial)
+    }
+  }
+
+  def pushCopy(trace: Map[String, T]): Map[String, T] = {
+    operateOnTo(trace) { toTrace =>
+      inner.pushCopy(toTrace)
+    }
+  }
+
+  def dropHead(trace: Map[String, T]): Map[String, T] = {
+    operateOnTo(trace) { toTrace =>
+      inner.dropHead(toTrace)
+    }
+  }
+
+  def injectNew(trace: Map[String, T], unit: TU): Map[String, T] = {
+    operateOnTo(trace) { toTrace =>
+      inner.injectNew(toTrace, unit)
+    }
+  }
+
+  def newTrace(unit: TU): Map[String, T] = {
+    Map(
+      toKey -> inner.newTrace(unit))
+  }
+
+  def sortKey(trace: Map[String, T]): List[String] = {
+    inner.sortKey(getToTrace(trace))
+  }
+
+  def ordering: Ordering[Map[String, T]] = {
+    Ordering.by { a: Map[String, T] =>
+      inner.sortKey(getToTrace(a)).mkString("|")
+    }
+  }
+
+  def calculateUnwindSequence(traverse: StatefulTraverse, trace: Map[String, T]): List[EdgeTypeTarget] = {
+    inner.calculateUnwindSequence(traverse, getToTrace(trace))
+  }
+}
+
 trait QueryTracingBasic[TU] {
   def unitFromJs(js: JsObject, edgeOverride: Option[GraphEdgeType] = None): TU
+
+  def getId(unit: TU): String
+
+  def getKey(unit: TU): String
 }
 
 trait QueryTracing[T, TU] extends QueryTracingBasic[TU] {
   self =>
-
-  val extractor: HasBasicExtraction[T]
 
   def traceHop(unit: T, edgeType: GraphEdgeType, edgeJs: JsObject, initial: Boolean): T
 
   /**
    * Inherited
    */
-  // HasBasicExtractor
-  def getId(unit: T) = extractor.getId(unit)
-
-  def getKey(unit: T) = extractor.getKey(unit)
-
-  def getTraceKey(trace: T): TU
+  def getTerminus(trace: T): TU
 
   def pushExternalKey(trace: T): T
 
@@ -31,8 +111,6 @@ trait QueryTracing[T, TU] extends QueryTracingBasic[TU] {
   def dropHead(trace: T): T
 
   def injectNew(trace: T, unit: TU): T
-
-  def injectHead(trace: T, unit: TU): T
 
   def newTrace(unit: TU): T
 
@@ -43,7 +121,7 @@ trait QueryTracing[T, TU] extends QueryTracingBasic[TU] {
 
   final def joinKey(trace: T): List[String] = sortKey(trace) :+ headKey(trace)
 
-  final def headKey(trace: T): String = getKey(trace)
+  private def headKey(trace: T): String = getKey(getTerminus(trace))
 
   def ordering: Ordering[T]
 
@@ -55,18 +133,20 @@ trait QueryTracing[T, TU] extends QueryTracingBasic[TU] {
 
 object QueryTracing {
   case object GenericGraph extends QueryTracing[GraphTrace[GenericGraphUnit], GenericGraphUnit] {
-    val extractor = new HasBasicExtraction[GraphTrace[GenericGraphUnit]] {
-      // just gets basic id
-      def getId(trace: GraphTrace[GenericGraphUnit]): String = {
-        trace.terminusId.id
-      }
-
-      // used to compute join keys for relational
-      def getKey(trace: GraphTrace[GenericGraphUnit]): String = {
-        val unit = trace.terminusId
-        s"${unit.orgId}/${unit.id}"
-      }
+    /**
+     * Unit level
+     */
+    def getId(unit: GenericGraphUnit): String = {
+      unit.id
     }
+
+    def getKey(unit: GenericGraphUnit): String = {
+      s"${unit.orgId}/${unit.id}"
+    }
+
+    /**
+     * Trace level
+     */
 
     def unitFromJs(js: JsObject, edgeOverride: Option[GraphEdgeType] = None) = {
       val id = (js \ "_source" \ "id").as[String]
@@ -82,7 +162,7 @@ object QueryTracing {
       GraphTrace(Nil, Nil, SubTrace(Nil, unit))
     }
 
-    def getTraceKey(trace: GraphTrace[GenericGraphUnit]): GenericGraphUnit = {
+    def getTerminus(trace: GraphTrace[GenericGraphUnit]): GenericGraphUnit = {
       trace.terminusId
     }
 
@@ -95,7 +175,7 @@ object QueryTracing {
     }
 
     def pushExternalKey(trace: GraphTrace[GenericGraphUnit]) = trace.copy(
-      externalKeys = trace.externalKeys :+ getKey(GraphTrace(externalKeys = Nil, Nil, SubTrace(Nil, trace.root))),
+      externalKeys = trace.externalKeys :+ getKey(trace.root),
       tracesInternal = Nil,
       terminus = trace.terminus.wipe)
 
@@ -117,12 +197,12 @@ object QueryTracing {
       trace.injectNew(unit)
     }
 
-    def injectHead(trace: GraphTrace[GenericGraphUnit], unit: GenericGraphUnit) = {
+    private def injectHead(trace: GraphTrace[GenericGraphUnit], unit: GenericGraphUnit) = {
       trace.injectHead(unit)
     }
 
     def sortKey(trace: GraphTrace[GenericGraphUnit]): List[String] = {
-      trace.externalKeys :+ getKey(GraphTrace(externalKeys = Nil, Nil, SubTrace(Nil, trace.root)))
+      trace.externalKeys :+ getKey(trace.root)
     }
 
     def ordering = {
@@ -138,13 +218,16 @@ object QueryTracing {
   }
 
   case object Basic extends QueryTracing[GraphTrace[TraceUnit], TraceUnit] {
-    val extractor = new HasBasicExtraction[GraphTrace[TraceUnit]] {
-      def getId(trace: GraphTrace[TraceUnit]) = trace.terminusId.id
+    /**
+     * Unit level
+     */
 
-      def getKey(trace: GraphTrace[TraceUnit]) = {
-        val unit = trace.terminusId
-        s"${unit.key}/${unit.path}/${unit.id}"
-      }
+    def getId(unit: TraceUnit): String = {
+      unit.id
+    }
+
+    def getKey(unit: TraceUnit): String = {
+      s"${unit.key}/${unit.path}/${unit.id}"
     }
 
     def unitFromJs(js: JsObject, edgeOverride: Option[GraphEdgeType] = None) = {
@@ -157,7 +240,10 @@ object QueryTracing {
       TraceUnit(edgeOverride, key, path, id, name, index)
     }
 
-    def getTraceKey(trace: GraphTrace[TraceUnit]): TraceUnit = {
+    /**
+     * Trace level
+     */
+    def getTerminus(trace: GraphTrace[TraceUnit]): TraceUnit = {
       trace.terminusId
     }
 
@@ -173,7 +259,7 @@ object QueryTracing {
       trace.injectNew(unit)
     }
 
-    def injectHead(trace: GraphTrace[TraceUnit], unit: TraceUnit) = {
+    private def injectHead(trace: GraphTrace[TraceUnit], unit: TraceUnit) = {
       trace.injectHead(unit)
     }
 
@@ -182,7 +268,7 @@ object QueryTracing {
     }
 
     def pushExternalKey(trace: GraphTrace[TraceUnit]) = trace.copy(
-      externalKeys = trace.externalKeys :+ getKey(GraphTrace(externalKeys = Nil, Nil, SubTrace(Nil, trace.root))),
+      externalKeys = trace.externalKeys :+ getKey(trace.root),
       tracesInternal = Nil,
       terminus = trace.terminus.wipe)
 
@@ -203,7 +289,7 @@ object QueryTracing {
     }
 
     def sortKey(trace: GraphTrace[TraceUnit]): List[String] = {
-      trace.externalKeys :+ getKey(GraphTrace(externalKeys = Nil, Nil, SubTrace(Nil, trace.root)))
+      trace.externalKeys :+ getKey(trace.root)
     }
 
     def ordering = {

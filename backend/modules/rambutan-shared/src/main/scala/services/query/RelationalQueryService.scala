@@ -109,7 +109,7 @@ class RelationalQueryService @Inject() (
         val intersectionMiss = {
           query.intersect.exists { inter => 
             inter.map { k =>
-              i.get(k).map { v => tracing.getId(v)}
+              i.get(k).map { v => tracing.getId(tracing.getTerminus(v))}
             }.distinct.length =/= 1
           }
         }
@@ -129,7 +129,7 @@ class RelationalQueryService @Inject() (
                   lastKey.lte(
                     query.calculatedOrdering, 
                     next.map {
-                      case (k, v) => k -> targeting.relationalKeyItem(tracing.getTraceKey(v))
+                      case (k, v) => k -> targeting.relationalKeyItem(tracing.getTerminus(v))
                     }
                   )
                 ) {
