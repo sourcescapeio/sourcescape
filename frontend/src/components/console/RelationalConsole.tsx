@@ -50,6 +50,28 @@ export function RelationalConsoleContainer() {
     setSize(size => (size + 50))
   }, []);
 
+  const relationalTime = useCallback((q: string) => {
+    const queryStartTime = new Date().getTime();
+
+    return fetch(`/api/orgs/-1/query/relational/time/${language}`, {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json;charset=UTF-8',        
+      },
+      body: JSON.stringify({
+        q
+      }),
+    }).then(async (resp) => {
+      const json = await resp.json()
+      const queryReturnTime = new Date().getTime();
+      const returnTime = (queryReturnTime - queryStartTime);
+      setReturnTime(returnTime)
+
+      alert(json.trace)
+    });
+  }, [language])
+
   const relationalSearch = useCallback((q: string) => {
     setLoading(true)
     setError(null)
@@ -62,10 +84,6 @@ export function RelationalConsoleContainer() {
     setIsDiff(false)
     setProgress(null)
     setSizeEstimate(null)
-
-    //   // ???
-    //   previous: null,
-    // })
 
     const queryStartTime = new Date().getTime();
 
@@ -96,7 +114,7 @@ export function RelationalConsoleContainer() {
 
       const queryReturnTime = new Date().getTime();
       const returnTime = (queryReturnTime - queryStartTime);
-
+      
       // setExplainColumns
       setIsDiff(isDiff)
       setReturnTime(returnTime)
@@ -155,6 +173,7 @@ export function RelationalConsoleContainer() {
           <ConsoleQueryComponent 
             // initialize={this.props.initialize}
             search={relationalSearch}
+            time={relationalTime}
             loading={loading}
             error={error}
             placeholder="SELECT file:(package.json) ... "

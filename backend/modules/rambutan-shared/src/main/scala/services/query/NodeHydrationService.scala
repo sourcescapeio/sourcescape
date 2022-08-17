@@ -8,6 +8,7 @@ import models.index.esprima._
 import javax.inject._
 import scala.concurrent.{ ExecutionContext, Future }
 import silvousplay.imports._
+import silvousplay.api._
 import play.api.mvc._
 import play.api.mvc.Results._
 import play.api.libs.ws._
@@ -24,8 +25,11 @@ class NodeHydrationService @Inject() (
   fileService:          FileService,
   elasticSearchService: ElasticSearchService)(implicit mat: akka.stream.Materializer, ec: ExecutionContext) {
 
-  val CodeJoinBatchSize = 20 // keep this small. no real gain from batching GCS
+  val CodeJoinBatchSize = 200 // keep this small. no real gain from batching GCS
+  val CodeJoinLatency = 50.milliseconds
+
   val NodeHydrationBatchSize = 1000
+  val NodeHydrationLatency = 100.milliseconds
 
   /**
    * Non-generics
@@ -42,6 +46,7 @@ class NodeHydrationService @Inject() (
     implicit
     targeting:   QueryTargeting[TU],
     tracing:     QueryTracingBasic[TU],
+    context:     SpanContext,
     hasTraceKey: HasTraceKey[TU],
     flattener:   HydrationFlattener[Map[String, T], TU],
     mapper:      HydrationMapper[TraceKey, JsObject, Map[String, T], Map[String, GraphTrace[IN]]]): Source[Map[String, GraphTrace[IN]], Any] = {
@@ -50,6 +55,7 @@ class NodeHydrationService @Inject() (
 
   def rehydrateCodeMap[IN, NO](base: Source[Map[String, GraphTrace[IN]], Any])(
     implicit
+    context:          SpanContext,
     fileKeyExtractor: FileKeyExtractor[IN],
     mapper:           HydrationMapper[FileKey, String, Map[String, GraphTrace[IN]], Map[String, GraphTrace[NO]]]): Source[Map[String, GraphTrace[NO]], Any] = {
     type B = Map[String, GraphTrace[IN]]
@@ -66,6 +72,7 @@ class NodeHydrationService @Inject() (
     implicit
     targeting:        QueryTargeting[TU],
     tracing:          QueryTracingBasic[TU],
+    context:          SpanContext,
     hasTraceKey:      HasTraceKey[TU],
     fileKeyExtractor: FileKeyExtractor[IN],
     flattener:        HydrationFlattener[T, TU],
@@ -82,6 +89,7 @@ class NodeHydrationService @Inject() (
     implicit
     targeting:        QueryTargeting[TU],
     tracing:          QueryTracingBasic[TU],
+    context:          SpanContext,
     hasTraceKey:      HasTraceKey[TU],
     fileKeyExtractor: FileKeyExtractor[IN],
     flattener:        HydrationFlattener[Map[String, T], TU],
@@ -98,6 +106,7 @@ class NodeHydrationService @Inject() (
     implicit
     targeting:        QueryTargeting[TU],
     tracing:          QueryTracingBasic[TU],
+    context:          SpanContext,
     hasTraceKey:      HasTraceKey[TU],
     nodeFlattener:    HydrationFlattener[A, TU],
     codeFlattener:    HydrationFlattener[B, IN],
@@ -117,61 +126,83 @@ class NodeHydrationService @Inject() (
     implicit
     targeting:       QueryTargeting[TU],
     tracing:         QueryTracingBasic[TU],
+    context:         SpanContext,
     traceExtraction: HasTraceKey[TU],
     flattener:       HydrationFlattener[From, TU],
     mapper:          HydrationMapper[TraceKey, JsObject, From, To]): Source[To, _] = {
-    base.groupedWithin(NodeHydrationBatchSize, 100.milliseconds).mapAsync(1) { traces =>
-      val allTraces = flattener.flatten(traces.toList)
-      for {
-        (total, source) <- elasticSearchService.source(
-          targeting.nodeIndexName,
-          ESQuery.bool(
-            filter = targeting.nodeQuery(allTraces) :: Nil),
-          sort = targeting.nodeSort,
-          scrollSize = NodeHydrationBatchSize)
-        nodeMap <- source.runWith(Sink.fold(Map.empty[TraceKey, JsObject]) {
-          case (acc, item) => {
-            val key = traceExtraction.traceKey(tracing.unitFromJs(item))
-            val obj = (item \ "_source").as[JsObject]
-            acc + (key -> obj)
+    context.withSpanS("query.rehydrate.nodes") { cc =>
+      base.groupedWithin(NodeHydrationBatchSize, NodeHydrationLatency).mapAsync(1) { traces =>
+
+        val allTraces = flattener.flatten(traces.toList)
+        for {
+          (total, source) <- context.withSpan("query.rehydrate.nodes") { _ =>
+            for {
+              (total, source) <- elasticSearchService.source(
+                targeting.nodeIndexName,
+                ESQuery.bool(
+                  filter = targeting.nodeQuery(allTraces) :: Nil),
+                sort = targeting.nodeSort,
+                scrollSize = NodeHydrationBatchSize)
+            } yield {
+              (total, cc.withSpanS("query.rehydrate.nodes.consume") { _ =>
+                source
+              })
+            }
           }
-        })
-      } yield {
-        traces.map { trace =>
-          mapper.hydrate(trace, nodeMap)
+          nodeMap <- source.runWith(Sink.fold(Map.empty[TraceKey, JsObject]) {
+            case (acc, item) => {
+              val key = traceExtraction.traceKey(tracing.unitFromJs(item))
+              val obj = (item \ "_source").as[JsObject]
+              acc + (key -> obj)
+            }
+          })
+        } yield {
+          traces.map { trace =>
+            mapper.hydrate(trace, nodeMap)
+          }
         }
+      }.mapConcat {
+        case s => s
       }
-    }.mapConcat {
-      case s => s
     }
   }
 
   private def joinCode[From, To, IN](in: Source[From, Any])(f: List[FileKey] => Future[Map[FileKey, String]])(
     implicit
+    context:          SpanContext,
     flattener:        HydrationFlattener[From, IN],
     fileKeyExtractor: FileKeyExtractor[IN],
     mapper:           HydrationMapper[FileKey, String, From, To]): Source[To, Any] = {
     val codeScanInitial = (Map.empty[FileKey, String], List.empty[To])
-    in.groupedWithin(CodeJoinBatchSize, 100.milliseconds).scanAsync(codeScanInitial) {
-      case ((codeMap, _), next) => {
-        val keys = flattener.flatten(next.toList).flatMap(fileKeyExtractor.extract).distinct
 
-        val (hasKeys, remainingKeys) = keys.partition(k => codeMap.contains(k))
+    context.withSpanS("query.hydration.code") { cc =>
+      in.groupedWithin(CodeJoinBatchSize, CodeJoinLatency).scanAsync(codeScanInitial) {
+        case ((codeMap, _), next) => {
+          val keys = flattener.flatten(next.toList).flatMap(fileKeyExtractor.extract).distinct
 
-        for {
-          lookup <- ifNonEmpty(remainingKeys) {
-            f(remainingKeys.toList)
-          }
-          fullMap = (codeMap ++ lookup)
-          nextJoined = next.map { n =>
-            mapper.hydrate(n, fullMap)
-          }
-        } yield {
-          // println("CODEMAP" + fullMap.size)
-          (fullMap, nextJoined.toList)
+          val (hasKeys, remainingKeys) = keys.partition(k => codeMap.contains(k))
+
+          cc.withSpan(
+            "query.hydration.code.pull",
+            "size" -> keys.size.toString(),
+            "remaining" -> remainingKeys.size.toString()) { _ =>
+              for {
+                lookup <- ifNonEmpty(remainingKeys) {
+                  f(remainingKeys.toList)
+                }
+                fullMap = (codeMap ++ lookup)
+                nextJoined = next.map { n =>
+                  mapper.hydrate(n, fullMap)
+                }
+              } yield {
+                // println("CODEMAP" + fullMap.size)
+                //context.event("query.hydration.code.map", "size" -> lastMap.size.toString())
+                (fullMap, nextJoined.toList)
+              }
+            }
         }
-      }
-    }.mapConcat(_._2)
+      }.mapConcat(_._2)
+    }
   }
 
   /**

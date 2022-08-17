@@ -457,14 +457,12 @@ class QueryController @Inject() (
                   relationalQueryServiceExperimental.runQuery(
                     query,
                     explain = true,
-                    progressUpdates = true)(targeting, context, scroll) // cc
+                    progressUpdates = true)(targeting, cc, scroll)
                 }
                 tableHeader = Json.obj(
                   "results" -> result.header,
                   "explain" -> result.explain.headers)
-                source = context.withSpanS("query.relational.consume") { _ =>
-                  result.source
-                }
+                source = result.source
                 // main data
                 withShutdown = source.map(Right.apply).alsoTo(Sink.onComplete({ _ =>
                   result.completeExplain
@@ -492,6 +490,48 @@ class QueryController @Inject() (
                 }
               } yield {
                 streamQuery(tableHeader, mergedSource)
+              }
+              case Left(fail) => {
+                throw Errors.badRequest("query.parse", fail.toString)
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  def relationalQueryTime(orgId: Int, indexType: IndexType) = {
+    api { implicit request =>
+      authService.authenticatedForOrg(orgId, OrgRole.Admin) {
+        withForm(QueryForm.form) { form =>
+          withTelemetry { context =>
+
+            println(context.span.getSpanContext().getTraceId())
+
+            relationalQueryService.parseQuery(form.q) match {
+              case Right((scrollKey, query)) => for {
+                targeting <- context.withSpan("query.relational.targeting-resolution") { _ =>
+                  queryTargetingService.resolveTargeting(
+                    orgId,
+                    indexType,
+                    QueryTargetingRequest.AllLatest(None))
+                }
+                scroll = QueryScroll(scrollKey)
+                source <- context.withSpan("query.relational.initialize") { cc =>
+                  relationalQueryServiceExperimental.runQuery(
+                    query,
+                    explain = false,
+                    progressUpdates = false)(targeting, cc, scroll)
+                  // relationalQueryServiceExperimental.runWithoutHydration(
+                  //   query,
+                  //   explain = false,
+                  //   progressUpdates = true)(targeting, cc, scroll)
+                }
+                _ <- source.source.runWith(Sink.ignore)
+              } yield {
+                Json.obj(
+                  "trace" -> context.span.getSpanContext().getTraceId())
               }
               case Left(fail) => {
                 throw Errors.badRequest("query.parse", fail.toString)

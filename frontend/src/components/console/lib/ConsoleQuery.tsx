@@ -28,7 +28,8 @@ export function ConsoleQueryComponent (props: {
   placeholder?: string,
   initialize?: string,
   //
-  search: (_: string) => void
+  search: (_: string) => void,
+  time?: (_: string) => void
 }) {
   // const { selectedLanguage, languages, selectLanguage } = this.props;
 
@@ -102,6 +103,12 @@ export function ConsoleQueryComponent (props: {
             >
               Execute
             </Button>
+            { props.time && <Button 
+              icon="time"
+              onClick={() => (props.time && props.time(formik.values.query))}
+            >
+              Time
+            </Button> }
           </div>
           <div style={{paddingLeft: 10, paddingTop: 5}}>
             {props.loading && <Spinner size={20}/>}

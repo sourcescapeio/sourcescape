@@ -41,6 +41,7 @@ const Span = (props: any) => (<span>{props.children}</span>)
 const CodeBlock = HighlightedCodeBlockComponent(Span);
 
 const CodeHighlightComponent = (props: any) => {
+  console.warn(props, props.nearby)
   return <CodeBlock
     language={"javascript"}
     text={props.nearby.code}

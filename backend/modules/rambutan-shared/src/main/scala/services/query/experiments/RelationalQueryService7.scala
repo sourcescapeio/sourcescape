@@ -143,7 +143,9 @@ class RelationalQueryService @Inject() (
       offset = query.offset.foldLeft(scrollOffset)((acc, i) => acc.drop(i))
       limited = query.limit.foldLeft(offset)((acc, i) => acc.take(i))
     } yield {
-      (size, explain, progressSource, limited)
+      (size, explain, progressSource, context.withSpanS("query.relational.consume") { _ =>
+        limited
+      })
     }
   }
 
@@ -188,6 +190,35 @@ class RelationalQueryService @Inject() (
         columns,
         hydrated,
         explain)
+    }
+  }
+
+  def runWithoutHydration(query: RelationalQuery, explain: Boolean, progressUpdates: Boolean)(implicit targeting: QueryTargeting[TraceUnit], context: SpanContext, scroll: QueryScroll): Future[Source[Map[String, GraphTrace[TraceUnit]], _]] = {
+    implicit val tracing = QueryTracing.Basic
+    runQueryGenericWithoutHydration[GraphTrace[TraceUnit], TraceUnit, (String, GraphNode), QueryNode](query, explain, progressUpdates)
+  }
+
+  private def runQueryGenericWithoutHydration[T, TU, IN, NO](query: RelationalQuery, explain: Boolean, progressUpdates: Boolean)(
+    implicit
+    targeting:        QueryTargeting[TU],
+    context:          SpanContext,
+    tracing:          QueryTracing[T, TU],
+    hasTraceKey:      HasTraceKey[TU],
+    flattener:        HydrationFlattener[Map[String, T], TU],
+    node:             HydrationMapper[TraceKey, JsObject, Map[String, T], Map[String, GraphTrace[IN]]],
+    code:             HydrationMapper[FileKey, String, Map[String, GraphTrace[IN]], Map[String, GraphTrace[NO]]],
+    groupable:        Groupable[IN],
+    fileKeyExtractor: FileKeyExtractor[IN],
+    writes:           Writes[NO],
+    //
+    scroll: QueryScroll) = {
+    val ordering = query.calculatedOrdering // calculate beforehand
+
+    for {
+      (size, explain, progressSource, source) <- runQueryInternal(query, explain, progressUpdates)
+      // hydration
+    } yield {
+      source
     }
   }
 
@@ -320,15 +351,18 @@ class RelationalQueryService @Inject() (
      */
     val isLeftJoin = trace.query.from.leftJoin
     // Mapped
-    implicit val map = MapTracing(tracing, fromKey, toKey)
-    val flow = graphQueryService.executeTrace[Joined[T], TU](
-      trace.query.traverses)
+    val mappedTracing = MapTracing(tracing, fromKey, toKey)
+
+    val flow = context.withSpanF("query.relational.trace", "key" -> toKey) { cc =>
+      graphQueryService.executeTrace[Joined[T], TU](
+        trace.query.traverses)(targeting, cc, mappedTracing)
+    }
 
     val pushExplain = explain.pusher(toKey)
 
     fromCast ~> Flow[Joined[T]].map { t =>
       pushExplain(("buffer", Json.obj("action" -> "trace-in", "key" -> toKey)))
-      map.pushExternalKey(t)
+      mappedTracing.pushExternalKey(t)
     } ~> flow.log(s"flow[$fromKey,$toKey]").map { t =>
       pushExplain(("buffer", Json.obj("action" -> "trace-out", "key" -> toKey)))
       t

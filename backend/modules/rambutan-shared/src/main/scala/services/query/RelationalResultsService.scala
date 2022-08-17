@@ -8,6 +8,7 @@ import models.index.esprima._
 import javax.inject._
 import scala.concurrent.{ ExecutionContext, Future }
 import silvousplay.imports._
+import silvousplay.api._
 import play.api.mvc._
 import play.api.mvc.Results._
 import play.api.libs.ws._
@@ -46,6 +47,7 @@ class RelationalResultsService @Inject() (
     implicit
     targeting:   QueryTargeting[TU],
     flattener:   HydrationFlattener[Map[String, T], TU],
+    context:     SpanContext,
     tracing:     QueryTracing[T, TU],
     hasTraceKey: HasTraceKey[TU],
     groupable:   Groupable[IN],
@@ -144,14 +146,18 @@ class RelationalResultsService @Inject() (
     implicit
     targeting:        QueryTargeting[TU],
     tracing:          QueryTracing[T, TU],
+    context:          SpanContext,
     hasTraceKey:      HasTraceKey[TU],
     flattener:        HydrationFlattener[Map[String, T], TU],
     node:             HydrationMapper[TraceKey, JsObject, Map[String, T], Map[String, GraphTrace[IN]]],
     code:             HydrationMapper[FileKey, String, Map[String, GraphTrace[IN]], Map[String, GraphTrace[NO]]],
     fileKeyExtractor: FileKeyExtractor[IN],
     writes:           Writes[NO]): Source[Map[String, JsValue], Any] = {
-    nodeHydrationService.rehydrateMap[T, TU, IN, NO](in).map { src =>
-      src.view.mapValues(_.json).toMap
+
+    context.withSpanS("query.hydration") { _ =>
+      nodeHydrationService.rehydrateMap[T, TU, IN, NO](in).map { src =>
+        src.view.mapValues(_.json).toMap
+      }
     }
   }
 
@@ -161,6 +167,7 @@ class RelationalResultsService @Inject() (
     implicit
     targeting:        QueryTargeting[TU],
     tracing:          QueryTracing[T, TU],
+    context:          SpanContext,
     hasTraceKey:      HasTraceKey[TU],
     flattener:        HydrationFlattener[Map[String, T], TU],
     node:             HydrationMapper[TraceKey, JsObject, Map[String, T], Map[String, GraphTrace[IN]]],

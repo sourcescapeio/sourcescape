@@ -6,6 +6,7 @@ import javax.inject._
 import scala.concurrent.{ ExecutionContext, Future }
 import scala.concurrent.duration._
 import silvousplay.imports._
+import silvousplay.api._
 import play.api.mvc._
 import play.api.mvc.Results._
 import play.api.libs.ws._
@@ -25,7 +26,7 @@ class CachingService @Inject() (
   queryCacheService:      QueryCacheService,
   savedQueryDataService:  SavedQueryDataService,
   srcLogCompilerService:  SrcLogCompilerService,
-  relationalQueryService: RelationalQueryService)(implicit ec: ExecutionContext, mat: akka.stream.Materializer) {
+  relationalQueryService: RelationalQueryService)(implicit ec: ExecutionContext, mat: akka.stream.Materializer) extends Telemetry {
 
   val CachingConcurrency = 4
 
@@ -50,25 +51,27 @@ class CachingService @Inject() (
   }
 
   private def runCaching(item: CachingQueueItem) = {
-    val orgId = item.orgId
-    val cacheId = item.cacheId
-    for {
-      record <- logService.getRecord(item.workId).map(_.getOrElse(throw new Exception("record not found")))
-      cache <- queryCacheService.getCache(cacheId).map {
-        _.getOrElse(throw new Exception(s"Cache ${cacheId} does not exist"))
+    withTelemetry { implicit context =>
+      val orgId = item.orgId
+      val cacheId = item.cacheId
+      for {
+        record <- logService.getRecord(item.workId).map(_.getOrElse(throw new Exception("record not found")))
+        cache <- queryCacheService.getCache(cacheId).map {
+          _.getOrElse(throw new Exception(s"Cache ${cacheId} does not exist"))
+        }
+        queryId = cache.queryId
+        query <- savedQueryDataService.getSavedQuery(orgId, queryId).map {
+          _.getOrElse(throw new Exception(s"Query ${queryId} not found"))
+        }
+        _ <- updateCache(orgId, cache, query, item.indexIds, item.existingKeys)(record)
+      } yield {
+        ()
       }
-      queryId = cache.queryId
-      query <- savedQueryDataService.getSavedQuery(orgId, queryId).map {
-        _.getOrElse(throw new Exception(s"Query ${queryId} not found"))
-      }
-      _ <- updateCache(orgId, cache, query, item.indexIds, item.existingKeys)(record)
-    } yield {
-      ()
     }
   }
 
   val MaxCursorGap = 100
-  private def updateCache(orgId: Int, cache: QueryCache, query: SavedQuery, indexIds: List[Int], existingKeys: List[String])(record: WorkRecord): Future[Unit] = {
+  private def updateCache(orgId: Int, cache: QueryCache, query: SavedQuery, indexIds: List[Int], existingKeys: List[String])(record: WorkRecord)(implicit context: SpanContext): Future[Unit] = {
     val cacheId = cache.id
     for {
       // getKeysForIndex(indexIds)
@@ -87,7 +90,7 @@ class CachingService @Inject() (
       (size, _, progressSource, source) <- relationalQueryService.runQueryInternal(
         adjustedQuery,
         shouldExplain = false,
-        progressUpdates = false)(targeting, tracing, queryScroll)
+        progressUpdates = false)(targeting, context, tracing, queryScroll)
       // we pull these to insert into our progress updates
       // TODO: not dealing with this now
       // existingKeyObjs <- queryCacheService.getCacheKeys(cacheId).map {

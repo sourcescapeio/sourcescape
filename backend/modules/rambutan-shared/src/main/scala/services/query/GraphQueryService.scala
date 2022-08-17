@@ -228,20 +228,22 @@ class GraphQueryService @Inject() (
   }
 
   def executeTrace[T, TU](traverses: List[Traverse])(implicit targeting: QueryTargeting[TU], context: SpanContext, tracing: QueryTracing[T, TU]): Flow[T, T, _] = {
-    traverses match {
-      case Nil => {
-        Flow[T]
-      }
-      case _ => {
-        val base = traverses.foldLeft(Flow[T]) {
-          case (acc, t) => {
-            acc.via {
-              applyTraverse(t)
+    context.withSpanF("query.graph.trace") { cc =>
+      traverses match {
+        case Nil => {
+          Flow[T]
+        }
+        case _ => {
+          val base = traverses.foldLeft(Flow[T]) {
+            case (acc, t) => {
+              acc.via {
+                applyTraverse(t)(targeting, cc, tracing)
+              }
             }
           }
-        }
 
-        base.via(sortBySecondary)
+          base.via(sortBySecondary)
+        }
       }
     }
   }

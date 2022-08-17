@@ -189,7 +189,7 @@ class RelationalQueryService @Inject() (
         progressSource, 
         query.isDiff,
         columns,
-        hydrated, 
+        hydrated,
         explain
       )
     }
