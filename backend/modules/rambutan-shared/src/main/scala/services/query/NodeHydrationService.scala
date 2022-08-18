@@ -26,10 +26,10 @@ class NodeHydrationService @Inject() (
   elasticSearchService: ElasticSearchService)(implicit mat: akka.stream.Materializer, ec: ExecutionContext) {
 
   val CodeJoinBatchSize = 200 // keep this small. no real gain from batching GCS
-  val CodeJoinLatency = 50.milliseconds
+  val CodeJoinLatency = 200.milliseconds
 
   val NodeHydrationBatchSize = 1000
-  val NodeHydrationLatency = 100.milliseconds
+  val NodeHydrationLatency = 200.milliseconds
 
   /**
    * Non-generics
@@ -57,7 +57,7 @@ class NodeHydrationService @Inject() (
     implicit
     context:          SpanContext,
     fileKeyExtractor: FileKeyExtractor[IN],
-    mapper:           HydrationMapper[FileKey, String, Map[String, GraphTrace[IN]], Map[String, GraphTrace[NO]]]): Source[Map[String, GraphTrace[NO]], Any] = {
+    mapper:           HydrationMapper[FileKey, (String, Array[String]), Map[String, GraphTrace[IN]], Map[String, GraphTrace[NO]]]): Source[Map[String, GraphTrace[NO]], Any] = {
     type B = Map[String, GraphTrace[IN]]
     type C = Map[String, GraphTrace[NO]]
     joinCode[B, C, IN](base) { remainingKeys =>
@@ -77,7 +77,7 @@ class NodeHydrationService @Inject() (
     fileKeyExtractor: FileKeyExtractor[IN],
     flattener:        HydrationFlattener[T, TU],
     node:             HydrationMapper[TraceKey, JsObject, T, GraphTrace[IN]],
-    code:             HydrationMapper[FileKey, String, GraphTrace[IN], GraphTrace[NO]]): Source[GraphTrace[NO], Any] = {
+    code:             HydrationMapper[FileKey, (String, Array[String]), GraphTrace[IN], GraphTrace[NO]]): Source[GraphTrace[NO], Any] = {
     type A = GraphTrace[TU]
     type B = GraphTrace[IN]
     type C = GraphTrace[NO]
@@ -94,7 +94,7 @@ class NodeHydrationService @Inject() (
     fileKeyExtractor: FileKeyExtractor[IN],
     flattener:        HydrationFlattener[Map[String, T], TU],
     node:             HydrationMapper[TraceKey, JsObject, Map[String, T], Map[String, GraphTrace[IN]]],
-    code:             HydrationMapper[FileKey, String, Map[String, GraphTrace[IN]], Map[String, GraphTrace[NO]]]): Source[Map[String, GraphTrace[NO]], Any] = {
+    code:             HydrationMapper[FileKey, (String, Array[String]), Map[String, GraphTrace[IN]], Map[String, GraphTrace[NO]]]): Source[Map[String, GraphTrace[NO]], Any] = {
     type A = Map[String, T]
     type B = Map[String, GraphTrace[IN]]
     type C = Map[String, GraphTrace[NO]]
@@ -112,7 +112,7 @@ class NodeHydrationService @Inject() (
     codeFlattener:    HydrationFlattener[B, IN],
     fileKeyExtractor: FileKeyExtractor[IN],
     node:             HydrationMapper[TraceKey, JsObject, A, B],
-    code:             HydrationMapper[FileKey, String, B, C]): Source[C, Any] = {
+    code:             HydrationMapper[FileKey, (String, Array[String]), B, C]): Source[C, Any] = {
     val withNode = joinNodes[A, B, TU](base)
     joinCode[B, C, IN](withNode) { remainingKeys =>
       getTextForFiles(remainingKeys)
@@ -135,20 +135,22 @@ class NodeHydrationService @Inject() (
 
         val allTraces = flattener.flatten(traces.toList)
         for {
-          (total, source) <- context.withSpan("query.rehydrate.nodes") { _ =>
-            for {
-              (total, source) <- elasticSearchService.source(
-                targeting.nodeIndexName,
-                ESQuery.bool(
-                  filter = targeting.nodeQuery(allTraces) :: Nil),
-                sort = targeting.nodeSort,
-                scrollSize = NodeHydrationBatchSize)
-            } yield {
-              (total, cc.withSpanS("query.rehydrate.nodes.consume") { _ =>
-                source
-              })
+          (total, source) <- cc.withSpan(
+            "query.rehydrate.nodes.query",
+            "size" -> traces.length.toString()) { cc2 =>
+              for {
+                (total, source) <- elasticSearchService.source(
+                  targeting.nodeIndexName,
+                  ESQuery.bool(
+                    filter = targeting.nodeQuery(allTraces) :: Nil),
+                  sort = targeting.nodeSort,
+                  scrollSize = NodeHydrationBatchSize)
+              } yield {
+                (total, cc2.withSpanS("query.rehydrate.nodes.consume") { _ =>
+                  source
+                })
+              }
             }
-          }
           nodeMap <- source.runWith(Sink.fold(Map.empty[TraceKey, JsObject]) {
             case (acc, item) => {
               val key = traceExtraction.traceKey(tracing.unitFromJs(item))
@@ -167,13 +169,14 @@ class NodeHydrationService @Inject() (
     }
   }
 
-  private def joinCode[From, To, IN](in: Source[From, Any])(f: List[FileKey] => Future[Map[FileKey, String]])(
+  private def joinCode[From, To, IN](in: Source[From, Any])(f: List[FileKey] => Future[Map[FileKey, (String, Array[String])]])(
     implicit
     context:          SpanContext,
     flattener:        HydrationFlattener[From, IN],
     fileKeyExtractor: FileKeyExtractor[IN],
-    mapper:           HydrationMapper[FileKey, String, From, To]): Source[To, Any] = {
-    val codeScanInitial = (Map.empty[FileKey, String], List.empty[To])
+    mapper:           HydrationMapper[FileKey, (String, Array[String]), From, To]): Source[To, Any] = {
+
+    val codeScanInitial = (Map.empty[FileKey, (String, Array[String])], List.empty[To])
 
     context.withSpanS("query.hydration.code") { cc =>
       in.groupedWithin(CodeJoinBatchSize, CodeJoinLatency).scanAsync(codeScanInitial) {
@@ -184,16 +187,26 @@ class NodeHydrationService @Inject() (
 
           cc.withSpan(
             "query.hydration.code.pull",
-            "size" -> keys.size.toString(),
-            "remaining" -> remainingKeys.size.toString()) { _ =>
+            "size.map" -> codeMap.size.toString(),
+            "size.in" -> next.size.toString(),
+            "size.keys.in" -> keys.size.toString(),
+            "size.remaining" -> remainingKeys.size.toString()) { cc2 =>
               for {
                 lookup <- ifNonEmpty(remainingKeys) {
-                  f(remainingKeys.toList)
+                  cc2.withSpan("query.hydration.code.fetch") { _ =>
+                    f(remainingKeys.toList)
+                  }
                 }
                 fullMap = (codeMap ++ lookup)
-                nextJoined = next.map { n =>
-                  mapper.hydrate(n, fullMap)
-                }
+                nextJoined = cc2.withSpanC(
+                  "query.hydration.code.hydrate",
+                  "size.code" -> ifNonEmpty(lookup.values) {
+                    lookup.values.map(_._1.length).sum.toString()
+                  }) { _ =>
+                    next.map { n =>
+                      mapper.hydrate(n, fullMap)
+                    }
+                  }
               } yield {
                 // println("CODEMAP" + fullMap.size)
                 //context.event("query.hydration.code.map", "size" -> lastMap.size.toString())
@@ -208,15 +221,18 @@ class NodeHydrationService @Inject() (
   /**
    * Helper
    */
-  private def getTextForFiles(keys: List[FileKey]): Future[Map[FileKey, String]] = {
+  private def getTextForFiles(keys: List[FileKey]): Future[Map[FileKey, (String, Array[String])]] = {
     for {
       res <- Source(keys).mapAsync(1) { key =>
         val fullPath = s"${models.RepoSHAHelpers.CollectionsDirectory}/${key.key}/${key.path}"
         fileService.readFile(fullPath).map { data =>
           key -> data
         }
-      }.runWith(Sink.fold(Map.empty[FileKey, String]) {
-        case (acc, (k, d)) => acc + (k -> d.utf8String)
+      }.runWith(Sink.fold(Map.empty[FileKey, (String, Array[String])]) {
+        case (acc, (k, d)) => {
+          val dStr = d.utf8String
+          acc + (k -> (dStr, dStr.split("\n")))
+        }
       })
     } yield {
       res.toMap

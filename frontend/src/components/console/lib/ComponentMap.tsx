@@ -91,7 +91,7 @@ const NodeResultComponent = (props: any) => {
 
   return <Row>
     {
-      ((props.edgeType !== "root") && props.displayEdge) && <Col style={{display: 'flex'}}>
+      ((props.edgeType !== "roota") && props.displayEdge) && <Col style={{display: 'flex'}}>
         <Icon icon="direction-right"/>
         <div>{props.edgeType}</div>
         <Icon icon="direction-right"/>
@@ -121,11 +121,11 @@ const NodeResultComponent = (props: any) => {
             {props.path} {props.range.start.line}:{props.range.start.column}-{props.range.end.line}:{props.range.end.column}
           </a></p>
           <Container style={{maxWidth: 600, overflow: 'scroll'}}>
-            <CodeHighlightComponent {...props} />
+            { props.nearby ? <CodeHighlightComponent {...props} /> : <div>Code size too large</div>}
           </Container>
           <Container style={{maxHeight: 500, maxWidth: 600, overflow: 'scroll'}}>
             <pre>
-              {JSON.stringify(props, null, 2)}
+              {/* {JSON.stringify(props, null, 2)} */}
             </pre>
           </Container>
         </Container>

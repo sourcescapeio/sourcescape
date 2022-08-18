@@ -59,20 +59,20 @@ object HydrationMapper {
   /**
    * Code
    */
-  implicit val flatTraceCodeHydration = new HydrationMapper[FileKey, String, GraphTrace[(String, GraphNode)], GraphTrace[QueryNode]] {
-    override def hydrate(trace: GraphTrace[(String, GraphNode)], codeMap: Map[FileKey, String]): GraphTrace[QueryNode] = {
+  implicit val flatTraceCodeHydration = new HydrationMapper[FileKey, (String, Array[String]), GraphTrace[(String, GraphNode)], GraphTrace[QueryNode]] {
+    override def hydrate(trace: GraphTrace[(String, GraphNode)], codeMap: Map[FileKey, (String, Array[String])]): GraphTrace[QueryNode] = {
       trace.mapTrace {
         case (edgeType, item) => {
           val key = item.fileKey
-          val text = codeMap.getOrElse(key, throw Errors.streamError("file not found"))
-          QueryNode.extract(item, edgeType, text)
+          val (text, splitText) = codeMap.getOrElse(key, throw Errors.streamError("file not found"))
+          QueryNode.extract(item, edgeType, text, splitText)
         }
       }
     }
   }
 
-  implicit val mapTraceCodeHydration = new HydrationMapper[FileKey, String, Map[String, GraphTrace[(String, GraphNode)]], Map[String, GraphTrace[QueryNode]]] {
-    override def hydrate(trace: Map[String, GraphTrace[(String, GraphNode)]], codeMap: Map[FileKey, String]): Map[String, GraphTrace[QueryNode]] = {
+  implicit val mapTraceCodeHydration = new HydrationMapper[FileKey, (String, Array[String]), Map[String, GraphTrace[(String, GraphNode)]], Map[String, GraphTrace[QueryNode]]] {
+    override def hydrate(trace: Map[String, GraphTrace[(String, GraphNode)]], codeMap: Map[FileKey, (String, Array[String])]): Map[String, GraphTrace[QueryNode]] = {
       trace.view.mapValues { tt =>
         flatTraceCodeHydration.hydrate(tt, codeMap)
       }.toMap
@@ -80,14 +80,14 @@ object HydrationMapper {
   }
 
   // No op
-  implicit val flatGenericCodeHydration = new HydrationMapper[FileKey, String, GraphTrace[GenericGraphNode], GraphTrace[GenericGraphNode]] {
-    override def hydrate(trace: GraphTrace[GenericGraphNode], codeMap: Map[FileKey, String]): GraphTrace[GenericGraphNode] = {
+  implicit val flatGenericCodeHydration = new HydrationMapper[FileKey, (String, Array[String]), GraphTrace[GenericGraphNode], GraphTrace[GenericGraphNode]] {
+    override def hydrate(trace: GraphTrace[GenericGraphNode], codeMap: Map[FileKey, (String, Array[String])]): GraphTrace[GenericGraphNode] = {
       trace
     }
   }
 
-  implicit val mapGenericCodeHydration = new HydrationMapper[FileKey, String, Map[String, GraphTrace[GenericGraphNode]], Map[String, GraphTrace[GenericGraphNode]]] {
-    override def hydrate(trace: Map[String, GraphTrace[GenericGraphNode]], codeMap: Map[FileKey, String]): Map[String, GraphTrace[GenericGraphNode]] = {
+  implicit val mapGenericCodeHydration = new HydrationMapper[FileKey, (String, Array[String]), Map[String, GraphTrace[GenericGraphNode]], Map[String, GraphTrace[GenericGraphNode]]] {
+    override def hydrate(trace: Map[String, GraphTrace[GenericGraphNode]], codeMap: Map[FileKey, (String, Array[String])]): Map[String, GraphTrace[GenericGraphNode]] = {
       trace
     }
   }

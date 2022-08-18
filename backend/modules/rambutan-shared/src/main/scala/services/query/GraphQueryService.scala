@@ -92,7 +92,7 @@ class GraphQueryService @Inject() (
     fileKeyExtractor: FileKeyExtractor[IN],
     flattener:        HydrationFlattener[T, TU],
     node:             HydrationMapper[TraceKey, JsObject, T, GraphTrace[IN]],
-    code:             HydrationMapper[FileKey, String, GraphTrace[IN], GraphTrace[NO]]): Future[(QueryResultHeader, Source[GraphTrace[NO], Any])] = {
+    code:             HydrationMapper[FileKey, (String, Array[String]), GraphTrace[IN], GraphTrace[NO]]): Future[(QueryResultHeader, Source[GraphTrace[NO], Any])] = {
     for {
       (sizeEstimate, _, traversed) <- executeUnit[T, TU](query, progressUpdates = false, cursor = None)
       rehydrated = context.withSpanS("graph.hydrate") { _ =>

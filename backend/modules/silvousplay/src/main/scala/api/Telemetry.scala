@@ -9,6 +9,19 @@ import akka.stream.scaladsl.{ Flow, Source }
 
 case class SpanContext(tracer: Tracer, span: Span) {
 
+  def withSpanC[T](name: String, attrib: (String, String)*)(f: SpanContext => T)(implicit ec: ExecutionContext): T = {
+    val newSpan = this.tracer.spanBuilder(name).setParent(
+      Context.current().`with`(this.span)).startSpan()
+
+    attrib.foreach {
+      case (k, v) => newSpan.setAttribute(k, v)
+    }
+
+    val r = f(this.copy(span = newSpan))
+    newSpan.end()
+    r
+  }
+
   def withSpan[T](name: String, attrib: (String, String)*)(f: SpanContext => Future[T])(implicit ec: ExecutionContext): Future[T] = {
     val newSpan = this.tracer.spanBuilder(name).setParent(
       Context.current().`with`(this.span)).startSpan()

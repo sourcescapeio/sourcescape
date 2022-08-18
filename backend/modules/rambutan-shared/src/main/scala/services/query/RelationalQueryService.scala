@@ -167,7 +167,7 @@ class RelationalQueryService @Inject() (
     hasTraceKey: HasTraceKey[TU],
     flattener:        HydrationFlattener[Map[String, T], TU],
     node:          HydrationMapper[TraceKey, JsObject, Map[String, T], Map[String, GraphTrace[IN]]],
-    code:          HydrationMapper[FileKey, String, Map[String, GraphTrace[IN]], Map[String, GraphTrace[NO]]],
+    code:          HydrationMapper[FileKey, (String, Array[String]), Map[String, GraphTrace[IN]], Map[String, GraphTrace[NO]]],
     groupable: Groupable[IN],
     fileKeyExtractor: FileKeyExtractor[IN],
     writes: Writes[NO],

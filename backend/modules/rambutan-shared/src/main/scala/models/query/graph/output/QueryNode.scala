@@ -37,7 +37,7 @@ object QueryNode {
   val MaxSize = 10000
   val MaxExtracted = 400
 
-  def extract(node: GraphNode, edgeType: String, text: String) = {
+  def extract(node: GraphNode, edgeType: String, text: String, splitText: Array[String]) = {
     val range = CodeRange(
       start = CodeLocation(node.start_line, node.start_column),
       end = CodeLocation(node.end_line, node.end_column),
@@ -49,11 +49,10 @@ object QueryNode {
     } else {
       val nearbyEnd = node.end_line + 2
       val nearbyStart = math.max(1, node.start_line - 2)
-      val (nearbyIdx, nearbyCode) = CodeRange.applyRangeByLine(text, nearbyStart, nearbyEnd, node.start_line, node.end_line)
+      val (nearbyIdx, nearbyCode) = CodeRange.applyRangeByLine(splitText, nearbyStart, nearbyEnd, node.start_line, node.end_line)
       if (nearbyCode.length > MaxSize) {
         (None, true)
       } else {
-
         val nearby = NearbyCode(
           nearbyCode,
           nearbyStart,
