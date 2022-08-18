@@ -500,7 +500,7 @@ private case class JoinTerminus[T](key: String, cast: UniformFanOutShape[Joined[
   val isLeft = leftJoin
 }
 
-private case class JoinTree[T, TU](joinKey: String, a: JoinUnit[T], b: JoinUnit[T])(implicit targeting: QueryTargeting[TU], tracing: QueryTracing[T, TU]) extends JoinUnit[T] {
+private case class JoinTree[T, TU](joinKey: String, a: JoinUnit[T], b: JoinUnit[T])(implicit targeting: QueryTargeting[TU], context: SpanContext, tracing: QueryTracing[T, TU]) extends JoinUnit[T] {
 
   val key = joinKey
 
@@ -547,7 +547,7 @@ private case class JoinTree[T, TU](joinKey: String, a: JoinUnit[T], b: JoinUnit[
     query:                 RelationalQuery,
     joincastMap:           Map[String, UniformFanOutShape[Joined[T], Joined[T]]],
     leftJoinMap:           Map[String, UniformFanOutShape[Joined[T], Joined[T]]]
-  )(implicit builder: GraphDSL.Builder[Any], targeting: QueryTargeting[TU], tracing: QueryTracing[T, TU], explain: RelationalQueryExplain) = {
+  )(implicit builder: GraphDSL.Builder[Any], targeting: QueryTargeting[TU], context: SpanContext, tracing: QueryTracing[T, TU], explain: RelationalQueryExplain) = {
 
     val joinTree = getFinalJoinTree(query, joincastMap, leftJoinMap)
 
@@ -606,7 +606,7 @@ private case class JoinTree[T, TU](joinKey: String, a: JoinUnit[T], b: JoinUnit[
     query: RelationalQuery,
     joincastMap:           Map[String, UniformFanOutShape[Joined[T], Joined[T]]],
     leftJoinMap:           Map[String, UniformFanOutShape[Joined[T], Joined[T]]]
-  )(implicit targeting: QueryTargeting[TU], tracing: QueryTracing[T, TU]) = {
+  )(implicit targeting: QueryTargeting[TU], context: SpanContext, tracing: QueryTracing[T, TU]) = {
     val traceQueries = query.traces
 
     val toLookup = traceQueries.map { trace => 
@@ -685,15 +685,15 @@ private case class JoinTree[T, TU](joinKey: String, a: JoinUnit[T], b: JoinUnit[
     leftOuter:   Boolean,
     rightOuter:  Boolean)(
     v1Key: V1 => K,
-    v2Key: V2 => K)(implicit builder: GraphDSL.Builder[Any], ordering: Ordering[K], writes: Writes[K]) = {
+    v2Key: V2 => K)(implicit builder: GraphDSL.Builder[Any], context: SpanContext, ordering: Ordering[K], writes: Writes[K]) = {
 
     type LeftJoin = (K, V1)
     type RightJoin = (K, V2)
 
     val preJoin = builder.add(new Merge[Either[Either[LeftJoin, Unit], Either[RightJoin, Unit]]](2, eagerComplete = false))
     // val preJoin = builder.add(new ZipN[Either[Either[LeftJoin, Unit], Either[RightJoin, Unit]]](2))
-    val joinBuffer = builder.add(new JoinBuffer[LeftJoin, RightJoin](pushExplain))
-    val joiner = builder.add(new MergeJoin[K, V1, V2](pushExplain, leftOuter, rightOuter))
+    val joinBuffer = builder.add(new JoinBuffer[LeftJoin, RightJoin](pushExplain, context))
+    val joiner = builder.add(new MergeJoin[K, V1, V2](pushExplain, context, leftOuter, rightOuter))
 
     // calculate keys
     left ~> Flow[V1].map {

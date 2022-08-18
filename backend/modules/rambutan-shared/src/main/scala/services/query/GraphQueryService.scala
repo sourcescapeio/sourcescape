@@ -253,7 +253,9 @@ class GraphQueryService @Inject() (
    */
   private def rootSearch[T, TU](
     root:   GraphRoot,
-    cursor: Option[RelationalKeyItem])(implicit targeting: QueryTargeting[TU], tracing: QueryTracing[T, TU]): Future[(Long, Source[T, _])] = {
+    cursor: Option[RelationalKeyItem])(implicit targeting: QueryTargeting[TU], context: SpanContext, tracing: QueryTracing[T, TU]): Future[(Long, Source[T, _])] = {
+
+    val cc = context.decoupledSpan("query.graph.root")
     for {
       (size, source) <- elasticSearchService.source(
         targeting.nodeIndexName,
@@ -262,10 +264,10 @@ class GraphQueryService @Inject() (
         additional = cursor.map(_.searchAfter).getOrElse(Json.obj()),
         scrollSize = SearchScroll)
     } yield {
-      (size, source.map { i =>
+      (size, cc.terminateFor(source.map { i =>
         val unit = tracing.unitFromJs(i)
         tracing.newTrace(unit)
-      })
+      }))
     }
   }
 

@@ -1,6 +1,7 @@
 package services
 
 import silvousplay.imports._
+import silvousplay.api._
 import akka.stream.{ Attributes, FanInShape2, Inlet, Outlet }
 import akka.stream.scaladsl.{ GraphDSL, Source }
 import akka.stream.stage.{ GraphStage, GraphStageLogic, InHandler, OutHandler }
@@ -9,23 +10,23 @@ import GraphDSL.Implicits._
 
 import play.api.libs.json._
 
-object MergeJoin {
+// object MergeJoin {
 
-  def combine[T, U1, U2](a: Source[(T, U1), _], b: Source[(T, U2), _])(implicit ord: Ordering[T], writes: Writes[T]) = {
-    Source.fromGraph {
-      GraphDSL.create() { implicit builder =>
-        val merge = builder.add(new MergeJoin[T, U1, U2]({
-          case (k, item) =>
-            println(item)
-        }, leftOuter = true, rightOuter = true))
-        a ~> merge.in0
-        b ~> merge.in1
-        akka.stream.SourceShape(merge.out)
-      }
-    }
-  }
+//   def combine[T, U1, U2](a: Source[(T, U1), _], b: Source[(T, U2), _])(implicit ord: Ordering[T], writes: Writes[T]) = {
+//     Source.fromGraph {
+//       GraphDSL.create() { implicit builder =>
+//         val merge = builder.add(new MergeJoin[T, U1, U2]({
+//           case (k, item) =>
+//             println(item)
+//         }, leftOuter = true, rightOuter = true))
+//         a ~> merge.in0
+//         b ~> merge.in1
+//         akka.stream.SourceShape(merge.out)
+//       }
+//     }
+//   }
 
-}
+// }
 
 /**
  * Merge Join
@@ -33,6 +34,7 @@ object MergeJoin {
  */
 final class MergeJoin[T: Ordering, U1, U2](
   pushExplain: ((String, JsObject)) => Unit,
+  context:     SpanContext,
   leftOuter:   Boolean,
   rightOuter:  Boolean)(implicit val writes: Writes[T]) extends GraphStage[FanInShape2[(T, U1), (T, U2), (T, (Option[U1], Option[U2]))]] {
   private val left = Inlet[(T, U1)]("MergeJoin.left")

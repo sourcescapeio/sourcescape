@@ -7,12 +7,15 @@ import akka.stream.stage.{ GraphStage, GraphStageLogic, InHandler, OutHandler }
 import GraphDSL.Implicits._
 
 import play.api.libs.json._
+import silvousplay.api._
 
 /**
  * Need to use this buffer to avoid deadlocks
  */
 
-final class JoinBuffer[A, B](val pushExplain: ((String, JsObject)) => Unit) extends GraphStage[FanOutShape2[Either[Either[A, Unit], Either[B, Unit]], List[A], List[B]]] {
+final class JoinBuffer[A, B](
+  val pushExplain: ((String, JsObject)) => Unit,
+  context:         SpanContext) extends GraphStage[FanOutShape2[Either[Either[A, Unit], Either[B, Unit]], List[A], List[B]]] {
 
   type InputShape = Either[Either[A, Unit], Either[B, Unit]]
 
@@ -67,6 +70,9 @@ final class JoinBuffer[A, B](val pushExplain: ((String, JsObject)) => Unit) exte
             if (isAvailable(out1)) {
               val flushLeft = rotateLeft()
               pushExplain(("buffer", Json.obj("action" -> "push-left", "size" -> (flushLeft.size + 1))))
+              if (flushLeft.size > 10) {
+                context.event("query.relational.join.buffer.push.left", "size" -> (flushLeft.size + 1).toString())
+              }
               push(out1, flushLeft :+ a)
             } else {
               pushExplain(("buffer", Json.obj("action" -> "queue-left", "key" -> a.asInstanceOf[(List[String], Any)]._1)))
@@ -91,6 +97,9 @@ final class JoinBuffer[A, B](val pushExplain: ((String, JsObject)) => Unit) exte
             if (isAvailable(out2)) {
               val flushRight = rotateRight()
               pushExplain(("buffer", Json.obj("action" -> "push-right", "size" -> (flushRight.size + 1))))
+              if (flushRight.size > 10) {
+                context.event("query.relational.join.buffer.push.right", "size" -> (flushRight.size + 1).toString())
+              }
               push(out2, flushRight :+ a)
             } else {
               pushExplain(("buffer", Json.obj("action" -> "queue-right")))

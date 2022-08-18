@@ -1,4 +1,4 @@
-package services.q7
+package services.q8
 
 import services._
 import silvousplay.TSort
@@ -56,6 +56,8 @@ class RelationalQueryService @Inject() (
     query:           RelationalQuery,
     shouldExplain:   Boolean,
     progressUpdates: Boolean)(implicit targeting: QueryTargeting[TU], context: SpanContext, tracing: QueryTracing[T, TU], scroll: QueryScroll) = {
+
+    val cc = context.decoupledSpan("query.relational")
     // do validation
     query.validate
 
@@ -79,10 +81,13 @@ class RelationalQueryService @Inject() (
       }
     }
 
-    // link the traces
+    val rootKey = query.root.key
+    val cc2 = cc.decoupledSpan("query.relational.base", "key" -> rootKey)
     for {
-      (size, progressSource, base) <- graphQueryService.executeUnit(rootQuery, progressUpdates, initialCursor)
-      rootKey = query.root.key
+      (size, progressSource, baseF) <- {
+        graphQueryService.executeUnit(rootQuery, progressUpdates, initialCursor)(targeting, cc2, tracing)
+      }
+      base = cc2.terminateFor(baseF)
       joined = if (query.traces.isEmpty) {
         base.map { trace =>
           Map(rootKey -> trace)
@@ -90,7 +95,7 @@ class RelationalQueryService @Inject() (
       } else {
         createJoinLattice(
           base,
-          query)
+          query)(targeting, cc, tracing, scroll, explain)
       }
       filtered = joined filterNot { i =>
         // filter out violations
@@ -143,9 +148,7 @@ class RelationalQueryService @Inject() (
       offset = query.offset.foldLeft(scrollOffset)((acc, i) => acc.drop(i))
       limited = query.limit.foldLeft(offset)((acc, i) => acc.take(i))
     } yield {
-      (size, explain, progressSource, context.withSpanS("query.relational.consume") { _ =>
-        limited
-      })
+      (size, explain, progressSource, cc.terminateFor(limited))
     }
   }
 
@@ -282,12 +285,11 @@ class RelationalQueryService @Inject() (
       /**
        * Final Join system
        */
-      // find all terminal nodes
-      // fold across, joining at shared common node in tree
-      val finalMerge = calculateFinalMerge(
-        query,
-        broadcastMap,
-        leftJoins)
+      val joinTree = getFinalJoinTree(query, broadcastMap, leftJoins)
+
+      println(joinTree)
+
+      val finalMerge = joinTree.merge(query)
 
       akka.stream.FlowShape(rootCast.in, finalMerge.out(0))
     }).log("fulljoin").addAttributes(Attributes.logLevels(
@@ -390,15 +392,19 @@ class RelationalQueryService @Inject() (
    * Joins all terminal broadcasts as well as left joins together
    */
   sealed trait JoinUnit[T] {
-    def merge(query: RelationalQuery)(implicit builder: GraphDSL.Builder[Any], explain: RelationalQueryExplain): UniformFanOutShape[Joined[T], Joined[T]]
+    def merge(query: RelationalQuery)(implicit builder: GraphDSL.Builder[Any], context: SpanContext, explain: RelationalQueryExplain): UniformFanOutShape[Joined[T], Joined[T]]
 
     val key: String
+
+    val reportKey: String
 
     val isLeft: Boolean
   }
 
   private case class JoinTerminus[T](key: String, cast: UniformFanOutShape[Joined[T], Joined[T]], leftJoin: Boolean) extends JoinUnit[T] {
-    def merge(query: RelationalQuery)(implicit builder: GraphDSL.Builder[Any], explain: RelationalQueryExplain) = cast
+    def merge(query: RelationalQuery)(implicit builder: GraphDSL.Builder[Any], context: SpanContext, explain: RelationalQueryExplain) = cast
+
+    val reportKey = key
 
     val isLeft = leftJoin
   }
@@ -407,9 +413,11 @@ class RelationalQueryService @Inject() (
 
     val key = joinKey
 
+    val reportKey = s"[${a.reportKey}<>${b.reportKey}]"
+
     val isLeft = false
 
-    def merge(query: RelationalQuery)(implicit builder: GraphDSL.Builder[Any], explain: RelationalQueryExplain) = {
+    def merge(query: RelationalQuery)(implicit builder: GraphDSL.Builder[Any], context: SpanContext, explain: RelationalQueryExplain) = {
       val getKey = { item: Joined[T] =>
         val fromItem = item.getOrElse(joinKey, throw new Exception("invalid merged item"))
         tracing.joinKey(fromItem)
@@ -426,6 +434,8 @@ class RelationalQueryService @Inject() (
 
       val out = builder.add(Broadcast[Joined[T]](1))
 
+      val cc = context.decoupledSpan("query.relational.join", "key" -> reportKey)
+
       val nextJoin = buildMergeJoin(
         a.merge(query),
         b.merge(query),
@@ -433,27 +443,19 @@ class RelationalQueryService @Inject() (
         leftOuter = isLeft || query.shouldOuterJoin(b.key), // opposite, yeah it's weird
         rightOuter = isLeft || query.shouldOuterJoin(a.key))(
           getKey,
-          getKey)
+          getKey)(builder, cc, implicitly[Ordering[List[String]]], implicitly[Writes[List[String]]])
 
-      nextJoin.out ~> Flow[(List[String], (Option[Joined[T]], Option[Joined[T]]))].map {
-        case (k, (maybeA, maybeB)) => {
-          pushExplain("emit", Json.obj("key" -> k))
-          maybeA.getOrElse(Map()) ++ maybeB.getOrElse(Map())
+      nextJoin.out ~> cc.terminateFor {
+        Flow[(List[String], (Option[Joined[T]], Option[Joined[T]]))].map {
+          case (k, (maybeA, maybeB)) => {
+            pushExplain("emit", Json.obj("key" -> k))
+            maybeA.getOrElse(Map()) ++ maybeB.getOrElse(Map())
+          }
         }
       } ~> out
 
       out
     }
-  }
-
-  private def calculateFinalMerge[T, TU](
-    query:       RelationalQuery,
-    joincastMap: Map[String, UniformFanOutShape[Joined[T], Joined[T]]],
-    leftJoinMap: Map[String, UniformFanOutShape[Joined[T], Joined[T]]])(implicit builder: GraphDSL.Builder[Any], targeting: QueryTargeting[TU], tracing: QueryTracing[T, TU], explain: RelationalQueryExplain) = {
-
-    val joinTree = getFinalJoinTree(query, joincastMap, leftJoinMap)
-
-    joinTree.merge(query)
   }
 
   /**
@@ -581,22 +583,24 @@ class RelationalQueryService @Inject() (
     leftOuter:   Boolean,
     rightOuter:  Boolean)(
     v1Key: V1 => K,
-    v2Key: V2 => K)(implicit builder: GraphDSL.Builder[Any], ordering: Ordering[K], writes: Writes[K]) = {
+    v2Key: V2 => K)(implicit builder: GraphDSL.Builder[Any], context: SpanContext, ordering: Ordering[K], writes: Writes[K]) = {
 
     type LeftJoin = (K, V1)
     type RightJoin = (K, V2)
 
     val preJoin = builder.add(new Merge[Either[Either[LeftJoin, Unit], Either[RightJoin, Unit]]](2, eagerComplete = false))
-    // val preJoin = builder.add(new ZipN[Either[Either[LeftJoin, Unit], Either[RightJoin, Unit]]](2))
-    val joinBuffer = builder.add(new JoinBuffer[LeftJoin, RightJoin](pushExplain))
-    val joiner = builder.add(new MergeJoin[K, V1, V2](pushExplain, leftOuter, rightOuter))
+    val bufferCC = context.decoupledSpan("query.relational.join.buffer")
+    val joinBuffer = builder.add(new JoinBuffer[LeftJoin, RightJoin](pushExplain, bufferCC))
+
+    val mergeCC = context.decoupledSpan("query.relational.join.merge")
+    val joiner = builder.add(new MergeJoin[K, V1, V2](pushExplain, mergeCC, leftOuter, rightOuter))
 
     // calculate keys
     left ~> Flow[V1].map {
       case joined => {
         val key = v1Key(joined)
-        pushExplain("left-pre", Json.obj("key" -> key))
-        pushExplain("buffer", Json.obj("action" -> "left-pre", "key" -> key))
+        // pushExplain("left-pre", Json.obj("key" -> key))
+        // pushExplain("buffer", Json.obj("action" -> "left-pre", "key" -> key))
         Left(Left((key, joined)))
       }
     }.concat(Source(Left(Right(())) :: Nil)) ~> preJoin
@@ -604,23 +608,24 @@ class RelationalQueryService @Inject() (
     right ~> Flow[V2].map {
       case trace => {
         val key = v2Key(trace)
-        pushExplain("right-pre", Json.obj("key" -> key))
-        pushExplain("buffer", Json.obj("action" -> "right-pre", "key" -> key))
+        // pushExplain("right-pre", Json.obj("key" -> key))
+        // pushExplain("buffer", Json.obj("action" -> "right-pre", "key" -> key))
         Right(Left((key, trace)))
       }
     }.concat(Source(Right(Right(())) :: Nil)) ~> preJoin
 
     preJoin ~> joinBuffer.in
 
-    joinBuffer.out0 ~> Flow[List[LeftJoin]].mapConcat(_.toList).map { i =>
+    // wrong termination, but let's run with it
+    joinBuffer.out0 ~> bufferCC.terminateFor(Flow[List[LeftJoin]].mapConcat(_.toList).map { i =>
       pushExplain("left", Json.obj("key" -> i._1))
       i
-    } ~> joiner.in0
-    joinBuffer.out1 ~> Flow[List[RightJoin]].mapConcat(_.toList).map { i =>
+    }) ~> joiner.in0
+    joinBuffer.out1 ~> mergeCC.terminateFor(Flow[List[RightJoin]].mapConcat(_.toList).map { i =>
       val data = Json.obj("key" -> i._1)
       pushExplain("right", data)
       i
-    } ~> joiner.in1
+    }) ~> joiner.in1
     joiner
   }
 }

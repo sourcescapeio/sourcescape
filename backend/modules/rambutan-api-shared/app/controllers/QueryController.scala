@@ -28,7 +28,7 @@ class QueryController @Inject() (
   srcLogService:          services.SrcLogCompilerService,
   // experimental
   graphQueryServiceExperimental:      services.GraphQueryService, // not really changing this
-  relationalQueryServiceExperimental: services.q7.RelationalQueryService)(implicit ec: ExecutionContext, as: ActorSystem) extends API with StreamResults with Telemetry {
+  relationalQueryServiceExperimental: services.q8.RelationalQueryService)(implicit ec: ExecutionContext, as: ActorSystem) extends API with StreamResults with Telemetry {
 
   /**
    * Get grammars
@@ -453,12 +453,10 @@ class QueryController @Inject() (
                     QueryTargetingRequest.AllLatest(None))
                 }
                 scroll = QueryScroll(scrollKey)
-                result <- context.withSpan("query.relational.initialize") { cc =>
-                  relationalQueryServiceExperimental.runQuery(
-                    query,
-                    explain = true,
-                    progressUpdates = true)(targeting, cc, scroll)
-                }
+                result <- relationalQueryServiceExperimental.runQuery(
+                  query,
+                  explain = true,
+                  progressUpdates = true)(targeting, context, scroll)
                 tableHeader = Json.obj(
                   "results" -> result.header,
                   "explain" -> result.explain.headers)
@@ -518,11 +516,11 @@ class QueryController @Inject() (
                     QueryTargetingRequest.AllLatest(None))
                 }
                 scroll = QueryScroll(scrollKey)
-                source <- context.withSpan("query.relational.initialize") { cc =>
+                source <- {
                   relationalQueryServiceExperimental.runQuery(
                     query,
                     explain = false,
-                    progressUpdates = false)(targeting, cc, scroll)
+                    progressUpdates = false)(targeting, context, scroll)
                   // relationalQueryServiceExperimental.runWithoutHydration(
                   //   query,
                   //   explain = false,

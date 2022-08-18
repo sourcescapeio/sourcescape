@@ -52,6 +52,7 @@ export function RelationalConsoleContainer() {
 
   const relationalTime = useCallback((q: string) => {
     const queryStartTime = new Date().getTime();
+    setLoading(true);
 
     return fetch(`/api/orgs/-1/query/relational/time/${language}`, {
       method: 'POST',
@@ -67,6 +68,7 @@ export function RelationalConsoleContainer() {
       const queryReturnTime = new Date().getTime();
       const returnTime = (queryReturnTime - queryStartTime);
       setReturnTime(returnTime)
+      setLoading(false);
 
       alert(json.trace)
     });

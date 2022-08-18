@@ -9,13 +9,46 @@ import akka.stream.scaladsl.{ Flow, Source }
 
 case class SpanContext(tracer: Tracer, span: Span) {
 
-  def withSpanC[T](name: String, attrib: (String, String)*)(f: SpanContext => T)(implicit ec: ExecutionContext): T = {
+  private def buildSpan(name: String, attrib: (String, String)*) = {
     val newSpan = this.tracer.spanBuilder(name).setParent(
       Context.current().`with`(this.span)).startSpan()
 
     attrib.foreach {
       case (k, v) => newSpan.setAttribute(k, v)
     }
+
+    newSpan
+  }
+
+  /**
+   * Decoupled API
+   */
+  def decoupledSpan[T](name: String, attrib: (String, String)*) = {
+    val newSpan = buildSpan(name, attrib: _*)
+    this.copy(span = newSpan)
+  }
+
+  def terminateFor[T](source: Source[T, _])(implicit ec: ExecutionContext): Source[T, _] = {
+    source.watchTermination()((_, done) => {
+      done.onComplete {
+        case scala.util.Failure(_) => this.span.end()
+        case scala.util.Success(_) => this.span.end()
+      }
+    })
+  }
+
+  def terminateFor[T, T2](flow: Flow[T, T2, _])(implicit ec: ExecutionContext): Flow[T, T2, _] = {
+    flow.watchTermination()((_, done) => {
+      done.onComplete {
+        case scala.util.Failure(_) => this.span.end()
+        case scala.util.Success(_) => this.span.end()
+      }
+    })
+  }
+
+  //
+  def withSpanC[T](name: String, attrib: (String, String)*)(f: SpanContext => T)(implicit ec: ExecutionContext): T = {
+    val newSpan = buildSpan(name, attrib: _*)
 
     val r = f(this.copy(span = newSpan))
     newSpan.end()
@@ -23,12 +56,7 @@ case class SpanContext(tracer: Tracer, span: Span) {
   }
 
   def withSpan[T](name: String, attrib: (String, String)*)(f: SpanContext => Future[T])(implicit ec: ExecutionContext): Future[T] = {
-    val newSpan = this.tracer.spanBuilder(name).setParent(
-      Context.current().`with`(this.span)).startSpan()
-
-    attrib.foreach {
-      case (k, v) => newSpan.setAttribute(k, v)
-    }
+    val newSpan = buildSpan(name, attrib: _*)
 
     f(this.copy(span = newSpan)).map { r =>
       newSpan.end()
@@ -37,45 +65,17 @@ case class SpanContext(tracer: Tracer, span: Span) {
   }
 
   def withSpanS[T](name: String, attrib: (String, String)*)(f: SpanContext => Source[T, _])(implicit ec: ExecutionContext): Source[T, _] = {
-    val newSpan = this.tracer.spanBuilder(name).setParent(
-      Context.current().`with`(this.span)).startSpan()
-
-    attrib.foreach {
-      case (k, v) => newSpan.setAttribute(k, v)
-    }
-
-    f(this.copy(span = newSpan)).watchTermination()((_, done) => {
-      done.onComplete {
-        case scala.util.Failure(_) => newSpan.end()
-        case scala.util.Success(_) => newSpan.end()
-      }
-    })
+    val newContext = decoupledSpan(name, attrib: _*)
+    newContext.terminateFor(f(newContext))
   }
 
   def withSpanF[T1, T2](name: String, attrib: (String, String)*)(f: SpanContext => Flow[T1, T2, _])(implicit ec: ExecutionContext): Flow[T1, T2, _] = {
-    val newSpan = this.tracer.spanBuilder(name).setParent(
-      Context.current().`with`(this.span)).startSpan()
-
-    attrib.foreach {
-      case (k, v) => newSpan.setAttribute(k, v)
-    }
-
-    f(this.copy(span = newSpan)).watchTermination()((_, done) => {
-      done.onComplete {
-        case scala.util.Failure(_) => newSpan.end()
-        case scala.util.Success(_) => newSpan.end()
-      }
-    })
+    val newContext = decoupledSpan(name, attrib: _*)
+    newContext.terminateFor(f(newContext))
   }
 
   def event(name: String, attrib: (String, String)*) = {
-    val newSpan = this.tracer.spanBuilder(name).setParent(
-      Context.current().`with`(this.span)).startSpan()
-
-    attrib.foreach {
-      case (k, v) => newSpan.setAttribute(k, v)
-    }
-
+    val newSpan = buildSpan(name, attrib: _*)
     newSpan.end()
   }
 }

@@ -153,11 +153,8 @@ class RelationalResultsService @Inject() (
     code:             HydrationMapper[FileKey, (String, Array[String]), Map[String, GraphTrace[IN]], Map[String, GraphTrace[NO]]],
     fileKeyExtractor: FileKeyExtractor[IN],
     writes:           Writes[NO]): Source[Map[String, JsValue], Any] = {
-
-    context.withSpanS("query.hydration") { _ =>
-      nodeHydrationService.rehydrateMap[T, TU, IN, NO](in).map { src =>
-        src.view.mapValues(_.json).toMap
-      }
+    nodeHydrationService.rehydrateMap[T, TU, IN, NO](in).map { src =>
+      src.view.mapValues(_.json).toMap
     }
   }
 
