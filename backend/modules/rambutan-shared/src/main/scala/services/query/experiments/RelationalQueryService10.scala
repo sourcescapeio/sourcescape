@@ -1,4 +1,4 @@
-package services.q9
+package services.q10
 
 import services._
 import silvousplay.TSort
@@ -589,7 +589,7 @@ class RelationalQueryService @Inject() (
 
     val mergeCC = context.decoupledSpan("query.relational.join.merge")
     val doExplain = true
-    val joiner = builder.add(new q9.MergeJoin[K, V1, V2](mergeCC, doExplain, leftOuter, rightOuter))
+    val joiner = builder.add(new q10.MergeJoin[K, V1, V2](mergeCC, doExplain, leftOuter, rightOuter))
 
     println("LEFT", leftOuter)
     println("RIGHT", rightOuter)

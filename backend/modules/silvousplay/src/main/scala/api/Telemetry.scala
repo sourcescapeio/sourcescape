@@ -7,7 +7,7 @@ import io.opentelemetry.context.Context
 import scala.concurrent.{ ExecutionContext, Future }
 import akka.stream.scaladsl.{ Flow, Source }
 
-case class SpanContext(tracer: Tracer, span: Span) {
+case class SpanContext(tracer: Tracer, span: Span, doPrint: Boolean) {
 
   private def buildSpan(name: String, attrib: (String, String)*) = {
     val newSpan = this.tracer.spanBuilder(name).setParent(
@@ -15,6 +15,12 @@ case class SpanContext(tracer: Tracer, span: Span) {
 
     attrib.foreach {
       case (k, v) => newSpan.setAttribute(k, v)
+    }
+
+    if (doPrint) {
+      println(name, attrib.map {
+        case (k, v) => s"${k}[${v}]"
+      }.mkString(" "))
     }
 
     newSpan
@@ -78,9 +84,6 @@ case class SpanContext(tracer: Tracer, span: Span) {
 
   def event(name: String, attrib: (String, String)*) = {
     val newSpan = buildSpan(name, attrib: _*)
-    println(name, attrib.map {
-      case (k, v) => s"${k}[${v}]"
-    }.mkString(" "))
     newSpan.end()
   }
 }
@@ -92,16 +95,16 @@ trait Telemetry {
     .setServiceName("SourceScape.Graph")
     .build()
 
-  protected def getSpanContext() = {
+  protected def getSpanContext(doPrint: Boolean) = {
     val tracer = honeycomb.getTracer("graph-query")
 
     val span = tracer.spanBuilder("query").startSpan() // what happens if we don't terminate a span?
 
-    SpanContext(tracer, span)
+    SpanContext(tracer, span, doPrint)
   }
 
   protected def withTelemetry[T](f: SpanContext => Future[T])(implicit ec: ExecutionContext) = {
-    val context = getSpanContext()
+    val context = getSpanContext(doPrint = false)
     f(context).map { r =>
       context.terminate()
       r
