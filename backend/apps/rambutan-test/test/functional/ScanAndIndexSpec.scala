@@ -67,8 +67,7 @@ case class GraphQLWebSocket(
   def pushG(query: Document) = {
     val item = Json.obj(
       "payload" -> Json.obj(
-        "query" -> query.renderCompact
-      )
+        "query" -> query.renderCompact)
     // "operation" ->
     )
     await(queue.offer(TextMessage(Json.stringify(item))))
@@ -138,8 +137,8 @@ abstract class RambutanSpec extends PlaySpec
   with GuiceOneAppPerSuite
   with BeforeAndAfterEach
   with BeforeAndAfterAll
-  with QueryHelpers
-  with IndexHelpers
+  // with QueryHelpers
+  // with IndexHelpers
   with MockitoSugar
   with ArgumentMatchersSugar {
 

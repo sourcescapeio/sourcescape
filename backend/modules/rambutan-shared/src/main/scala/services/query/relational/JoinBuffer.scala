@@ -70,12 +70,13 @@ final class JoinBuffer[A, B](
             if (isAvailable(out1)) {
               val flushLeft = rotateLeft()
               pushExplain(("buffer", Json.obj("action" -> "push-left", "size" -> (flushLeft.size + 1))))
-              if (flushLeft.size > 10) {
+              if (flushLeft.size > 0) {
                 context.event("query.relational.join.buffer.push.left", "size" -> (flushLeft.size + 1).toString())
               }
               push(out1, flushLeft :+ a)
             } else {
               pushExplain(("buffer", Json.obj("action" -> "queue-left", "key" -> a.asInstanceOf[(List[String], Any)]._1)))
+              // context.event("query.relational.join.buffer.queue.left", "size" -> (leftBuffer.size + 1).toString())
               leftBuffer.append(a)
             }
 
@@ -83,6 +84,7 @@ final class JoinBuffer[A, B](
               val flushRight = rotateRight()
               if (flushRight.length > 0) {
                 pushExplain(("buffer", Json.obj("action" -> "flush-right")))
+                context.event("query.relational.join.buffer.flush.right", "size" -> flushRight.size.toString())
               }
               push(out2, flushRight)
             }
@@ -91,18 +93,22 @@ final class JoinBuffer[A, B](
             // pushExplain(("right-buffer", Json.obj("key" -> a.asInstanceOf[(List[String], Any)]._1)))
             if (isAvailable(out1)) {
               val flushLeft = rotateLeft()
+              if (flushLeft.length > 0) {
+                context.event("query.relational.join.buffer.flush.left", "size" -> flushLeft.size.toString())
+              }
               push(out1, flushLeft)
             }
 
             if (isAvailable(out2)) {
               val flushRight = rotateRight()
               pushExplain(("buffer", Json.obj("action" -> "push-right", "size" -> (flushRight.size + 1))))
-              if (flushRight.size > 10) {
+              if (flushRight.size > 0) {
                 context.event("query.relational.join.buffer.push.right", "size" -> (flushRight.size + 1).toString())
               }
               push(out2, flushRight :+ a)
             } else {
               pushExplain(("buffer", Json.obj("action" -> "queue-right")))
+              // context.event("query.relational.join.buffer.queue.right", "size" -> (rightBuffer.size + 1).toString())
               rightBuffer.append(a)
             }
           }

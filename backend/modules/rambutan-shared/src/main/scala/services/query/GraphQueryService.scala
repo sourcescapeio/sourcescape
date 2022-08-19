@@ -276,31 +276,45 @@ class GraphQueryService @Inject() (
 
     traverse match {
       case a: EdgeTraverse => {
-        edgeTraverse(
-          a.follow.traverses,
-          a.target.traverses,
-          a.typeHint,
-          initial = true)
+        context.withSpanF("query.graph.trace.edge") { cc =>
+          edgeTraverse(
+            a.follow.traverses,
+            a.target.traverses,
+            a.typeHint,
+            initial = true)(targeting, cc, tracing)
+        }
       }
       case b: NodeTraverse => {
-        nodeTraverse(b.filters, b.follow.traverses)
+        context.withSpanF("query.graph.trace.node") { cc =>
+          nodeTraverse(b.filters, b.follow.traverses)(targeting, cc, tracing)
+        }
       }
       case r: ReverseTraverse => {
-        reverseTraverse(r)
+        context.withSpanF("query.graph.trace.reverse") { cc =>
+          reverseTraverse(r)(targeting, cc, tracing)
+        }
       }
       case s: StatefulTraverse => {
-        statefulTraverse(s)
+        context.withSpanF("query.graph.trace.stateful") { cc =>
+          statefulTraverse(s)(targeting, cc, tracing)
+        }
       }
       case re: RepeatedEdgeTraverse[T, TU] => {
         // used for git
-        repeatedEdgeTraverse(re)
+        context.withSpanF("query.graph.trace.repeated") { cc =>
+          repeatedEdgeTraverse(re)(targeting, cc, tracing)
+        }
       }
       // debug
       case c: OneHopTraverse => {
-        onehopTraverse(c.follow, initial = true)
+        context.withSpanF("query.graph.trace.hop") { cc =>
+          onehopTraverse(c.follow, initial = true)(targeting, cc, tracing)
+        }
       }
       case e: FilterTraverse => {
-        filterTraverse(e.traverses)
+        context.withSpanF("query.graph.trace.filter") { cc =>
+          filterTraverse(e.traverses)(targeting, cc, tracing)
+        }
       }
     }
   }
@@ -671,7 +685,8 @@ class GraphQueryService @Inject() (
 
   private def nodeCheck[T, TU](
     nodeIndex: String,
-    filters:   List[NodeFilter])(implicit targeting: QueryTargeting[TU], tracing: QueryTracing[T, TU]) = {
+    filters:   List[NodeFilter])(implicit targeting: QueryTargeting[TU], context: SpanContext, tracing: QueryTracing[T, TU]) = {
+
     Flow[T].groupedWithin(NodeHopSize, 100.milliseconds).mapAsync(1) { traces =>
       val query = targeting.nodeQuery(traces.map(tracing.getTerminus).toList)
 
@@ -683,7 +698,11 @@ class GraphQueryService @Inject() (
               must = query :: filters.map(_.query)) :: Nil),
           sort = targeting.nodeSort,
           scrollSize = NodeHopSize)
-        collectedSources <- source.runWith(Sinks.ListAccum)
+        collectedSources <- context.withSpan(
+          "query.graph.elasticsearch.node",
+          "size" -> traces.size.toString()) { _ =>
+            source.runWith(Sinks.ListAccum)
+          }
         // assume ids are unique so that's all we need to check
         sourceMap = collectedSources.map { item =>
           (item \ "_source" \ "id").as[String] -> (item \ "_source").as[JsObject]

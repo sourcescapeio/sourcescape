@@ -28,6 +28,8 @@ case class SpanContext(tracer: Tracer, span: Span) {
     this.copy(span = newSpan)
   }
 
+  def terminate() = this.span.end()
+
   def terminateFor[T](source: Source[T, _])(implicit ec: ExecutionContext): Source[T, _] = {
     source.watchTermination()((_, done) => {
       done.onComplete {
@@ -76,6 +78,9 @@ case class SpanContext(tracer: Tracer, span: Span) {
 
   def event(name: String, attrib: (String, String)*) = {
     val newSpan = buildSpan(name, attrib: _*)
+    println(name, attrib.map {
+      case (k, v) => s"${k}[${v}]"
+    }.mkString(" "))
     newSpan.end()
   }
 }
@@ -87,13 +92,18 @@ trait Telemetry {
     .setServiceName("SourceScape.Graph")
     .build()
 
-  protected def withTelemetry[T](f: SpanContext => Future[T])(implicit ec: ExecutionContext) = {
+  protected def getSpanContext() = {
     val tracer = honeycomb.getTracer("graph-query")
 
     val span = tracer.spanBuilder("query").startSpan() // what happens if we don't terminate a span?
 
-    f(SpanContext(tracer, span)).map { r =>
-      span.end()
+    SpanContext(tracer, span)
+  }
+
+  protected def withTelemetry[T](f: SpanContext => Future[T])(implicit ec: ExecutionContext) = {
+    val context = getSpanContext()
+    f(context).map { r =>
+      context.terminate()
       r
     }
   }

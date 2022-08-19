@@ -10,24 +10,6 @@ import GraphDSL.Implicits._
 
 import play.api.libs.json._
 
-// object MergeJoin {
-
-//   def combine[T, U1, U2](a: Source[(T, U1), _], b: Source[(T, U2), _])(implicit ord: Ordering[T], writes: Writes[T]) = {
-//     Source.fromGraph {
-//       GraphDSL.create() { implicit builder =>
-//         val merge = builder.add(new MergeJoin[T, U1, U2]({
-//           case (k, item) =>
-//             println(item)
-//         }, leftOuter = true, rightOuter = true))
-//         a ~> merge.in0
-//         b ~> merge.in1
-//         akka.stream.SourceShape(merge.out)
-//       }
-//     }
-//   }
-
-// }
-
 /**
  * Merge Join
  * - Assume left and right both come in sorted by T
@@ -35,6 +17,7 @@ import play.api.libs.json._
 final class MergeJoin[T: Ordering, U1, U2](
   pushExplain: ((String, JsObject)) => Unit,
   context:     SpanContext,
+  doExplain:   Boolean,
   leftOuter:   Boolean,
   rightOuter:  Boolean)(implicit val writes: Writes[T]) extends GraphStage[FanInShape2[(T, U1), (T, U2), (T, (Option[U1], Option[U2]))]] {
   private val left = Inlet[(T, U1)]("MergeJoin.left")
@@ -244,6 +227,9 @@ final class MergeJoin[T: Ordering, U1, U2](
         case (leftKey, _) if k > leftKey => {
           // ahead, read opposite side
           val rightEmit = incRight(rightElem)
+          if (doExplain) {
+            context.event("push.R", "key" -> ">", "push.key" -> k.toString(), "size" -> rightEmit.size.toString())
+          }
           emitMultiple(out, rightEmit, readL)
         }
         case (leftKey, _) if leftKey equiv k => {
@@ -257,11 +243,22 @@ final class MergeJoin[T: Ordering, U1, U2](
           val rightEmit = incRight(rightElem)
           currentLeftMatched = true
           currentRightMatched = true // must be after
+          if (doExplain) {
+            context.event(
+              "push.R",
+              "key" -> "=",
+              "push.key" -> k.toString(),
+              "size" -> (rightEmit.size + elems.size).toString(),
+              "size.elems" -> elems.size.toString())
+          }
           emitMultiple(out, rightEmit ++ elems, readL)
         }
         case (leftKey, _) if k < leftKey => {
           // still behind, increment again
           val rightEmit = incRight(rightElem)
+          if (doExplain) {
+            context.event("push.R", "key" -> "<", "push.key" -> k.toString(), "size" -> rightEmit.size.toString())
+          }
           emitMultiple(out, rightEmit, () => {
             checkPreviousLeftElem(rightElem)
           })
@@ -283,6 +280,9 @@ final class MergeJoin[T: Ordering, U1, U2](
         case (_, rightKey) if k > rightKey => {
           // ahead, read opposite side
           val leftEmit = incLeft(leftElem)
+          if (doExplain) {
+            context.event("push.L", "key" -> ">", "push.key" -> k.toString(), "size" -> leftEmit.size.toString())
+          }
           emitMultiple(out, leftEmit, readR)
         }
         case (_, rightKey) if k equiv rightKey => {
@@ -296,11 +296,22 @@ final class MergeJoin[T: Ordering, U1, U2](
           val leftEmit = incLeft(leftElem)
           currentRightMatched = true
           currentLeftMatched = true // must be after incLeft
+          if (doExplain) {
+            context.event(
+              "push.L",
+              "key" -> "=",
+              "push.key" -> k.toString(),
+              "size" -> (leftEmit.size + elems.size).toString(),
+              "size.elems" -> elems.size.toString())
+          }
           emitMultiple(out, leftEmit ++ elems, readR)
         }
         case (_, rightKey) if k < rightKey => {
           // still behind, increment again
           val leftEmit = incLeft(leftElem)
+          if (doExplain) {
+            context.event("push.L", "key" -> "<", "push.key" -> k.toString(), "size" -> leftEmit.size.toString())
+          }
           emitMultiple(out, leftEmit, () => {
             checkPreviousRightElem(leftElem)
           })
@@ -350,6 +361,9 @@ final class MergeJoin[T: Ordering, U1, U2](
     }
 
     val passR = () => {
+      if (doExplain) {
+        context.event("pass.R")
+      }
       val toFlush = flushTerminal()
 
       emitMultiple(out, toFlush, () => {
@@ -366,6 +380,9 @@ final class MergeJoin[T: Ordering, U1, U2](
       })
     }
     val passL = () => {
+      if (doExplain) {
+        context.event("pass.L")
+      }
       val toFlush = flushTerminal()
 
       emitMultiple(out, toFlush, () => {
@@ -382,8 +399,18 @@ final class MergeJoin[T: Ordering, U1, U2](
       })
     }
 
-    val readR = () => read(right)(dispatchR, passL)
-    val readL = () => read(left)(dispatchL, passR)
+    val readR = () => {
+      if (doExplain) {
+        context.event("read.R")
+      }
+      read(right)(dispatchR, passL)
+    }
+    val readL = () => {
+      if (doExplain) {
+        context.event("read.L")
+      }
+      read(left)(dispatchL, passR)
+    }
 
     override def preStart(): Unit = {
       // all fan-in stages need to eagerly pull all inputs to get cycles started

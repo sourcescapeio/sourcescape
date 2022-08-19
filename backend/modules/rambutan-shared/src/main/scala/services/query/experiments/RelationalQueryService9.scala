@@ -1,4 +1,4 @@
-package services.q8
+package services.q9
 
 import services._
 import silvousplay.TSort
@@ -585,45 +585,29 @@ class RelationalQueryService @Inject() (
     type LeftJoin = (K, V1)
     type RightJoin = (K, V2)
 
-    val preJoin = builder.add(new Merge[Either[Either[LeftJoin, Unit], Either[RightJoin, Unit]]](2, eagerComplete = false))
-    val bufferCC = context.decoupledSpan("query.relational.join.buffer")
-    val joinBuffer = builder.add(new JoinBuffer[LeftJoin, RightJoin](pushExplain, bufferCC))
-
     val mergeCC = context.decoupledSpan("query.relational.join.merge")
-    val doExplain = false
-    val joiner = builder.add(new MergeJoin[K, V1, V2](pushExplain, mergeCC, doExplain, leftOuter, rightOuter))
+    val doExplain = true
+    val joiner = builder.add(new q9.MergeJoin[K, V1, V2](mergeCC, doExplain, leftOuter, rightOuter))
+
+    println("LEFT", leftOuter)
+    println("RIGHT", rightOuter)
 
     // calculate keys
     left ~> Flow[V1].map {
       case joined => {
         val key = v1Key(joined)
-        // pushExplain("left-pre", Json.obj("key" -> key))
-        // pushExplain("buffer", Json.obj("action" -> "left-pre", "key" -> key))
-        Left(Left((key, joined)))
+        (key, joined)
       }
-    }.concat(Source(Left(Right(())) :: Nil)) ~> preJoin
+    } ~> joiner.in0
 
-    right ~> Flow[V2].map {
+    right ~> mergeCC.terminateFor(Flow[V2].map {
       case trace => {
         val key = v2Key(trace)
-        // pushExplain("right-pre", Json.obj("key" -> key))
-        // pushExplain("buffer", Json.obj("action" -> "right-pre", "key" -> key))
-        Right(Left((key, trace)))
+        (key, trace)
       }
-    }.concat(Source(Right(Right(())) :: Nil)) ~> preJoin
-
-    preJoin ~> joinBuffer.in
+    }) ~> joiner.in1
 
     // wrong termination, but let's run with it
-    joinBuffer.out0 ~> bufferCC.terminateFor(Flow[List[LeftJoin]].mapConcat(_.toList).map { i =>
-      pushExplain("left", Json.obj("key" -> i._1))
-      i
-    }) ~> joiner.in0
-    joinBuffer.out1 ~> mergeCC.terminateFor(Flow[List[RightJoin]].mapConcat(_.toList).map { i =>
-      val data = Json.obj("key" -> i._1)
-      pushExplain("right", data)
-      i
-    }) ~> joiner.in1
     joiner
   }
 }

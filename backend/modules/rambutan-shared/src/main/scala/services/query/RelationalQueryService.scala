@@ -693,7 +693,8 @@ private case class JoinTree[T, TU](joinKey: String, a: JoinUnit[T], b: JoinUnit[
     val preJoin = builder.add(new Merge[Either[Either[LeftJoin, Unit], Either[RightJoin, Unit]]](2, eagerComplete = false))
     // val preJoin = builder.add(new ZipN[Either[Either[LeftJoin, Unit], Either[RightJoin, Unit]]](2))
     val joinBuffer = builder.add(new JoinBuffer[LeftJoin, RightJoin](pushExplain, context))
-    val joiner = builder.add(new MergeJoin[K, V1, V2](pushExplain, context, leftOuter, rightOuter))
+    val doExplain = false
+    val joiner = builder.add(new MergeJoin[K, V1, V2](pushExplain, context, doExplain, leftOuter, rightOuter))
 
     // calculate keys
     left ~> Flow[V1].map {
