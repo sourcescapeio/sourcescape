@@ -42,7 +42,52 @@ final class MergeJoin[T: Ordering, U1, U2](
     var currentRightValues = collection.mutable.ListBuffer.empty[U2]
 
     /**
-     * Push heleprs
+     * Lookahead state
+     *
+     * We need a lookahead because we cannot always guarantee correct order
+     * Ex:
+     * val source1 = ("1", "A"), ("2", "B")
+     * val source2 = ("1", "AA"), ("1", "AAA")
+     *
+     * ("1", "AAA") is consumed after ("2", B")
+     */
+    var previousLeftKey: T = _
+    var previousRightKey: T = _
+
+    var previousLeftValues = collection.mutable.ListBuffer.empty[U1]
+    var previousRightValues = collection.mutable.ListBuffer.empty[U2]
+
+    /**
+     * Lookaheads
+     * - See notice above
+     */
+    def checkPreviousRightElem(elem: (T, U1)) = {
+      val (k, v) = elem
+      withFlag(previousRightKey != null && (previousRightKey equiv k)) {
+        calculateJoin(
+          k,
+          v :: Nil,
+          previousRightValues.toList)
+      }
+    }
+
+    def checkPreviousLeftElem(elem: (T, U2)) = {
+      val (k, v) = elem
+      println(k, previousLeftKey)
+      withFlag(previousLeftKey != null && (previousLeftKey equiv k)) {
+        calculateJoin(
+          k,
+          previousLeftValues.toList,
+          v :: Nil)
+      }
+    }
+
+    /**
+      * Outer join flushes
+      */
+
+    /**
+     * State increment
      */
     def incLeft(elem: (T, U1)) = {
       val (k, v) = elem
@@ -53,6 +98,9 @@ final class MergeJoin[T: Ordering, U1, U2](
         // add to set
         currentLeftValues.append(v)
       } else {
+        previousLeftValues = currentLeftValues
+        previousLeftKey = currentLeftKey
+
         currentLeftValues = collection.mutable.ListBuffer.empty[U1]
         currentLeftValues.append(v)
         currentLeftKey = k
@@ -68,12 +116,18 @@ final class MergeJoin[T: Ordering, U1, U2](
         // add to set
         currentRightValues.append(v)
       } else {
+        previousRightValues = currentRightValues
+        previousRightKey = currentRightKey
+
         currentRightValues = collection.mutable.ListBuffer.empty[U2]
         currentRightValues.append(v)
         currentRightKey = k
       }
     }
 
+    /**
+     * Element push handlers
+     */
     def leftElementPush(leftElem: (T, U1)): Unit = {
       val (k, v) = leftElem
       // println("LEFT", leftElem)
@@ -109,12 +163,20 @@ final class MergeJoin[T: Ordering, U1, U2](
           emitMultiple(out, elems, readR)
         }
         case (_, rightKey) if k < rightKey => {
+          // must do this before incLeft
+          val lookaheadEmit = checkPreviousRightElem(leftElem)
           // still behind, increment again
           incLeft(leftElem)
+
+          // if leftOuter, we emit current
+          val leftOuterFlush = withFlag(leftOuter) {
+            (leftElem._1, (Some(leftElem._2), None)) :: Nil
+          }
           if (doExplain) {
             context.event("push.L", "key" -> "<", "push.key" -> k.toString(), "other.key" -> rightKey.toString())
           }
-          readL()
+
+          emitMultiple(out, leftOuterFlush ++ lookaheadEmit, readL)
         }
       }
     }
@@ -154,12 +216,18 @@ final class MergeJoin[T: Ordering, U1, U2](
           emitMultiple(out, elems, readL)
         }
         case (leftKey, _) if k < leftKey => {
+          // must do this before incRight
+          val lookaheadEmit = checkPreviousLeftElem(rightElem)
           // still behind, increment again
           incRight(rightElem)
+          // if rightOuter, we emit current
+          val rightOuterFlush = withFlag(rightOuter) {
+            (rightElem._1, (None, Some(rightElem._2))) :: Nil
+          }
           if (doExplain) {
             context.event("push.R", "key" -> "<", "push.key" -> k.toString(), "other.key" -> leftKey.toString())
           }
-          readR()
+          emitMultiple(out, rightOuterFlush ++ lookaheadEmit, readR)
         }
       }
     }
@@ -199,8 +267,12 @@ final class MergeJoin[T: Ordering, U1, U2](
         context.event("pass.L")
       }
       passAlongMapConcat(left, out, doPull = true) { item =>
-        withFlag(item._1 =?= currentRightKey) {
+        if (item._1 =?= currentRightKey) {
           calculateJoin(item._1, item._2 :: Nil, currentRightValues.toList)
+        } else {
+          withFlag(leftOuter) {
+            (item._1, (Some(item._2), None)) :: Nil
+          }
         }
       }
     }
@@ -210,8 +282,13 @@ final class MergeJoin[T: Ordering, U1, U2](
         context.event("pass.R")
       }
       passAlongMapConcat(right, out, doPull = true) { item =>
-        withFlag(item._1 =?= currentLeftKey) {
+        if (item._1 =?= currentLeftKey) {
           calculateJoin(item._1, currentLeftValues.toList, item._2 :: Nil)
+        } else {
+          // outer joins we must
+          withFlag(rightOuter) {
+            (item._1, (None, Some(item._2))) :: Nil
+          }
         }
       }
     }

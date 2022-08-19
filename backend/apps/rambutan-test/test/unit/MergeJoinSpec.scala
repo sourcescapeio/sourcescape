@@ -6,7 +6,7 @@ import org.scalatestplus.play._
 import models.query._
 import akka.stream.scaladsl._
 import silvousplay.api._
-import services.q9
+import services.q10
 import play.api.libs.json._
 import models.Sinks
 import akka.stream.Materializer
@@ -18,11 +18,11 @@ class MergeJoinSpec extends PlaySpec with Telemetry {
 
   implicit val ec = scala.concurrent.ExecutionContext.Implicits.global
 
-  private def mergeJoin[K, V1, V2](source1: Source[(K, V1), _], source2: Source[(K, V2), _])(implicit ordering: Ordering[K], writes: Writes[K]) = {
+  private def mergeJoin[K, V1, V2](source1: Source[(K, V1), _], source2: Source[(K, V2), _], leftOuter: Boolean = false, rightOuter: Boolean = false)(implicit ordering: Ordering[K], writes: Writes[K]) = {
     Source.fromGraph(GraphDSL.create() { implicit builder =>
       import GraphDSL.Implicits._
-      val context = getSpanContext()
-      val joiner = builder.add(new q9.MergeJoin[K, V1, V2](context, doExplain = true, leftOuter = false, rightOuter = false))
+      val context = getSpanContext(doPrint = true)
+      val joiner = builder.add(new q10.MergeJoin[K, V1, V2](context, doExplain = true, leftOuter, rightOuter = rightOuter))
 
       source1 ~> joiner.in0
       source2 ~> joiner.in1
@@ -73,9 +73,37 @@ class MergeJoinSpec extends PlaySpec with Telemetry {
 
     //sbt "project rambutanTest" "testOnly test.unit.MergeJoinSpec -- -z join.left"
     "join.left" in {
-      // should pass along properly when one stream terminates
       val source1 = Source(List(("1", 1), ("2", 1), ("3", 1), ("4", 1), ("5", 1)))
       val source2 = Source(List(("3", 1)))
+
+      withMaterializer { implicit m =>
+        val res = mergeJoin(source1, source2, leftOuter = true).runWith(Sinks.ListAccum)
+        // need to pass in left flag
+        await(res).foreach { item =>
+          println(item)
+        }
+      }
+    }
+
+    //sbt "project rambutanTest" "testOnly test.unit.MergeJoinSpec -- -z join.right"
+    "join.right" in {
+      val source1 = Source(List(("1", 1), ("2", 1), ("3", 1), ("4", 1), ("5", 1)))
+      val source2 = Source(List(("3", 1)))
+
+      withMaterializer { implicit m =>
+        val res = mergeJoin(source1, source2, rightOuter = true).runWith(Sinks.ListAccum)
+        // need to pass in left flag
+        await(res).foreach { item =>
+          println(item)
+        }
+      }
+    }
+
+    //sbt "project rambutanTest" "testOnly test.unit.MergeJoinSpec -- -z join.edge"
+    "join.edge" in {
+      // deals with edge case where ("1", "AAA") is consumed after ("2", B")
+      val source1 = Source(List(("1", "A"), ("2", "B")))
+      val source2 = Source(List(("1", "AA"), ("1", "AAA")))
 
       withMaterializer { implicit m =>
         val res = mergeJoin(source1, source2).runWith(Sinks.ListAccum)
