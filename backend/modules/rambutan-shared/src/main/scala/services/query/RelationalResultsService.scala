@@ -211,7 +211,7 @@ class RelationalResultsService @Inject() (
         QueryColumnDefinition("*", QueryResultType.Count) :: Nil
       }
       case RelationalSelect.SelectAll => {
-        query.allKeys.map { k =>
+        query.calculatedOrdering.map { k =>
           QueryColumnDefinition(k, targeting.resultType)
         }
       }

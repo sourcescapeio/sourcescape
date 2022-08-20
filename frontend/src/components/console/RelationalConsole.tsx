@@ -63,6 +63,10 @@ export function RelationalConsoleContainer() {
       body: JSON.stringify({
         q
       }),
+    }).catch(async (e) => {
+      const body = await e.response.json()
+      console.error(body);
+      return Promise.reject(e);
     }).then(async (resp) => {
       const json = await resp.json()
       const queryReturnTime = new Date().getTime();

@@ -28,7 +28,7 @@ class QueryController @Inject() (
   srcLogService:          services.SrcLogCompilerService,
   // experimental
   graphQueryServiceExperimental:      services.GraphQueryService, // not really changing this
-  relationalQueryServiceExperimental: services.q9.RelationalQueryService)(implicit ec: ExecutionContext, as: ActorSystem) extends API with StreamResults with Telemetry {
+  relationalQueryServiceExperimental: services.q10.RelationalQueryService)(implicit ec: ExecutionContext, as: ActorSystem) extends API with StreamResults with Telemetry {
 
   /**
    * Get grammars

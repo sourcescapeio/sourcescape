@@ -71,7 +71,7 @@ class MergeJoinSpec extends PlaySpec with Telemetry {
       }
     }
 
-    //sbt "project rambutanTest" "testOnly test.unit.MergeJoinSpec -- -z join.left"
+    // sbt "project rambutanTest" "testOnly test.unit.MergeJoinSpec -- -z join.left"
     "join.left" in {
       val source1 = Source(List(("1", 1), ("2", 1), ("3", 1), ("4", 1), ("5", 1)))
       val source2 = Source(List(("3", 1)))
@@ -85,10 +85,10 @@ class MergeJoinSpec extends PlaySpec with Telemetry {
       }
     }
 
-    //sbt "project rambutanTest" "testOnly test.unit.MergeJoinSpec -- -z join.right"
+    // sbt "project rambutanTest" "testOnly test.unit.MergeJoinSpec -- -z join.right"
     "join.right" in {
-      val source1 = Source(List(("1", 1), ("2", 1), ("3", 1), ("4", 1), ("5", 1)))
-      val source2 = Source(List(("3", 1)))
+      val source1 = Source(List(("3", 1)))
+      val source2 = Source(List(("1", 1), ("2", 1), ("3", 1), ("4", 1), ("5", 1)))
 
       withMaterializer { implicit m =>
         val res = mergeJoin(source1, source2, rightOuter = true).runWith(Sinks.ListAccum)
@@ -99,8 +99,8 @@ class MergeJoinSpec extends PlaySpec with Telemetry {
       }
     }
 
-    //sbt "project rambutanTest" "testOnly test.unit.MergeJoinSpec -- -z join.edge"
-    "join.edge" in {
+    // sbt "project rambutanTest" "testOnly test.unit.MergeJoinSpec -- -z join.lookahead"
+    "join.lookahead" in {
       // deals with edge case where ("1", "AAA") is consumed after ("2", B")
       val source1 = Source(List(("1", "A"), ("2", "B")))
       val source2 = Source(List(("1", "AA"), ("1", "AAA")))
@@ -113,5 +113,7 @@ class MergeJoinSpec extends PlaySpec with Telemetry {
         }
       }
     }
+
+    // TEST join ordering
   }
 }

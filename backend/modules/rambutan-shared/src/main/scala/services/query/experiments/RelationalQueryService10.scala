@@ -422,6 +422,16 @@ class RelationalQueryService @Inject() (
         tracing.joinKey(fromItem)
       }
 
+      val aKey = { item: Joined[T] =>
+        val fromItem = item.getOrElse(a.key, throw new Exception("invalid merged item"))
+        tracing.joinKey(fromItem)
+      }
+
+      val bKey = { item: Joined[T] =>
+        val fromItem = item.getOrElse(b.key, throw new Exception("invalid merged item"))
+        tracing.joinKey(fromItem)
+      }
+
       val isLeft = a.isLeft || b.isLeft
 
       val explainKey = isLeft match {
@@ -442,7 +452,8 @@ class RelationalQueryService @Inject() (
         leftOuter = isLeft || query.shouldOuterJoin(b.key), // opposite, yeah it's weird
         rightOuter = isLeft || query.shouldOuterJoin(a.key))(
           getKey,
-          getKey)(builder, cc, implicitly[Ordering[List[String]]], implicitly[Writes[List[String]]])
+          aKey,
+          bKey)(builder, cc, implicitly[Ordering[List[String]]], implicitly[Writes[List[String]]])
 
       nextJoin.out ~> cc.terminateFor {
         Flow[(List[String], (Option[Joined[T]], Option[Joined[T]]))].map {
@@ -515,6 +526,7 @@ class RelationalQueryService @Inject() (
 
     val fromLookup = query.fromLookup
     val ordering = query.calculatedOrdering
+    println("ORDERING", ordering)
 
     val leaves = getLeaves(traceQueries, joincastMap)
 
@@ -575,36 +587,41 @@ class RelationalQueryService @Inject() (
     in.mkString("|")
   }
 
-  private def buildMergeJoin[K, V1, V2](
-    left:        UniformFanOutShape[V1, V1],
-    right:       UniformFanOutShape[V2, V2],
+  private def buildMergeJoin[K, V](
+    left:        UniformFanOutShape[V, V],
+    right:       UniformFanOutShape[V, V],
     pushExplain: ((String, JsObject)) => Unit,
     leftOuter:   Boolean,
     rightOuter:  Boolean)(
-    v1Key: V1 => K,
-    v2Key: V2 => K)(implicit builder: GraphDSL.Builder[Any], context: SpanContext, ordering: Ordering[K], writes: Writes[K]) = {
-
-    type LeftJoin = (K, V1)
-    type RightJoin = (K, V2)
-
+    rootKey: V => K,
+    //
+    v1SecondaryKey: V => K,
+    v2SecondaryKey: V => K)(implicit builder: GraphDSL.Builder[Any], context: SpanContext, ordering: Ordering[K], writes: Writes[K]) = {
     val mergeCC = context.decoupledSpan("query.relational.join.merge")
     val doExplain = true
-    val joiner = builder.add(new q10.MergeJoin[K, V1, V2](mergeCC, doExplain, leftOuter, rightOuter))
+    val joiner = builder.add(new q10.MergeJoin[K, V, V](
+      mergeCC,
+      doExplain,
+      leftOuter = false,
+      rightOuter = false
+      // v1SecondaryKey,
+      // v2SecondaryKey
+    ))
 
     println("LEFT", leftOuter)
     println("RIGHT", rightOuter)
 
     // calculate keys
-    left ~> Flow[V1].map {
+    left ~> Flow[V].map {
       case joined => {
-        val key = v1Key(joined)
+        val key = rootKey(joined)
         (key, joined)
       }
     } ~> joiner.in0
 
-    right ~> mergeCC.terminateFor(Flow[V2].map {
+    right ~> mergeCC.terminateFor(Flow[V].map {
       case trace => {
-        val key = v2Key(trace)
+        val key = rootKey(trace)
         (key, trace)
       }
     }) ~> joiner.in1
