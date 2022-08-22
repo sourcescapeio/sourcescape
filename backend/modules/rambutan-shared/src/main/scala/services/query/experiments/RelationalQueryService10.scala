@@ -449,11 +449,13 @@ class RelationalQueryService @Inject() (
         a.merge(query),
         b.merge(query),
         pushExplain,
-        leftOuter = isLeft || query.shouldOuterJoin(b.key), // opposite, yeah it's weird
-        rightOuter = isLeft || query.shouldOuterJoin(a.key))(
-          getKey,
-          aKey,
-          bKey)(builder, cc, implicitly[Ordering[List[String]]], implicitly[Writes[List[String]]])
+        leftOuter = false, // isLeft || query.shouldOuterJoin(b.key), // opposite, yeah it's weird
+        rightOuter = false // isLeft || query.shouldOuterJoin(a.key)
+      )(
+        getKey,
+        aKey,
+        bKey
+      )(builder, cc, implicitly[Ordering[List[String]]], implicitly[Writes[List[String]]])
 
       nextJoin.out ~> cc.terminateFor {
         Flow[(List[String], (Option[Joined[T]], Option[Joined[T]]))].map {
@@ -602,10 +604,10 @@ class RelationalQueryService @Inject() (
     val joiner = builder.add(new q10.MergeJoin[K, V, V](
       mergeCC,
       doExplain,
-      leftOuter = false,
-      rightOuter = false
-      // v1SecondaryKey,
-      // v2SecondaryKey
+      leftOuter = leftOuter,
+      rightOuter = rightOuter
+    // v1SecondaryKey,
+    // v2SecondaryKey
     ))
 
     println("LEFT", leftOuter)

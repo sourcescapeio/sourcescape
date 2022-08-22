@@ -71,10 +71,52 @@ class MergeJoinSpec extends PlaySpec with Telemetry {
       }
     }
 
-    // sbt "project rambutanTest" "testOnly test.unit.MergeJoinSpec -- -z join.left"
-    "join.left" in {
+    // sbt "project rambutanTest" "testOnly test.unit.MergeJoinSpec -- -z join.left.1"
+    "join.left.1" in {
       val source1 = Source(List(("1", 1), ("2", 1), ("3", 1), ("4", 1), ("5", 1)))
       val source2 = Source(List(("3", 1)))
+
+      withMaterializer { implicit m =>
+        val res = mergeJoin(source1, source2, leftOuter = true).runWith(Sinks.ListAccum)
+        // need to pass in left flag
+        await(res).foreach { item =>
+          println(item)
+        }
+      }
+    }
+
+    // sbt "project rambutanTest" "testOnly test.unit.MergeJoinSpec -- -z join.left.2"
+    "join.left.2" in {
+      val source1 = Source(List(("1", 1), ("2", 1), ("3", 1), ("4", 1), ("5", 1)))
+      val source2 = Source(List(("1", 1), ("2", 1)))
+
+      withMaterializer { implicit m =>
+        val res = mergeJoin(source1, source2, leftOuter = true).runWith(Sinks.ListAccum)
+        // need to pass in left flag
+        await(res).foreach { item =>
+          println(item)
+        }
+      }
+    }
+
+    // sbt "project rambutanTest" "testOnly test.unit.MergeJoinSpec -- -z join.left.3"
+    "join.left.3" in {
+      val source1 = Source(List(("1", 1), ("2", 1), ("3", 1), ("4", 1), ("5", 1)))
+      val source2 = Source(List(("1", 1), ("3", 1)))
+
+      withMaterializer { implicit m =>
+        val res = mergeJoin(source1, source2, leftOuter = true).runWith(Sinks.ListAccum)
+        // need to pass in left flag
+        await(res).foreach { item =>
+          println(item)
+        }
+      }
+    }
+
+    // sbt "project rambutanTest" "testOnly test.unit.MergeJoinSpec -- -z join.left.4"
+    "join.left.4" in {
+      val source1 = Source(List(("3", 1), ("5", 1), ("8", 1)))
+      val source2 = Source(List(("4", 1), ("7", 1), ("9", 1)))
 
       withMaterializer { implicit m =>
         val res = mergeJoin(source1, source2, leftOuter = true).runWith(Sinks.ListAccum)
