@@ -123,7 +123,7 @@ final class MergeJoin[T: Ordering, U1, U2](
 
     def flushLeftState(elemKey: T) = {
       withFlag(leftOuter) {
-        println("flush.L", elemKey, previousLeftKey, currentLeftKey)
+        // println("flush.L", elemKey, previousLeftKey, currentLeftKey)
         // On rotation, previous falls out without having been matched
         lazy val shouldFlushPrev = elemKey > previousLeftKey
         val flushPrev = withFlag(previousLeftKey != null && shouldFlushPrev && !previousLeftEmitted) {
@@ -171,7 +171,7 @@ final class MergeJoin[T: Ordering, U1, U2](
         currentLeftValues.append(v)
         currentLeftKey = k
 
-        println("left.changed", previousLeftKey, currentLeftKey)
+        // println("left.changed", previousLeftKey, currentLeftKey)
       }
     }
 
@@ -193,7 +193,7 @@ final class MergeJoin[T: Ordering, U1, U2](
         currentRightValues.append(v)
         currentRightKey = k
 
-        println("right.changed", previousRightKey, currentRightKey)
+        // println("right.changed", previousRightKey, currentRightKey)
       }
     }
 
@@ -343,7 +343,7 @@ final class MergeJoin[T: Ordering, U1, U2](
     /**
      * Read triggers
      */
-    val readR = () => {
+    val  readR = () => {
       if (doExplain) {
         context.event("read.R")
       }
@@ -480,6 +480,9 @@ final class MergeJoin[T: Ordering, U1, U2](
       // initiate reads. first read left, then read right
       read(left)(l => {
         val (k, v) = l
+        if (doExplain) {
+          context.event("initial.L")
+        }
         currentLeftKey = k
         currentLeftValues.append(v)
         readR()

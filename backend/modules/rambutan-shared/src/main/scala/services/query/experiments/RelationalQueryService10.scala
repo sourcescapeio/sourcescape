@@ -275,19 +275,41 @@ class RelationalQueryService @Inject() (
        * Link the node broadcasts together
        * - Also link with the joiner
        */
-      // kind of janky to return left join, but better than passing in mutable list
-      val leftJoins = query.traces.flatMap { trace =>
+
+      query.traces.foreach { trace =>
         applyTraceToGraph(
           trace,
-          broadcastMap)
+          broadcastMap
+        )
+      }
+
+      /**
+       * For any root that has only left joins
+       * - Create a prime broadcast to broadcast itself
+       */      
+      val leftJoins = query.traces.groupBy(_.query.fromName).flatMap {
+        // implicitly vs.length > 0
+        case (k, vs) if vs.forall(_.query.from.leftJoin) => {
+          val fromCast = broadcastMap.getOrElse(k, throw new Exception(s"could not find ${k}"))
+          val leftJoinCast = builder.add(Broadcast[Joined[T]](1))
+
+          fromCast ~> Flow[Joined[T]].map { i =>
+            context.event("left-pass", "key" -> s"${k}'")
+            i
+          }.buffer(100, OverflowStrategy.backpressure) ~> leftJoinCast
+
+          Some(k -> leftJoinCast)
+        }
+        case _ => None
       }.toMap
+      
 
       /**
        * Final Join system
        */
       val joinTree = getFinalJoinTree(query, broadcastMap, leftJoins)
 
-      println(joinTree)
+      println("JOINTREE", joinTree)
 
       val finalMerge = joinTree.merge(query)
 
@@ -306,16 +328,11 @@ class RelationalQueryService @Inject() (
    * Helpers
    */
   private def calculateQueryDependencyCounts(query: RelationalQuery): Map[String, Int] = {
-    val allFroms: Map[String, Int] = {
-      val base = query.traces.map { t =>
-        // NOTE: not worried about left joins for now
-        t.query.fromName -> 1
-      }
-
-      base.groupBy(_._1).map {
-        case (k, vs) => {
-          k -> vs.map(_._2).sum
-        }
+    val byFrom = query.traces.groupBy(_.query.fromName)
+    val allFroms: Map[String, Int] = byFrom.map {
+      case (k, vs) => {
+        val allLeft = vs.forall(_.query.from.leftJoin)
+        k -> (vs.length + (if (allLeft) 1 else 0))
       }
     }
 
@@ -328,13 +345,14 @@ class RelationalQueryService @Inject() (
 
   private def applyTraceToGraph[T, TU](
     trace:        KeyedQuery[TraceQuery],
-    broadcastMap: Map[String, UniformFanOutShape[Joined[T], Joined[T]]])(
+    broadcastMap: Map[String, UniformFanOutShape[Joined[T], Joined[T]]],
+  )(
     implicit
     builder:   GraphDSL.Builder[Any],
     targeting: QueryTargeting[TU],
     context:   SpanContext,
     tracing:   QueryTracing[T, TU],
-    explain:   RelationalQueryExplain): Option[(String, UniformFanOutShape[Joined[T], Joined[T]])] = {
+    explain:   RelationalQueryExplain) = {
     val fromKey = trace.query.fromName
     val toKey = trace.key
 
@@ -348,7 +366,6 @@ class RelationalQueryService @Inject() (
     /**
      * Build up query flow [from -> to]
      */
-    val isLeftJoin = trace.query.from.leftJoin
     // Mapped
     val mappedTracing = MapTracing(tracing, fromKey, toKey)
 
@@ -360,28 +377,16 @@ class RelationalQueryService @Inject() (
     val pushExplain = explain.pusher(toKey)
 
     fromCast ~> Flow[Joined[T]].map { t =>
+      context.event("trace-in", "key" -> toKey)
       pushExplain(("buffer", Json.obj("action" -> "trace-in", "key" -> toKey)))
       mappedTracing.pushExternalKey(t)
     } ~> flow.log(s"flow[$fromKey,$toKey]").map { t =>
+      context.event("trace-out", "key" -> toKey)
       pushExplain(("buffer", Json.obj("action" -> "trace-out", "key" -> toKey)))
       t
     } ~> toCast
 
     explain.link(fromKey, toKey)
-
-    // TODO: create left join
-    /**
-     * Link join output to join broadcast. Left joins have separate thing
-     * [joiner -> to.join]
-     */
-    if (isLeftJoin) {
-      val leftJoinCast = builder.add(Broadcast[Joined[T]](1))
-      fromCast ~> leftJoinCast
-      // Option(linkJoinToNextWithLeftJoin(joiner, toKey, joinCast, explain.pusher(toKey)))
-      Some(toKey -> leftJoinCast)
-    } else {
-      None
-    }
   }
 
   /**
@@ -408,13 +413,13 @@ class RelationalQueryService @Inject() (
 
   // joinKey is the root (!)
   // A fork to B, C, we join using A as joinKey (!!!)
-  private case class JoinTree[T, TU](joinKey: String, a: JoinUnit[T], b: JoinUnit[T])(implicit targeting: QueryTargeting[TU], tracing: QueryTracing[T, TU]) extends JoinUnit[T] {
+  private case class JoinTree[T, TU](joinKey: String, a: JoinUnit[T], b: JoinUnit[T], leftJoin: Boolean)(implicit targeting: QueryTargeting[TU], tracing: QueryTracing[T, TU]) extends JoinUnit[T] {
 
     val key = joinKey
 
     val reportKey = s"[${a.reportKey}<>${b.reportKey}]"
 
-    val isLeft = false
+    val isLeft = leftJoin
 
     def merge(query: RelationalQuery)(implicit builder: GraphDSL.Builder[Any], context: SpanContext, explain: RelationalQueryExplain) = {
       val getKey = { item: Joined[T] =>
@@ -449,13 +454,12 @@ class RelationalQueryService @Inject() (
         a.merge(query),
         b.merge(query),
         pushExplain,
-        leftOuter = false, // isLeft || query.shouldOuterJoin(b.key), // opposite, yeah it's weird
-        rightOuter = false // isLeft || query.shouldOuterJoin(a.key)
+        leftOuter = b.isLeft, // isLeft || query.shouldOuterJoin(b.key), // opposite, yeah it's weird
+        rightOuter = a.isLeft // isLeft || query.shouldOuterJoin(a.key)
       )(
-        getKey,
-        aKey,
-        bKey
-      )(builder, cc, implicitly[Ordering[List[String]]], implicitly[Writes[List[String]]])
+          getKey,
+          aKey,
+          bKey)(builder, cc, implicitly[Ordering[List[String]]], implicitly[Writes[List[String]]])
 
       nextJoin.out ~> cc.terminateFor {
         Flow[(List[String], (Option[Joined[T]], Option[Joined[T]]))].map {
@@ -480,31 +484,31 @@ class RelationalQueryService @Inject() (
     joincastMap:  Map[String, UniformFanOutShape[Joined[TU], Joined[TU]]]): List[(String, JoinTerminus[TU])] = {
     val froms = traceQueries.map(_.query.fromName).toSet
     val traceMap = traceQueries.map { t =>
-      t.key -> t.query.fromName
+      t.key -> t.query
     }
 
     traceMap.filter {
       case (k, _) => !froms.contains(k)
     }.map {
-      case (k, f) => {
-        f -> JoinTerminus(
+      case (k, q) => {
+        q.fromName -> JoinTerminus(
           k,
           joincastMap.getOrElse(k, throw new Exception(s"join ${k} not found")),
-          false)
+          q.from.leftJoin)
       }
     }
   }
 
   private def getLeftJoinLeaves[TU](
-    traceQueries: List[KeyedQuery[TraceQuery]],
     leftJoinMap:  Map[String, UniformFanOutShape[Joined[TU], Joined[TU]]]): List[(String, JoinTerminus[TU])] = {
-    traceQueries.filter(_.query.from.leftJoin).map { trace =>
-      val k = trace.key
-      val f = trace.query.fromName
-      f -> JoinTerminus(
-        k,
-        leftJoinMap.getOrElse(k, throw new Exception(s"join ${k} not found")),
-        true)
+
+    leftJoinMap.toList.map {
+      case (f, item) => {
+        f -> JoinTerminus(
+          s"${f}'",
+          item,
+          true)
+      }
     }
   }
 
@@ -528,19 +532,28 @@ class RelationalQueryService @Inject() (
 
     val fromLookup = query.fromLookup
     val ordering = query.calculatedOrdering
-    println("ORDERING", ordering)
 
     val leaves = getLeaves(traceQueries, joincastMap)
 
     val collapsed = leaves.map(_._2.key).toSet
 
-    val leftJoins = getLeftJoinLeaves(traceQueries, leftJoinMap).toList
+    val traceMap = traceQueries.map { t =>
+      t.key -> t.query
+    }.toMap
+
+    val leftJoins = getLeftJoinLeaves(leftJoinMap).toList
 
     def buildLayer(rootKey: String, units: List[JoinUnit[T]]): JoinUnit[T] = {
       units match {
-        case Nil                     => throw new Exception("0 unit layer")
-        case head :: Nil             => head
-        case head :: second :: other => buildLayer(rootKey, JoinTree[T, TU](rootKey, head, second) :: other)
+        case Nil         => throw new Exception("0 unit layer")
+        case head :: Nil => head
+        case head :: second :: other => {
+          val leftJoin = traceMap.get(rootKey).map(_.from.leftJoin).getOrElse(false) // if not found, it's the root
+
+          buildLayer(
+            rootKey,
+            JoinTree[T, TU](rootKey, head, second, leftJoin) :: other)
+        }
       }
     }
 

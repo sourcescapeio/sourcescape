@@ -66,6 +66,7 @@ export function RelationalConsoleContainer() {
     }).catch(async (e) => {
       const body = await e.response.json()
       console.error(body);
+      setError(body);
       return Promise.reject(e);
     }).then(async (resp) => {
       const json = await resp.json()
@@ -102,17 +103,28 @@ export function RelationalConsoleContainer() {
       body: JSON.stringify({
         q
       }),
-    }).catch((e) => {
+    }).catch(async (e) => {
       console.error(e);
-      e.response.json().then((json: any) => {
-        setError(json)
+      const body = await e.response.json()
+      console.error(body);      
+      setError(body)
+      setLoading(false)
+      setData([])
+      setDiffData({})
+      setExplain([])
+      return Promise.reject(e);
+    }).then(async (resp) => {
+      // handle error
+      if(resp.status !== 200) {
+        const body = await resp.json()
+        setError(body)
         setLoading(false)
         setData([])
         setDiffData({})
         setExplain([])
-      })
-      return Promise.reject(e);
-    }).then((resp) => {
+        return;
+      }
+
       const queryHeaderStr = resp.headers.get('Rambutan-Result') || "{}";
       const queryHeaders = JSON.parse(queryHeaderStr);
       const { columns, sizeEstimate, isDiff } = queryHeaders.results;
