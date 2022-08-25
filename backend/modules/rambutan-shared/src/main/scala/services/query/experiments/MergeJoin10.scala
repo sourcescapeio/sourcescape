@@ -343,7 +343,7 @@ final class MergeJoin[T: Ordering, U1, U2](
     /**
      * Read triggers
      */
-    val  readR = () => {
+    val readR = () => {
       if (doExplain) {
         context.event("read.R")
       }
