@@ -355,7 +355,7 @@ class RelationalQueryService @Inject() (
         t
       } ~> toCast
     } else {
-      // If self left-join, we use a hash join
+      // If self left-join, we use a hash join with self
       val getKey = { item: Map[String, T] =>
         val fromItem = item.getOrElse(fromKey, throw new Exception("invalid merged item"))
         tracing.joinKey(fromItem).mkString("|")
