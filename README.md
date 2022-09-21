@@ -8,7 +8,7 @@ Primadonna => 3001
 
 # Building local images
 ```bash
-docker -f docker-compose.desktop.yml compose build
+docker compose -f docker-compose.desktop.yml build
 
-docker -f docker-compose.desktop.yml compose build backend
+docker compose -f docker-compose.desktop.yml build backend
 ```

@@ -9,7 +9,7 @@ services:
     build:
       context: .
       dockerfile: docker/desktop/backend.Dockerfile
-    platform: linux/amd64 # TODO: fix, find a better image
+    platform: linux/arm64/v8
     image: sourcescape_backend:1.0
   frontend:
     build:
