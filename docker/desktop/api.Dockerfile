@@ -5,6 +5,10 @@ ADD ./backend /usr/build/app
 
 ARG SBT_VERSION=1.7.1
 
+RUN mkdir /tmp
+
+WORKDIR /tmp
+
 RUN \
   curl -L -o sbt-$SBT_VERSION.deb https://repo.scala-sbt.org/scalasbt/debian/sbt-$SBT_VERSION.deb && \
   dpkg -i sbt-$SBT_VERSION.deb && \
