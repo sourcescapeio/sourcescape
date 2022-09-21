@@ -13,7 +13,7 @@ object Dependencies {
 
     // TODO: 2.6.19 once we upgrade Play
     val Akka = "2.5.31"
-    val AkkaHttp = "10.1.11"
+    val AkkaHttp = "10.1.15"
     // val Alpakka = "2.0.2"
 
     // TODO: could use an upgrade

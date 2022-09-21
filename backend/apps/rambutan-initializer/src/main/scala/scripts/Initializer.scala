@@ -43,9 +43,9 @@ object Initializer {
   }
 
   def main(args: Array[String]): Unit = {
-    // println("Running evolutions...")
-    // Evolutions.applyEvolutions(db)
-    // println("Evolutions complete")
+    println("Running evolutions...")
+    Evolutions.applyEvolutions(db)
+    println("Evolutions complete")
 
     println("Ensuring ES indexes...")
     val esWork = for {
