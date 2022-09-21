@@ -12,6 +12,7 @@ object APIBuild {
     Core.akkaHttp,
     // Core.akkaSprayJson,
     Core.akkaStreams,
+    Play.twirl,
     play.sbt.PlayImport.evolutions,
     play.sbt.PlayImport.jdbc,
     play.sbt.PlayImport.ws,

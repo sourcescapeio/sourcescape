@@ -36,7 +36,7 @@ case class APIException(code: String, message: String, status: Int) extends Base
 }
 
 trait FormAPI {
-  def withFormLight[T, V](form: Form[T])(f: T => V)(implicit request: Request[AnyContent]): Either[JsObject, V] = {
+  def withFormLight[T, V](form: Form[T])(f: T => V)(implicit request: Request[AnyContent], binding: play.api.data.FormBinding): Either[JsObject, V] = {
     form.bindFromRequest.fold(
       formWithErrors => {
         val errors = formWithErrors.errors.groupBy(_.message).map {
@@ -53,7 +53,7 @@ trait FormAPI {
       })
   }
 
-  def withForm[T, V](form: Form[T])(f: T => V)(implicit request: Request[AnyContent], resultable: Resultable[V]) = {
+  def withForm[T, V](form: Form[T])(f: T => V)(implicit request: Request[AnyContent], resultable: Resultable[V], binding: play.api.data.FormBinding) = {
     withFormLight(form)(f).fold(
       errorMap => Future.successful(BadRequest(errorMap)),
       item => resultable.toResult(item))
