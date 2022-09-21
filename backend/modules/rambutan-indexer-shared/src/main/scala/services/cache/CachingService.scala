@@ -28,8 +28,7 @@ class CachingService @Inject() (
   srcLogCompilerService:  SrcLogCompilerService,
   relationalQueryService: RelationalQueryService,
   //
-  telemetryService: TelemetryService
-)(implicit ec: ExecutionContext, mat: akka.stream.Materializer) {
+  telemetryService: TelemetryService)(implicit ec: ExecutionContext, mat: akka.stream.Materializer) {
 
   val CachingConcurrency = 4
 
