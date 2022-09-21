@@ -5,7 +5,7 @@ ADD ./backend /usr/build/app
 
 ARG SBT_VERSION=1.3.10
 
-WORKDIR /tmp
+WORKDIR /usr/build/app
 
 RUN \
   curl -L -o sbt-$SBT_VERSION.deb https://repo.scala-sbt.org/scalasbt/debian/sbt-$SBT_VERSION.deb && \
@@ -14,8 +14,6 @@ RUN \
   apt-get update && \
   apt-get install sbt && \
   sbt sbtVersion
-
-WORKDIR /usr/build/app
 
 ARG SBT_OPTS="-Xmx4096m -Xms1024m -Xss32m -XX:ReservedCodeCacheSize=128m -XX:+UseCodeCacheFlushing -XX:+UseCompressedOops -XX:+UseConcMarkSweepGC -XX:+CMSClassUnloadingEnabled"
 RUN sbt "project rambutanLocal" clean stage
