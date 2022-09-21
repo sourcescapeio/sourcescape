@@ -15,51 +15,33 @@ jobs:
         with:
           github-push-secret: ${{secrets.GITHUB_TOKEN}}
           docker-image-name: primadonna
-          docker-image-tag: 1.0.0 # optional
-          dockerfile-path: ./docker/desktop/primadonna.Dockerfile # optional
-          build-context: ./ # optional
+          docker-image-tag: 1.0.0
+          dockerfile-path: ./docker/desktop/primadonna.Dockerfile
+          build-context: ./
 
       - uses: pmorelli92/github-container-registry-build-push@2.0.0
-        name: Build and Publish API
+        name: Build and Publish Unified Backend (API+Indexer+Initializer)
         with:
           github-push-secret: ${{secrets.GITHUB_TOKEN}}
-          docker-image-name: api
-          docker-image-tag: 1.0.0 # optional
-          dockerfile-path: ./docker/desktop/api.Dockerfile # optional
-          build-context: ./ # optional
-
-      - uses: pmorelli92/github-container-registry-build-push@2.0.0
-        name: Build and Publish Indexer
-        with:
-          github-push-secret: ${{secrets.GITHUB_TOKEN}}
-          docker-image-name: indexer
-          docker-image-tag: 1.0.0 # optional
-          dockerfile-path: ./docker/desktop/indexer.Dockerfile # optional
-          build-context: ./ # optional
+          docker-image-name: backend
+          docker-image-tag: 1.0.0
+          dockerfile-path: ./docker/desktop/backend.Dockerfile
+          build-context: ./
 
       - uses: pmorelli92/github-container-registry-build-push@2.0.0
         name: Build and Publish Proxy
         with:
           github-push-secret: ${{secrets.GITHUB_TOKEN}}
           docker-image-name: proxy
-          docker-image-tag: 1.0.0 # optional
-          dockerfile-path: ./docker/desktop/proxy.Dockerfile # optional
-          build-context: ./ # optional
-
-      - uses: pmorelli92/github-container-registry-build-push@2.0.0
-        name: Build and Publish Initializer
-        with:
-          github-push-secret: ${{secrets.GITHUB_TOKEN}}
-          docker-image-name: initializer
-          docker-image-tag: 1.0.0 # optional
-          dockerfile-path: ./docker/desktop/initializer.Dockerfile # optional
-          build-context: ./ # optional
+          docker-image-tag: 1.0.0
+          dockerfile-path: ./docker/desktop/proxy.Dockerfile
+          build-context: ./
 
       - uses: pmorelli92/github-container-registry-build-push@2.0.0
         name: Build and Publish Frontend
         with:
           github-push-secret: ${{secrets.GITHUB_TOKEN}}
           docker-image-name: frontend
-          docker-image-tag: 1.0.0 # optional
-          dockerfile-path: ./docker/desktop/frontend.Dockerfile # optional
-          build-context: ./ # optional
+          docker-image-tag: 1.0.0
+          dockerfile-path: ./docker/desktop/frontend.Dockerfile
+          build-context: ./
