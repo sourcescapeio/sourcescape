@@ -16,5 +16,5 @@ jobs:
           github-push-secret: ${{secrets.GITHUB_TOKEN}}
           docker-image-name: primadonna
           docker-image-tag: latest # optional
-          dockerfile-path: ./docker/desktop/primadonna.Docker # optional
+          dockerfile-path: ./docker/desktop/primadonna.Dockerfile # optional
           build-context: ./ # optional
