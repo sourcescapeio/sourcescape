@@ -99,13 +99,13 @@ export async function statusTier(items: ServiceConfig[], log: Function) {
     const { name } = item;
     const maybeRunning = find(runningContainers, (c) => (c.name === name));
     if (maybeRunning) {
-      log(`RUNNING: ${name}`);
+      log(`RUNNING: ${maybeRunning.id} ${name}`);
       return null;
     }
 
     const maybeStopped = find(stoppedContainers, (c) => (c.name === name));
     if (maybeStopped) {
-      log(`STOPPED: ${name}`);
+      log(`STOPPED: ${maybeStopped.id} ${name}`);
       return null;
     }
 
@@ -229,7 +229,7 @@ export async function ensureTier(items: ServiceConfig[], directories: string[], 
         if (missing.length > 0) {
           log("CONTAINERS ARE ALREADY RUNNING WITH DIFFERENT MOUNTS");
           log(`MISSING MOUNTS: ${missing}`);
-          log('Need to destroy with `clean --all` and recreate');
+          log('Need to destroy with `sourcescape clean` and recreate');
           process.exit(1);
         }
       }
