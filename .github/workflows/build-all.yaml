@@ -15,7 +15,7 @@ jobs:
         with:
           github-push-secret: ${{secrets.GITHUB_TOKEN}}
           docker-image-name: primadonna
-          docker-image-tag: 1.0.0
+          docker-image-tag: 1.0
           dockerfile-path: ./docker/desktop/primadonna.Dockerfile
           build-context: ./
 
@@ -24,7 +24,7 @@ jobs:
         with:
           github-push-secret: ${{secrets.GITHUB_TOKEN}}
           docker-image-name: backend
-          docker-image-tag: 1.0.0
+          docker-image-tag: 1.0
           dockerfile-path: ./docker/desktop/backend.Dockerfile
           build-context: ./
 
@@ -33,7 +33,7 @@ jobs:
         with:
           github-push-secret: ${{secrets.GITHUB_TOKEN}}
           docker-image-name: proxy
-          docker-image-tag: 1.0.0
+          docker-image-tag: 1.0
           dockerfile-path: ./docker/desktop/proxy.Dockerfile
           build-context: ./
 
@@ -42,6 +42,6 @@ jobs:
         with:
           github-push-secret: ${{secrets.GITHUB_TOKEN}}
           docker-image-name: frontend
-          docker-image-tag: 1.0.0
+          docker-image-tag: 1.0
           dockerfile-path: ./docker/desktop/frontend.Dockerfile
           build-context: ./
