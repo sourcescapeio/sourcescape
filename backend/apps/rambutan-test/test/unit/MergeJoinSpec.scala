@@ -14,14 +14,14 @@ import akka.actor.ActorSystem
 import scala.concurrent.Future
 
 // sbt "project rambutanTest" "testOnly test.unit.MergeJoinSpec"
-class MergeJoinSpec extends PlaySpec with Telemetry {
+class MergeJoinSpec extends PlaySpec {
 
   implicit val ec = scala.concurrent.ExecutionContext.Implicits.global
 
   private def mergeJoin[K, V1, V2](source1: Source[(K, V1), _], source2: Source[(K, V2), _], leftOuter: Boolean = false, rightOuter: Boolean = false)(implicit ordering: Ordering[K], writes: Writes[K]) = {
     Source.fromGraph(GraphDSL.create() { implicit builder =>
       import GraphDSL.Implicits._
-      val context = getSpanContext(doPrint = true)
+      val context = NoopSpanContext
       val joiner = builder.add(new q10.MergeJoin[K, V1, V2](context, doExplain = true, leftOuter, rightOuter = rightOuter))
 
       source1 ~> joiner.in0
