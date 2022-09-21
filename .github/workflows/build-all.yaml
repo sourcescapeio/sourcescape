@@ -34,7 +34,7 @@ jobs:
             ghcr.io/sourcescapeio/backend:latest
             ghcr.io/sourcescapeio/backend:1.0
 
-  build-rest:
+  build-frontend:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository

@@ -1,5 +1,5 @@
 # Stage 1
-FROM ibm-semeru-runtimes:open-8u345-b01-jre-jammy AS builder
+FROM ibm-semeru-runtimes:open-8u345-b01-jdk-jammy AS builder
 
 ADD ./backend /usr/build/app
 
@@ -21,7 +21,7 @@ RUN sbt "project rambutanLocal" clean stage
 RUN sbt "project rambutanIndexer" clean stage
 
 # Stage 2
-FROM ibm-semeru-runtimes:open-8u345-b01-jdk-jammy
+FROM ibm-semeru-runtimes:open-8u345-b01-jre-jammy
 ADD ./docker/desktop/rambutan.conf /opt/conf/rambutan.conf
 COPY --from=builder /usr/build/app/apps/rambutan-initializer/target/universal /opt/initializer
 COPY --from=builder /usr/build/app/apps/rambutan-local/target/universal /opt/api
