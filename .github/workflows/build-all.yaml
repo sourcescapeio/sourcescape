@@ -4,7 +4,37 @@ on:
     branches:
       - drj/actions
 jobs:
-  build-all:
+  build-backend:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Set up QEMU     
+        uses: docker/setup-qemu-action@v2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+      
+      - name: Login to Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and Publish Unified Backend
+        uses: docker/build-push-action@v3
+        with:
+          context: .
+          file: ./docker/desktop/backend.Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ghcr.io/sourcescapeio/backend:latest
+            ghcr.io/sourcescapeio/backend:1.0
+
+  build-rest:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -34,38 +64,24 @@ jobs:
             ghcr.io/sourcescapeio/primadonna:latest
             ghcr.io/sourcescapeio/primadonna:1.0
 
-      # - uses: pmorelli92/github-container-registry-build-push@2.0.0
-      #   name: Build and Publish Primadonna
-      #   with:
-      #     github-push-secret: ${{secrets.GITHUB_TOKEN}}
-      #     docker-image-name: primadonna
-      #     docker-image-tag: "1.0"
-      #     dockerfile-path: ./docker/desktop/primadonna.Dockerfile
-      #     build-context: ./
+      - name: Build and Publish Proxy
+        uses: docker/build-push-action@v3
+        with:
+          context: .
+          file: ./docker/desktop/proxy.Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ghcr.io/sourcescapeio/proxy:latest
+            ghcr.io/sourcescapeio/proxy:1.0
 
-      # - uses: pmorelli92/github-container-registry-build-push@2.0.0
-      #   name: Build and Publish Unified Backend (API+Indexer+Initializer)
-      #   with:
-      #     github-push-secret: ${{secrets.GITHUB_TOKEN}}
-      #     docker-image-name: backend
-      #     docker-image-tag: "1.0"
-      #     dockerfile-path: ./docker/desktop/backend.Dockerfile
-      #     build-context: ./
-
-      # - uses: pmorelli92/github-container-registry-build-push@2.0.0
-      #   name: Build and Publish Proxy
-      #   with:
-      #     github-push-secret: ${{secrets.GITHUB_TOKEN}}
-      #     docker-image-name: proxy
-      #     docker-image-tag: "1.0"
-      #     dockerfile-path: ./docker/desktop/proxy.Dockerfile
-      #     build-context: ./
-
-      # - uses: pmorelli92/github-container-registry-build-push@2.0.0
-      #   name: Build and Publish Frontend
-      #   with:
-      #     github-push-secret: ${{secrets.GITHUB_TOKEN}}
-      #     docker-image-name: frontend
-      #     docker-image-tag: "1.0"
-      #     dockerfile-path: ./docker/desktop/frontend.Dockerfile
-      #     build-context: ./
+      - name: Build and Publish Frontend
+        uses: docker/build-push-action@v3
+        with:
+          context: .
+          file: ./docker/desktop/frontend.Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ghcr.io/sourcescapeio/frontend:latest
+            ghcr.io/sourcescapeio/frontend:1.0
