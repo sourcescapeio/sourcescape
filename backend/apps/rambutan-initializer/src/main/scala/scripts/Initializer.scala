@@ -17,6 +17,9 @@ object Initializer {
 
   val pgHost = sys.env.get("POSTGRES_HOST").getOrElse("localhost")
 
+  println(esHost)
+  println(pgHost)
+
   // POSTGRES_HOST
   private lazy val db = Databases(
     "org.postgresql.Driver",
