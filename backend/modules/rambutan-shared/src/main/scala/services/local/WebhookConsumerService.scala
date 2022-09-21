@@ -10,14 +10,14 @@ import play.api.libs.json._
 import org.joda.time._
 import akka.stream.scaladsl.Sink
 import akka.stream.Materializer
-import silvousplay.api.SpanContext
-import silvousplay.api.Telemetry
+import silvousplay.api._
 
 @Singleton
 class WebhookConsumerService @Inject() (
   configuration:               play.api.Configuration,
   webhookConsumerQueueService: WebhookConsumerQueueService,
   queueManagementService:      QueueManagementService,
+  telemetryService:            TelemetryService,
   gitService:                  LocalGitService,
   socketService:               SocketService,
   repoDataService:             LocalRepoDataService,
@@ -26,7 +26,7 @@ class WebhookConsumerService @Inject() (
   val indexerService:       IndexerService,
   val repoIndexDataService: RepoIndexDataService,
   val clonerQueueService:   ClonerQueueService,
-  val logService:           LogService)(implicit val ec: ExecutionContext, mat: Materializer) extends ConsumerService with Telemetry {
+  val logService:           LogService)(implicit val ec: ExecutionContext, mat: Materializer) extends ConsumerService {
 
   val WebhookConcurrency = 4
 
@@ -38,7 +38,7 @@ class WebhookConsumerService @Inject() (
         concurrency = WebhookConcurrency,
         source = webhookConsumerQueueService.source) { item =>
           println("DEQUEUE", item)
-          withTelemetry { implicit c =>
+          telemetryService.withTelemetry { implicit c =>
             repoRefresh(item)
           }
         } { item =>
@@ -51,7 +51,7 @@ class WebhookConsumerService @Inject() (
   }
 
   def consumeOne() = {
-    withTelemetry { implicit c =>
+    telemetryService.withTelemetry { implicit c =>
       for {
         item <- webhookConsumerQueueService.source.runWith(Sink.head)
         _ = println(item)

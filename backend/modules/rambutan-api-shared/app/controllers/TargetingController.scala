@@ -2,7 +2,7 @@ package controllers
 
 import models._
 import javax.inject._
-import silvousplay.api.API
+import silvousplay.api._
 import silvousplay.imports._
 import scala.concurrent.{ ExecutionContext, Future }
 import scala.concurrent.duration._
@@ -11,19 +11,19 @@ import akka.actor.ActorSystem
 import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.{ Flow, Sink, Source }
 import play.api.libs.json._
-import silvousplay.api.Telemetry
 
 @Singleton
 class TargetingController @Inject() (
   configuration:    play.api.Configuration,
+  telemetryService: TelemetryService,
   authService:      services.AuthService,
-  targetingService: services.TargetingService)(implicit ec: ExecutionContext, as: ActorSystem) extends API with Telemetry {
+  targetingService: services.TargetingService)(implicit ec: ExecutionContext, as: ActorSystem) extends API {
 
   def checkTargeting(orgId: Int) = {
     api(parse.tolerantJson) { implicit request =>
       authService.authenticatedForOrg(orgId, OrgRole.ReadOnly) {
         withJson { form: TargetingForm =>
-          withTelemetry { implicit c =>
+          telemetryService.withTelemetry { implicit c =>
             form match {
               case TargetingForm(Some(repoId), None, None) => {
                 targetingService.repoTargeting(orgId, repoId)

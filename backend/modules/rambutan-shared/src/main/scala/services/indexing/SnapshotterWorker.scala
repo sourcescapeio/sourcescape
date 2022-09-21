@@ -20,9 +20,10 @@ import models.graph.snapshot._
 
 @Singleton
 class SnapshotterWorker @Inject() (
-  configuration:           play.api.Configuration,
+  configuration:       play.api.Configuration,
   queueManagementService:  QueueManagementService,
   logService:              LogService,
+  telemetryService: TelemetryService,
   socketService:           SocketService,
   snapshotterQueueService: SnapshotterQueueService,
   // data
@@ -34,7 +35,8 @@ class SnapshotterWorker @Inject() (
   // query
   queryTargetingService:  QueryTargetingService,
   srcLogCompilerService:  SrcLogCompilerService,
-  relationalQueryService: RelationalQueryService)(implicit ec: ExecutionContext, mat: akka.stream.Materializer) extends Telemetry {
+  relationalQueryService: RelationalQueryService,
+)(implicit ec: ExecutionContext, mat: akka.stream.Materializer) {
 
   val SnapshotterConcurrency = 2
 
@@ -61,7 +63,7 @@ class SnapshotterWorker @Inject() (
   def runSnapshot(item: SnapshotterQueueItem) = {
     val orgId = item.orgId
 
-    withTelemetry { implicit context =>
+    telemetryService.withTelemetry { implicit context =>
       for {
         // pull all assets
         // _ <- item.indexId

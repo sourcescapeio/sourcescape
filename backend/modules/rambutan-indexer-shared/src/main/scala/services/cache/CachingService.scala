@@ -26,7 +26,10 @@ class CachingService @Inject() (
   queryCacheService:      QueryCacheService,
   savedQueryDataService:  SavedQueryDataService,
   srcLogCompilerService:  SrcLogCompilerService,
-  relationalQueryService: RelationalQueryService)(implicit ec: ExecutionContext, mat: akka.stream.Materializer) extends Telemetry {
+  relationalQueryService: RelationalQueryService,
+  //
+  telemetryService: TelemetryService
+)(implicit ec: ExecutionContext, mat: akka.stream.Materializer) {
 
   val CachingConcurrency = 4
 
@@ -51,7 +54,7 @@ class CachingService @Inject() (
   }
 
   private def runCaching(item: CachingQueueItem) = {
-    withTelemetry { implicit context =>
+    telemetryService.withTelemetry { implicit context =>
       val orgId = item.orgId
       val cacheId = item.cacheId
       for {

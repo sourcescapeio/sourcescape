@@ -5,20 +5,21 @@ import scala.concurrent.duration._
 import scala.concurrent.{ ExecutionContext, Future }
 import akka.stream.scaladsl.{ Source, Flow, Sink }
 import silvousplay.imports._
+import silvousplay.api._
 import play.api.mvc.WebSocket
 import play.api.libs.json._
 import models._
-import silvousplay.api.Telemetry
 
 @Singleton
 class SchemasController @Inject() (
-  configuration:        play.api.Configuration,
+  val configuration:    play.api.Configuration,
+  telemetryService:     TelemetryService,
   socketService:        services.SocketService,
   authService:          services.AuthService,
   schemaService:        services.SchemaService,
   snapshotService:      services.SnapshotService,
   documentationService: services.DocumentationService,
-  repoIndexDataService: services.RepoIndexDataService)(implicit ec: ExecutionContext, as: akka.actor.ActorSystem) extends API with StreamResults with Telemetry {
+  repoIndexDataService: services.RepoIndexDataService)(implicit ec: ExecutionContext, as: akka.actor.ActorSystem) extends API with StreamResults {
 
   def createSchema(orgId: Int) = {
     api(parse.tolerantJson) { implicit request =>
@@ -49,7 +50,7 @@ class SchemasController @Inject() (
   def schemaDetails(orgId: Int, schemaId: Int) = {
     api { implicit request =>
       authService.authenticatedSuperUser {
-        withTelemetry { implicit c =>
+        telemetryService.withTelemetry { implicit c =>
           schemaService.schemaDetails(schemaId).map(_.map(_.dto))
         }
       }
@@ -144,7 +145,7 @@ class SchemasController @Inject() (
   def getSnapshotDataForIndex(orgId: Int, schemaId: Int, indexId: Int) = {
     api { implicit request =>
       authService.authenticatedSuperUser {
-        withTelemetry { implicit c =>
+        telemetryService.withTelemetry { implicit c =>
           for {
             (header, source) <- snapshotService.getSnapshotDataForIndex(orgId, schemaId, indexId)
           } yield {
@@ -158,7 +159,7 @@ class SchemasController @Inject() (
   def deleteSnapshotForIndex(orgId: Int, schemaId: Int, indexId: Int) = {
     api { implicit request =>
       authService.authenticatedSuperUser {
-        withTelemetry { implicit c =>
+        telemetryService.withTelemetry { implicit c =>
           for {
             _ <- snapshotService.deleteSnapshotForIndex(orgId, schemaId, indexId)
           } yield {

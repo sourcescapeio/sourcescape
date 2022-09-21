@@ -2,7 +2,7 @@ package controllers
 
 import models._
 import javax.inject._
-import silvousplay.api.API
+import silvousplay.api._
 import silvousplay.imports._
 import scala.concurrent.{ ExecutionContext, Future }
 import scala.concurrent.duration._
@@ -11,17 +11,17 @@ import akka.actor.ActorSystem
 import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.{ Flow, Sink, Source }
 import play.api.libs.json._
-import silvousplay.api.Telemetry
 
 @Singleton
 class LocalRepoController @Inject() (
-  configuration:   play.api.Configuration,
-  repoService:     services.RepoService,
-  repoSyncService: services.LocalRepoSyncService,
-  repoDataService: services.RepoDataService,
-  socketService:   services.SocketService,
-  gitService:      services.GitService,
-  watcherService:  services.WatcherService)(implicit ec: ExecutionContext, as: ActorSystem) extends API with Telemetry {
+  configuration:    play.api.Configuration,
+  telemetryService: TelemetryService,
+  repoService:      services.RepoService,
+  repoSyncService:  services.LocalRepoSyncService,
+  repoDataService:  services.RepoDataService,
+  socketService:    services.SocketService,
+  gitService:       services.GitService,
+  watcherService:   services.WatcherService)(implicit ec: ExecutionContext, as: ActorSystem) extends API {
 
   def openItem(orgId: Int) = {
     api(parse.tolerantJson) { implicit request =>
@@ -43,7 +43,7 @@ class LocalRepoController @Inject() (
   def watcherUpdate(orgId: Int, repoId: Int) = {
     api(parse.tolerantJson) { implicit request =>
       withJson { form: WebhookForm =>
-        withTelemetry { implicit c =>
+        telemetryService.withTelemetry { implicit c =>
           val hasChange = form.changedFiles.exists { f =>
             IndexType.all.exists(_.isValidBlob(f)) || GitFiles.contains(f)
           }

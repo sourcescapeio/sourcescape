@@ -2,8 +2,8 @@ package controllers
 
 import models._
 import javax.inject._
-import silvousplay.api.API
 import silvousplay.imports._
+import silvousplay.api._
 import scala.concurrent.{ ExecutionContext, Future }
 import scala.concurrent.duration._
 import java.util.Base64
@@ -14,11 +14,11 @@ import akka.stream.scaladsl.{ Source, Sink, Keep }
 import akka.stream.OverflowStrategy
 import play.api.libs.json._
 import akka.util.ByteString
-import silvousplay.api.Telemetry
 
 @Singleton
 class IndexController @Inject() (
   configuration:         play.api.Configuration,
+  telemetryService:      TelemetryService,
   consumerService:       services.ConsumerService,
   repoService:           services.RepoService,
   repoDataService:       services.RepoDataService,
@@ -28,7 +28,7 @@ class IndexController @Inject() (
   indexerQueueService:   services.IndexerQueueService,
   socketService:         services.SocketService,
   staticAnalysisService: services.StaticAnalysisService,
-  authService:           services.AuthService)(implicit ec: ExecutionContext, as: ActorSystem) extends API with Telemetry {
+  authService:           services.AuthService)(implicit ec: ExecutionContext, as: ActorSystem) extends API {
 
   def getTreeForIndex(orgId: Int, indexId: Int) = {
     api { implicit request =>
@@ -85,7 +85,7 @@ class IndexController @Inject() (
   def runIndexForSHA(orgId: Int, repoId: Int, sha: String, forceRoot: Boolean) = {
     api { implicit request =>
       authService.authenticatedForOrg(orgId, OrgRole.Admin) {
-        withTelemetry { implicit c =>
+        telemetryService.withTelemetry { implicit c =>
           for {
             repo <- repoDataService.getRepo(repoId).map {
               _.getOrElse(throw models.Errors.notFound("repo.dne", "Repo not found"))

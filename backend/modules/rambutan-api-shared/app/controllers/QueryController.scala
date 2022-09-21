@@ -4,7 +4,7 @@ import models._
 import models.query.grammar._
 import models.query._
 import javax.inject._
-import silvousplay.api.{ API, Telemetry }
+import silvousplay.api._
 import silvousplay.imports._
 import scala.concurrent.{ ExecutionContext, Future }
 import scala.concurrent.duration._
@@ -16,8 +16,9 @@ import play.api.libs.json._
 
 @Singleton
 class QueryController @Inject() (
-  configuration: play.api.Configuration,
-  authService:   services.AuthService,
+  configuration:    play.api.Configuration,
+  telemetryService: TelemetryService,
+  authService:      services.AuthService,
   //
   repoService:            services.RepoService,
   repoDataService:        services.RepoDataService,
@@ -28,7 +29,7 @@ class QueryController @Inject() (
   srcLogService:          services.SrcLogCompilerService,
   // experimental
   graphQueryServiceExperimental:      services.GraphQueryService, // not really changing this
-  relationalQueryServiceExperimental: services.q10.RelationalQueryService)(implicit ec: ExecutionContext, as: ActorSystem) extends API with StreamResults with Telemetry {
+  relationalQueryServiceExperimental: services.q10.RelationalQueryService)(implicit ec: ExecutionContext, as: ActorSystem) extends API with StreamResults {
 
   /**
    * Get grammars
@@ -133,7 +134,7 @@ class QueryController @Inject() (
     api(parse.tolerantJson) { implicit request =>
       authService.authenticatedReposForOrg(orgId, RepoRole.Pull) { repos =>
         withJson { form: GroupedQueryForm =>
-          withTelemetry { implicit c =>
+          telemetryService.withTelemetry { implicit c =>
             val allQueries = SrcLogOperations.extractComponents(form.query.toModel).map(_._2)
             val selectedQuery = allQueries.find { q =>
               form.selected.forall(s => q.vertexes.contains(s))
@@ -167,7 +168,7 @@ class QueryController @Inject() (
     api(parse.tolerantJson) { implicit request =>
       authService.authenticatedReposForOrg(orgId, RepoRole.Pull) { repos =>
         withJson { form: SnapshotQueryForm =>
-          withTelemetry { implicit c =>
+          telemetryService.withTelemetry { implicit c =>
             val repoIds = repos.map(_.repoId)
             val allQueries = SrcLogOperations.extractComponents(form.query.toModel).map(_._2)
             val selectedQuery = allQueries.find { q =>
@@ -229,7 +230,7 @@ class QueryController @Inject() (
     api(parse.tolerantJson) { implicit request =>
       authService.authenticatedReposForOrg(orgId, RepoRole.Pull) { repos =>
         withJson { form: BuilderQueryForm =>
-          withTelemetry { implicit c =>
+          telemetryService.withTelemetry { implicit c =>
             val repoIds = repos.map(_.repoId)
             val allQueries = SrcLogOperations.extractComponents(form.query.toModel).map(_._2)
             val selectedQuery = allQueries.find(_.vertexes.contains(form.queryKey)).getOrElse {
@@ -266,7 +267,7 @@ class QueryController @Inject() (
     api { implicit request =>
       authService.authenticatedSuperUser {
         withForm(QueryForm.form) { form =>
-          withTelemetry { implicit c =>
+          telemetryService.withTelemetry { implicit c =>
             val query = SrcLogGenericQuery.parseOrDie(form.q)
             query.nodes.foreach(println)
             query.edges.foreach(println)
@@ -309,7 +310,7 @@ class QueryController @Inject() (
     api { implicit request =>
       authService.authenticatedForOrg(orgId, OrgRole.Admin) {
         withForm(QueryForm.form) { form =>
-          withTelemetry { implicit c =>
+          telemetryService.withTelemetry { implicit c =>
             implicit val targeting = GenericGraphTargeting(orgId)
             val query = RelationalQuery.parseOrDie(form.q)
             val scroll = QueryScroll(None)
@@ -357,7 +358,7 @@ class QueryController @Inject() (
     api { implicit request =>
       authService.authenticatedForOrg(orgId, OrgRole.Admin) {
         withForm(QueryForm.form) { form =>
-          withTelemetry { implicit c =>
+          telemetryService.withTelemetry { implicit c =>
             relationalQueryService.parseQuery(form.q) match {
               case Right((scrollKey, query)) => for {
                 targeting <- queryTargetingService.resolveTargeting(
@@ -415,7 +416,7 @@ class QueryController @Inject() (
     api { implicit request =>
       authService.authenticatedForOrg(orgId, OrgRole.Admin) {
         withForm(QueryForm.form) { form =>
-          withTelemetry { implicit c =>
+          telemetryService.withTelemetry { implicit c =>
             graphQueryService.parseQuery(form.q) match {
               case Right((targetingRequest, query)) => for {
                 targeting <- queryTargetingService.resolveTargeting(
@@ -441,8 +442,8 @@ class QueryController @Inject() (
     api { implicit request =>
       authService.authenticatedForOrg(orgId, OrgRole.Admin) {
         withForm(QueryForm.form) { form =>
-          withTelemetry { context =>
-            println(context.span.getSpanContext().getTraceId())
+          telemetryService.withTelemetry { context =>
+            println(context.traceId)
 
             relationalQueryService.parseQuery(form.q) match {
               case Right((scrollKey, query)) => for {
@@ -503,9 +504,9 @@ class QueryController @Inject() (
     api { implicit request =>
       authService.authenticatedForOrg(orgId, OrgRole.Admin) {
         withForm(QueryForm.form) { form =>
-          withTelemetry { context =>
+          telemetryService.withTelemetry { context =>
 
-            println(context.span.getSpanContext().getTraceId())
+            println(context.traceId)
 
             relationalQueryService.parseQuery(form.q) match {
               case Right((scrollKey, query)) => for {
@@ -529,7 +530,7 @@ class QueryController @Inject() (
                 _ <- source.source.runWith(Sink.ignore)
               } yield {
                 Json.obj(
-                  "trace" -> context.span.getSpanContext().getTraceId())
+                  "traceId" -> context.traceId)
               }
               case Left(fail) => {
                 throw Errors.badRequest("query.parse", fail.toString)

@@ -14,4 +14,6 @@ service-account.json
 .bloop
 metals.sbt
 
+.env
+
 /collections
