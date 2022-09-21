@@ -9,7 +9,7 @@ services:
       - POSTGRES_USER=sourcescape
     complete: "database system is ready to accept connections"
   sourcescape_elasticsearch:
-    image: elasticsearch:7.10.2
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.10.2
     base: true
     environment:
       - discovery.type=single-node
@@ -68,4 +68,4 @@ services:
 - sourcescape_proxy:
     image: ghcr.io/sourcescapeio/proxy
     ports:
-      - "5000:4003"
+      - "5001:4003"
