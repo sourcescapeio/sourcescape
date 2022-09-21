@@ -54,54 +54,34 @@ import '@blueprintjs/icons/lib/css/blueprint-icons.css';
 import 'bootstrap/dist/css/bootstrap-grid.min.css';
 // import 'draft-js/dist/Draft.css';
 // import 'prismjs/themes/prism-twilight.css';
-import { Loading } from 'components/shared/Loading';
 import { LocalViewWrapper } from 'components/dash';
 import { LocalOnboardingContainer } from 'components/user/Onboarding';
-// import { Card, H3 } from '@blueprintjs/core';
+import { SrcLogConsoleContainer } from 'components/console/SrcLogConsole';
+import { RelationalConsoleContainer } from 'components/console/RelationalConsole';
+import { GraphConsoleContainer } from 'components/console/GraphConsole';
 
-/**
-  * Websocket
-  */
-let protocol;
-if (window.location.protocol === "https:") {
-  protocol = "wss";
-} else {
-  protocol = "ws";
-}
-
-// const enqueueItem = enqueue(localStore.dispatch);
-
-const ws = new Sockette(`${protocol}://${window.location.host}/api/socket`, {
-  maxAttempts: 10,
-  onopen: (e: any) => console.log('Connected!', e),
-  onmessage: (e: any) => {
-    const eData = JSON.parse(e.data);
-    // even enqueue pings to clean up
-    console.warn(eData);
-    // enqueueItem(eData);
-  },
-  onreconnect: (e: any) => console.log('Reconnecting...', e),
-  onmaximum: (e: any) => console.log('Stop Attempting!', e),
-  onclose: (e: any) => console.log('Closed!', e),
-  onerror: (e: any) => console.log('Error:', e)
-});
+import { GrammarProvider } from 'contexts/GrammarContext';
+import { QueryBuilderContainer } from 'components/builder/QueryBuilder';
 
 function LocalAppBase() {
-  return <Router>
-    <Routes>
-      <Route path="/onboarding" element={<LocalOnboardingContainer />} />
-      <Route path="*" element={<div>Not Found</div>} />
-      <Route path="/" element={<InitialRedirectComponent />} />
-      {
-        // Wrapped
-      }
-      <Route path="/" element={<LocalViewWrapper debug={false} currentPath="/"/>}>
-
-        {/* <Route path="/loading" element={<Loading loading={true}/>} /> */}
-        <Route path="/console" element={<div>test</div>} />
-      </Route>
-    </Routes>
-  </Router>
+  return <GrammarProvider>
+    <Router>
+      <Routes>
+        <Route path="/onboarding" element={<LocalOnboardingContainer />} />
+        <Route path="*" element={<div>Not Found</div>} />
+        <Route path="/" element={<InitialRedirectComponent />} />
+        {
+          // Wrapped
+        }
+        <Route path="/" element={<LocalViewWrapper debug={false} />}>
+          <Route path="/console" element={<QueryBuilderContainer />} />
+          <Route path="/srclog-console" element={<SrcLogConsoleContainer />} />
+          <Route path="/relational-console" element={<RelationalConsoleContainer />} />
+          <Route path="/graph-console" element={<GraphConsoleContainer />} />
+        </Route>
+      </Routes>
+    </Router>
+  </GrammarProvider>
 }
 
 export default LocalAppBase

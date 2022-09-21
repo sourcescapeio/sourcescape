@@ -34,24 +34,24 @@ function SidebarComponent(props: {
           label="Console"
           icon="console"
         />
-        { props.debug && <SidebarItem
+        <SidebarItem
           linkTo="/srclog-console"
           currentPath={props.currentPath}
           label="SrcLog"
           icon="layout-hierarchy"
-        /> }
-        { props.debug && <SidebarItem
+        />
+        <SidebarItem
           linkTo="/relational-console"
           currentPath={props.currentPath}
           label="Relational"
           icon="left-join"
-        /> }
-        { props.debug && <SidebarItem
+        />
+        <SidebarItem
           linkTo="/graph-console"
           currentPath={props.currentPath}
           label="Graph"
           icon="graph"
-        /> }
+        />
       </SidebarMenu>
       { props.debug && <SidebarMenu>
         <SidebarItem

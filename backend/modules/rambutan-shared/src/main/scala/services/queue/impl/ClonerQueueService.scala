@@ -55,6 +55,10 @@ class ClonerQueueService @Inject() (
     idempotentQueueService.enqueue(ClonerQueueDefinition, item)
   }
 
+  def ack(item: ClonerQueueItem): Future[Unit] = {
+    idempotentQueueService.ack(ClonerQueueDefinition, List(item))
+  }
+
   def source: Source[ClonerQueueItem, Any] = {
     idempotentQueueService.source(ClonerQueueDefinition)
   }

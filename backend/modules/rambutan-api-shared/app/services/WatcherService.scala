@@ -54,19 +54,20 @@ class WatcherService @Inject() (
       _ <- withFlag(repo.shouldIndex) {
         socketService.watcherStartup(orgId, repoId, repoName)
       }
-      response <- wsClient.url(WatcherURL + "/watches").withRequestTimeout(5000.millis).post(Json.obj(
-        "watch" -> repo.shouldIndex,
-        "orgId" -> orgId.toString(),
-        "repoId" -> repoId.toString(),
-        "directory" -> directory))
+      // response <- wsClient.url(WatcherURL + "/watches").withRequestTimeout(5000.millis).post(Json.obj(
+      //   "watch" -> repo.shouldIndex,
+      //   "orgId" -> orgId.toString(),
+      //   "repoId" -> repoId.toString(),
+      //   "directory" -> directory))
     } yield {
-      if (response.status =/= 200) {
-        println(s"Error starting watch for ${directory}.")
-        println(response.body)
-        throw new Exception("error starting watch")
-      } else {
-        response.body
-      }
+      println("NO WATCHER")
+      // if (response.status =/= 200) {
+      //   println(s"Error starting watch for ${directory}.")
+      //   println(response.body)
+      //   throw new Exception("error starting watch")
+      // } else {
+      //   response.body
+      // }
     }
   }
 

@@ -25,13 +25,12 @@ import {
   ContentContainer,
   DashboardContainer,
 } from './Layout';
-import { Outlet } from 'react-router';
+import { Outlet, useLocation } from 'react-router';
 
 // adapter between url and actual components
 
 
-function LocalViewWrapperBase(props: {
-  currentPath: string,
+export function LocalViewWrapper(props: {
   debug: boolean
 }) {
   //    this.props.fetchProfile();    
@@ -39,7 +38,9 @@ function LocalViewWrapperBase(props: {
   // profileLoading
   // setDebug
   const profileLoading = false;
-  const { currentPath, debug,  } = props;
+  const { debug,  } = props;
+
+  const currentPath = useLocation()
 
   return (
     <WrapperRoot>
@@ -49,7 +50,7 @@ function LocalViewWrapperBase(props: {
             debug={debug}
             // setDebug={setDebug}
             loading={profileLoading}
-            currentPath={currentPath}
+            currentPath={currentPath.pathname}
           />
         </SidebarContainer>
         <MainContainer>
@@ -64,15 +65,3 @@ function LocalViewWrapperBase(props: {
     </WrapperRoot>
   );  
 }
-
-const LocalViewWrapper = LocalViewWrapperBase;
-
-// const LocalViewWrapper = connect(
-//   mapStateToProps,
-//   mapDispatchToProps,
-//   mergeProps,
-// )(LocalViewWrapperBase);
-
-export {
-  LocalViewWrapper,
-};

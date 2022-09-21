@@ -30,19 +30,7 @@ case class SubTrace[T](tracesInternal: List[T], terminus: T) {
 
 case class GraphTrace[T](externalKeys: List[String], tracesInternal: List[SubTrace[T]], terminus: SubTrace[T]) {
 
-  // left
-  def joinKey(implicit targeting: HasBasicExtraction[T]): List[String] = sortKey :+ headKey
-  // right
-  def sortKey(implicit targeting: HasBasicExtraction[T]): List[String] = externalKeys :+ targeting.getKey(root)
-
-  def headKey(implicit targeting: HasBasicExtraction[T]): String = targeting.getKey(terminusId)
-
   def allKeys = tracesInternal.flatMap(_.allKeys) ++ terminus.allKeys
-
-  def pushExternalKey(implicit targeting: HasBasicExtraction[T]) = this.copy(
-    externalKeys = externalKeys :+ targeting.getKey(root),
-    tracesInternal = Nil,
-    terminus = terminus.wipe)
 
   def terminusId = terminus.terminus
 

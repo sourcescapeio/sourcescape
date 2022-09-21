@@ -10,6 +10,7 @@ import play.api.mvc.Results._
 import play.api.libs.ws._
 import play.api.libs.json._
 import akka.stream.scaladsl.Sink
+import silvousplay.api.SpanContext
 
 @Singleton
 class TargetingService @Inject() (
@@ -27,7 +28,7 @@ class TargetingService @Inject() (
     }
   }
 
-  def repoTargeting(orgId: Int, repoId: Int): Future[JsObject] = {
+  def repoTargeting(orgId: Int, repoId: Int)(implicit context: SpanContext): Future[JsObject] = {
     for {
       repo <- repoDataService.getRepoWithSettings(orgId, repoId).map {
         _.getOrElse(throw new Exception("invalid repo"))
@@ -53,7 +54,7 @@ class TargetingService @Inject() (
     }
   }
 
-  def branchTargeting(orgId: Int, repoId: Int, branch: String): Future[JsObject] = {
+  def branchTargeting(orgId: Int, repoId: Int, branch: String)(implicit context: SpanContext): Future[JsObject] = {
     for {
       repo <- repoDataService.getRepoWithSettings(orgId, repoId).map {
         _.getOrElse(throw new Exception("invalid repo"))
@@ -81,7 +82,7 @@ class TargetingService @Inject() (
     }
   }
 
-  def shaTargeting(orgId: Int, repoId: Int, sha: String): Future[JsObject] = {
+  def shaTargeting(orgId: Int, repoId: Int, sha: String)(implicit context: SpanContext): Future[JsObject] = {
     for {
       repo <- repoDataService.getRepoWithSettings(orgId, repoId).map {
         _.getOrElse(throw new Exception("invalid repo"))

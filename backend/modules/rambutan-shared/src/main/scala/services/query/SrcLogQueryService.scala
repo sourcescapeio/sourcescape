@@ -4,6 +4,7 @@ import models.query._
 import javax.inject._
 import scala.concurrent.{ ExecutionContext, Future }
 import silvousplay.imports._
+import silvousplay.api._
 import play.api.mvc._
 import play.api.mvc.Results._
 import play.api.libs.ws._
@@ -17,7 +18,7 @@ class SrcLogQueryService @Inject() (
   srcLogCompilerService:  SrcLogCompilerService,
   relationalQueryService: RelationalQueryService)(implicit mat: akka.stream.Materializer, ec: ExecutionContext) {
 
-  def runQueryGeneric(query: SrcLogQuery)(implicit targeting: QueryTargeting[GenericGraphUnit]): Future[Source[Map[String, GenericGraphNode], Any]] = {
+  def runQueryGeneric(query: SrcLogQuery)(implicit targeting: QueryTargeting[GenericGraphUnit], context: SpanContext): Future[Source[Map[String, GenericGraphNode], Any]] = {
     implicit val queryScroll = QueryScroll(None)
     for {
       relationalQuery <- srcLogCompilerService.compileQuery(query)

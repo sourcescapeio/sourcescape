@@ -11,6 +11,7 @@ import play.api.libs.ws._
 import play.api.libs.json._
 import java.util.Base64
 import akka.stream.scaladsl.{ Source, Sink }
+import silvousplay.api.SpanContext
 
 @Singleton
 class LocalRepoSyncService @Inject() (
@@ -90,7 +91,7 @@ class LocalRepoSyncService @Inject() (
   /**
    * RepoSyncService overrides
    */
-  override def repoRefreshDirect(repo: RepoWithSettings, sha: String, maybeDirty: Option[GitDiff]): Future[(RepoSHAIndex, Option[WorkRecord])] = {
+  override def repoRefreshDirect(repo: RepoWithSettings, sha: String, maybeDirty: Option[GitDiff])(implicit context: SpanContext): Future[(RepoSHAIndex, Option[WorkRecord])] = {
     val orgId = repo.repo.orgId
     val repoName = repo.repo.repoName
     val repoId = repo.repo.repoId
@@ -117,7 +118,7 @@ class LocalRepoSyncService @Inject() (
     }
   }
 
-  def setRepoIntent(orgId: Int, repoId: Int, intent: RepoCollectionIntent, queue: Boolean): Future[Unit] = {
+  def setRepoIntent(orgId: Int, repoId: Int, intent: RepoCollectionIntent, queue: Boolean): Future[Int] = {
     for {
       // get repo
       changed <- repoDataService.setRepoIntent(orgId, repoId, intent)
@@ -134,7 +135,7 @@ class LocalRepoSyncService @Inject() (
         socketService.reposUpdated(orgId)
       }
     } yield {
-      ()
+      changed
     }
   }
 }

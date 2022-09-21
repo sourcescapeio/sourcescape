@@ -37,7 +37,6 @@ class GitTreeIndexingService @Inject() (
             _.values.flatten.map(_.sha).toSet
           }
         } yield {
-          println(commits)
           commits.map(c => !existingSHAs.contains(c.sha) -> c)
         }
       }.mapConcat(i => i)

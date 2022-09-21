@@ -68,6 +68,8 @@ case class EventMessage(orgId: Int, additionalOrgIds: List[Int], eventType: Sock
 
   val allOrgIds = (orgId :: additionalOrgIds).toSet
 
+  def redisKey = s"${eventType.identifier}:${id}"
+
   def toJson = Json.obj(
     "type" -> eventType,
     "id" -> id,
@@ -166,7 +168,7 @@ class SocketService @Inject() (
   }
 
   def scanFinished(orgId: Int, scanId: Int) = {
-    publish(EventMessage(orgId, Nil, SocketEventType.ScanFinished, scanId.toString(), false, Json.obj()))
+    publish(EventMessage(orgId, Nil, SocketEventType.ScanStartup, scanId.toString(), true, Json.obj("progress" -> 100)))
   }
 
   def localRepoUpdate(orgId: Int, repoId: Int) = {
@@ -193,7 +195,7 @@ class SocketService @Inject() (
   }
 
   // indexing records
-  def cloningProgress(orgId: Int, additionalOrgIds: List[Int], workId: String, repo: String, indexId: Int, progress: Int) = {
+  def cloningProgress(orgId: Int, additionalOrgIds: List[Int], workId: String, repo: String, repoId: Int, indexId: Int, progress: Int) = {
     publish(
       EventMessage(
         orgId,
@@ -201,14 +203,14 @@ class SocketService @Inject() (
         SocketEventType.CloningStarted,
         indexId.toString,
         true,
-        Json.obj("repo" -> repo, "progress" -> progress, "cloningProgress" -> progress)))
+        Json.obj("repo" -> repo, "repoId" -> repoId, "indexId" -> indexId, "progress" -> progress, "cloningProgress" -> progress)))
   }
 
-  def cloningFinished(orgId: Int, additionalOrgIds: List[Int], workId: String, repo: String, indexId: Int) = {
-    publish(EventMessage(orgId, Nil, SocketEventType.CloningFinished, indexId.toString, true, Json.obj("repo" -> repo)))
+  def cloningFinished(orgId: Int, additionalOrgIds: List[Int], workId: String, repo: String, repoId: Int, indexId: Int) = {
+    publish(EventMessage(orgId, Nil, SocketEventType.CloningStarted, indexId.toString, true, Json.obj("repoId" -> repoId, "indexId" -> indexId, "repo" -> repo, "progress" -> 100)))
   }
 
-  def indexingProgress(orgId: Int, additionalOrgIds: List[Int], workId: String, repo: String, indexId: Int, progress: Int) = {
+  def indexingProgress(orgId: Int, additionalOrgIds: List[Int], workId: String, repo: String, repoId: Int, indexId: Int, progress: Int) = {
     publish(
       EventMessage(
         orgId,
@@ -216,7 +218,7 @@ class SocketService @Inject() (
         SocketEventType.IndexingStarted,
         indexId.toString,
         true,
-        Json.obj("repo" -> repo, "progress" -> progress)))
+        Json.obj("repo" -> repo, "repoId" -> repoId, "indexId" -> indexId, "progress" -> progress)))
   }
 
   def indexingFinished(orgId: Int, additionalOrgIds: List[Int], workId: String, repo: String, repoId: Int, sha: String, indexId: Int, parentId: String) = {
@@ -224,10 +226,10 @@ class SocketService @Inject() (
       EventMessage(
         orgId,
         additionalOrgIds,
-        SocketEventType.IndexingFinished,
+        SocketEventType.IndexingStarted,
         indexId.toString,
-        false,
-        Json.obj("repo" -> repo, "parentId" -> parentId, "indexId" -> indexId, "repoId" -> repoId, "sha" -> sha)))
+        true,
+        Json.obj("repo" -> repo, "parentId" -> parentId, "indexId" -> indexId, "repoId" -> repoId, "sha" -> sha, "progress" -> 100)))
   }
 
   def cachingAvailable(orgId: Int, workId: String, available: Int) = {
@@ -258,16 +260,16 @@ class SocketService @Inject() (
     for {
       _ <- if (message.persist) {
         for {
-          _ <- redisClient.set(message.id, rendered)
-          _ <- redisClient.sadd(MessageBufferKey, message.id)
+          _ <- redisClient.set(message.redisKey, rendered)
+          _ <- redisClient.sadd(MessageBufferKey, message.redisKey)
         } yield {
           ()
         }
       } else {
         // delete
         for {
-          _ <- redisClient.srem(MessageBufferKey, message.id)
-          _ <- redisClient.del(message.id)
+          _ <- redisClient.srem(MessageBufferKey, message.redisKey)
+          _ <- redisClient.del(message.redisKey)
         } yield {
           ()
         }
@@ -277,6 +279,29 @@ class SocketService @Inject() (
       ()
     }
   }
+
+  def getMessageBatch(ids: Seq[(SocketEventType, String)]): Future[Map[(SocketEventType, String), Option[EventMessage]]] = {
+    val keys = ids.map {
+      case (eventType, id) => s"${eventType.identifier}:${id}"
+    }
+    redisClient.mget[Array[Byte]](keys: _*).map { r =>
+      ids.zip(r).map {
+        case (id, obj) => id -> obj.flatMap { o =>
+          Json.parse(o).asOpt[EventMessage]
+        }
+      }.toMap
+    }
+  }
+
+  // def getMessage(eventType: SocketEventType, id: String): Future[Option[EventMessage]] = {
+  //   for {
+  //     raw <- redisClient.get(s"${eventType.identifier}:${id}")
+  //   } yield {
+  //     withDefined(raw) { r =>
+  //       Json.parse(r.toArray).asOpt[EventMessage]
+  //     }
+  //   }
+  // }
 
   // controller level
   def openSocket(orgIds: List[Int]): Future[Source[EventMessage, Any]] = {
@@ -289,6 +314,7 @@ class SocketService @Inject() (
     }
     for {
       members <- redisClient.smembers(MessageBufferKey)
+      // TODO: do we need this buffreder anymore?
       buffer <- if (members.nonEmpty) {
         redisClient.mget(members.map(_.utf8String): _*).map { items =>
           val parsed = items.flatMap {

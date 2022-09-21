@@ -1,1 +1,11 @@
+##############
+# ADMIN APIS #
+##############
+GET     /health                                     controllers.HealthController.health()
+GET     /all-tables/diff.html                       controllers.HealthController.diff()
+GET     /all-tables/create.html                     controllers.HealthController.create()
+GET     /all-tables/deletes.html                    controllers.HealthController.deletes()
+POST    /cycle-indexes/:it                          controllers.HealthController.cycleIndexes(it: models.IndexType)
+
+
 ->    /        api.Routes

@@ -2,7 +2,7 @@ package controllers
 
 import models._
 import javax.inject._
-import silvousplay.api.API
+import silvousplay.api._
 import silvousplay.imports._
 import scala.concurrent.{ ExecutionContext, Future }
 import scala.concurrent.duration._
@@ -14,13 +14,14 @@ import play.api.libs.json._
 
 @Singleton
 class LocalRepoController @Inject() (
-  configuration:   play.api.Configuration,
-  repoService:     services.RepoService,
-  repoSyncService: services.LocalRepoSyncService,
-  repoDataService: services.RepoDataService,
-  socketService:   services.SocketService,
-  gitService:      services.GitService,
-  watcherService:  services.WatcherService)(implicit ec: ExecutionContext, as: ActorSystem) extends API {
+  configuration:    play.api.Configuration,
+  telemetryService: TelemetryService,
+  repoService:      services.RepoService,
+  repoSyncService:  services.LocalRepoSyncService,
+  repoDataService:  services.RepoDataService,
+  socketService:    services.SocketService,
+  gitService:       services.GitService,
+  watcherService:   services.WatcherService)(implicit ec: ExecutionContext, as: ActorSystem) extends API {
 
   def openItem(orgId: Int) = {
     api(parse.tolerantJson) { implicit request =>
@@ -42,31 +43,33 @@ class LocalRepoController @Inject() (
   def watcherUpdate(orgId: Int, repoId: Int) = {
     api(parse.tolerantJson) { implicit request =>
       withJson { form: WebhookForm =>
-        val hasChange = form.changedFiles.exists { f =>
-          IndexType.all.exists(_.isValidBlob(f)) || GitFiles.contains(f)
-        }
-        val gitUpdate = form.changedFiles.exists { f =>
-          GitFiles.contains(f)
-        }
-        val shouldUpdate = form.defaultedForce || hasChange
+        telemetryService.withTelemetry { implicit c =>
+          val hasChange = form.changedFiles.exists { f =>
+            IndexType.all.exists(_.isValidBlob(f)) || GitFiles.contains(f)
+          }
+          val gitUpdate = form.changedFiles.exists { f =>
+            GitFiles.contains(f)
+          }
+          val shouldUpdate = form.defaultedForce || hasChange
 
-        withFlag(!shouldUpdate) {
-          println("Discarded: ")
-          form.changedFiles.foreach(println)
-        }
-        withFlag(shouldUpdate) {
-          for {
-            repo <- repoDataService.getRepoWithSettings(orgId, repoId).map { f =>
-              f.getOrElse(throw Errors.notFound("repo.dne", "Repo not found"))
+          withFlag(!shouldUpdate) {
+            println("Discarded: ")
+            form.changedFiles.foreach(println)
+          }
+          withFlag(shouldUpdate) {
+            for {
+              repo <- repoDataService.getRepoWithSettings(orgId, repoId).map { f =>
+                f.getOrElse(throw Errors.notFound("repo.dne", "Repo not found"))
+              }
+              gitInfo <- gitService.withRepo(repo.repo)(_.getRepoInfo)
+              maybeDirty = if (gitInfo.isClean) None else Some(gitInfo.statusDiff)
+              _ <- repoSyncService.repoSHARefreshSync(repo, gitInfo.sha, maybeDirty)
+              _ <- withFlag(gitUpdate) {
+                socketService.localRepoUpdate(orgId, repoId)
+              }
+            } yield {
+              ()
             }
-            gitInfo <- gitService.withRepo(repo.repo)(_.getRepoInfo)
-            maybeDirty = if (gitInfo.isClean) None else Some(gitInfo.statusDiff)
-            _ <- repoSyncService.repoSHARefreshSync(repo, gitInfo.sha, maybeDirty)
-            _ <- withFlag(gitUpdate) {
-              socketService.localRepoUpdate(orgId, repoId)
-            }
-          } yield {
-            ()
           }
         }
       }

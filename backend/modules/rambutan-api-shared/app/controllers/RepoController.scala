@@ -2,7 +2,7 @@ package controllers
 
 import models._
 import javax.inject._
-import silvousplay.api.API
+import silvousplay.api._
 import silvousplay.imports._
 import scala.concurrent.{ ExecutionContext, Future }
 import scala.concurrent.duration._
@@ -15,6 +15,7 @@ import play.api.libs.json._
 @Singleton
 class RepoController @Inject() (
   configuration:        play.api.Configuration,
+  telemetryService:     TelemetryService,
   authService:          services.AuthService,
   scanService:          services.LocalScanService,
   repoService:          services.RepoService,
@@ -40,7 +41,9 @@ class RepoController @Inject() (
   def getBranchSummary(orgId: Int, repoId: Int, branch: String) = {
     api { implicit request =>
       authService.authenticatedForRepo(orgId, repoId, RepoRole.Pull) {
-        repoService.getBranchSummary(orgId, repoId, java.net.URLDecoder.decode(branch, "UTF-8")).map(_.map(_.dto))
+        telemetryService.withTelemetry { implicit c =>
+          repoService.getBranchSummary(orgId, repoId, java.net.URLDecoder.decode(branch, "UTF-8")).map(_.map(_.dto))
+        }
       }
     }
   }
@@ -49,24 +52,6 @@ class RepoController @Inject() (
     api { implicit request =>
       authService.authenticatedForOrg(orgId, OrgRole.ReadOnly) {
         repoIndexDataService.getSHAsForRepos(List(repoId)).map(_.map(_.dto))
-      }
-    }
-  }
-
-  def batchSelect(orgId: Int) = {
-    api(parse.tolerantJson) { implicit request =>
-      authService.authenticatedForOrg(orgId, OrgRole.Admin) {
-        withJson { form: RepoForm =>
-          for {
-            _ <- Future.sequence {
-              form.repos.map { repoId =>
-                repoSyncService.setRepoIntent(orgId, repoId, RepoCollectionIntent.Collect, queue = true)
-              }
-            }
-          } yield {
-            ()
-          }
-        }
       }
     }
   }

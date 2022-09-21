@@ -20,6 +20,7 @@ object APIBuild {
     Persist.postgresSlick,
     Persist.postgresSlickJson,
     Instrumentation.sentry,
+    Instrumentation.openTelemetry,
     // Instrumentation.prometheus,
     // Instrumentation.zipkin,
     Misc.joda,

@@ -3,6 +3,7 @@ package services
 import models._
 import models.query._
 import silvousplay.imports._
+import silvousplay.api.SpanContext
 import javax.inject._
 import play.api.libs.json._
 import scala.concurrent.{ ExecutionContext, Future }
@@ -400,7 +401,7 @@ class QueryCacheService @Inject() (
     }
   }
 
-  def executeQueryPlan(queryPlan: QueryPlanChunk) = {
+  def executeQueryPlan(queryPlan: QueryPlanChunk)(implicit context: SpanContext) = {
     val cache = queryPlan.cache
     val orgId = cache.orgId
     val queryId = cache.queryId
@@ -420,7 +421,7 @@ class QueryCacheService @Inject() (
       res <- relationalQueryService.runQuery(
         adjustedQuery,
         explain = false,
-        progressUpdates = true)(targeting, queryPlan.scroll)
+        progressUpdates = true)(targeting, context, queryPlan.scroll)
     } yield {
       CachedQueryResult(res.sizeEstimate, res.progressSource, res.columns, res.source)
     }

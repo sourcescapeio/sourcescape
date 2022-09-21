@@ -2,8 +2,8 @@ package controllers
 
 import models._
 import javax.inject._
-import silvousplay.api.API
 import silvousplay.imports._
+import silvousplay.api._
 import scala.concurrent.{ ExecutionContext, Future }
 import scala.concurrent.duration._
 import java.util.Base64
@@ -18,6 +18,7 @@ import akka.util.ByteString
 @Singleton
 class IndexController @Inject() (
   configuration:         play.api.Configuration,
+  telemetryService:      TelemetryService,
   consumerService:       services.ConsumerService,
   repoService:           services.RepoService,
   repoDataService:       services.RepoDataService,
@@ -84,13 +85,15 @@ class IndexController @Inject() (
   def runIndexForSHA(orgId: Int, repoId: Int, sha: String, forceRoot: Boolean) = {
     api { implicit request =>
       authService.authenticatedForOrg(orgId, OrgRole.Admin) {
-        for {
-          repo <- repoDataService.getRepo(repoId).map {
-            _.getOrElse(throw models.Errors.notFound("repo.dne", "Repo not found"))
+        telemetryService.withTelemetry { implicit c =>
+          for {
+            repo <- repoDataService.getRepo(repoId).map {
+              _.getOrElse(throw models.Errors.notFound("repo.dne", "Repo not found"))
+            }
+            _ <- consumerService.runCleanIndexForSHA(orgId, repo.repoName, repoId, sha, forceRoot)
+          } yield {
+            ()
           }
-          _ <- consumerService.runCleanIndexForSHA(orgId, repo.repoName, repoId, sha, forceRoot)
-        } yield {
-          ()
         }
       }
     }

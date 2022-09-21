@@ -848,7 +848,7 @@ object GenericGraphEdgePredicate extends Plenumeration[GenericEdgePredicate] {
       val maybeCommit = props.find(_.key =?= "commit").map(_.value)
       val maybeLimit = props.find(_.key =?= "limit").map(_.value.toInt)
 
-      RepeatedEdgeTraverse[GenericGraphUnit](
+      RepeatedEdgeTraverse[GraphTrace[GenericGraphUnit], GenericGraphUnit](
         EdgeTypeFollow(
           EdgeTypeTraverse(GenericGraphEdgeType.GitCommitParent, filter = None) :: Nil
         ),
@@ -873,7 +873,7 @@ object GenericGraphEdgePredicate extends Plenumeration[GenericEdgePredicate] {
       val maybeCommit = props.find(_.key =?= "commit").map(_.value)
       val maybeLimit = props.find(_.key =?= "limit").map(_.value.toInt)
 
-      RepeatedEdgeTraverse[GenericGraphUnit](
+      RepeatedEdgeTraverse[GraphTrace[GenericGraphUnit], GenericGraphUnit](
         EdgeTypeFollow(
           EdgeTypeTraverse(GenericGraphEdgeType.GitCommitParent.opposite, filter = None) :: Nil
         ),

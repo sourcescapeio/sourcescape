@@ -30,12 +30,12 @@ object CodeRange {
   val empty = CodeRange(CodeLocation.empty, CodeLocation.empty, 0, 0)
 
   def applyRange(text: String, startIndex: Int, endIndex: Int) = {
-    text.drop(startIndex).take(endIndex - startIndex)
+    text.substring(startIndex, endIndex)
   }
 
-  def applyRangeByLine(text: String, start: Int, end: Int, realStart: Int, realEnd: Int) = {
-    val chunk = text.split("\n").drop(start - 1).take(end - start + 1)
-    val pre = chunk.take(realStart - start)
+  def applyRangeByLine(text: Array[String], start: Int, end: Int, realStart: Int, realEnd: Int) = {
+    val chunk = text.slice(start - 1, end)
+    val pre = chunk.slice(0, realStart - start)
     val preGap = if (realStart > start) {
       1
     } else {

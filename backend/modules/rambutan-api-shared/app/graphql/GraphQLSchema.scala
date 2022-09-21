@@ -19,10 +19,55 @@ import services.SocketEventType
 import models.LocalRepoConfig
 import models.RepoSHAIndex
 
+import silvousplay.imports._
+import models.RepoCollectionIntent
+import models.RepoSettings
+
 // Question: how to define GraphQL context
 object SchemaDefinition {
-  val ScanID = Argument("id", IntType, description = "id of the scan")
+  // Fetchers
+  val repoByScanFetcher = {
+    Fetcher(
+      (ctx: RambutanContext, scanIds: Seq[Int]) => {
+        println("FETCHING REPOS", scanIds)
+        import ctx.ec
+        ctx.localRepoDataService.getReposByScanBatch(scanIds).map(_.toList)
+      })(HasId[(Int, List[LocalRepoConfig]), Int](_._1))
+  }
 
+  val indexByRepoFetcher = {
+    Fetcher(
+      (ctx: RambutanContext, repoIds: Seq[Int]) => {
+        println("FETCHING INDEXES", repoIds)
+        import ctx.ec
+        ctx.repoIndexDataService.getIndexesForRepo(repoIds.toList).map(_.toList)
+      })(HasId[(Int, List[RepoSHAIndex]), Int](_._1))
+  }
+
+  val settingsByRepoFetcher = {
+    Fetcher(
+      (ctx: RambutanContext, repoIds: Seq[Int]) => {
+        println("FETCHING SETTINGS", repoIds)
+        import ctx.ec
+        ctx.localRepoDataService.getRepoSettings(repoIds.toList).map(_.toList)
+      })(HasId[(Int, Option[RepoSettings]), Int](_._1))
+  }
+
+  val messageByIdFetcher = {
+    Fetcher(
+      (ctx: RambutanContext, ids: Seq[(SocketEventType, String)]) => {
+        import ctx.ec
+        ctx.socketService.getMessageBatch(ids).map(_.toList)
+      })(HasId[((SocketEventType, String), Option[EventMessage]), (SocketEventType, String)](_._1))
+  }
+
+  // Args
+  val ScanID = Argument("id", IntType, description = "id of the scan")
+  val RepoID = Argument("id", IntType, description = "id of the repo")
+
+  /**
+   * Objects
+   */
   val RepoIndexType = ObjectType(
     "RepoIndex",
     "Index for a repo",
@@ -33,8 +78,31 @@ object SchemaDefinition {
       Field("sha", StringType,
         Some("the sha of the index"),
         resolve = _.value.sha),
-    )
-  )
+      Field("cloneProgress", IntType,
+        Some("clone progress"),
+        resolve = { ctx =>
+          import ctx.ctx.ec
+          DeferredValue(messageByIdFetcher.deferOpt((SocketEventType.CloningStarted, ctx.value.id.toString()))).map {
+            case Some((i, Some(v))) => {
+              (v.data \ "progress").asOpt[Int].getOrElse(0)
+            }
+            case _ => 0
+          }
+        }),
+      Field("indexProgress", IntType,
+        Some("index progress"),
+        resolve = { ctx =>
+          import ctx.ctx.ec
+          DeferredValue(messageByIdFetcher.deferOpt((SocketEventType.IndexingStarted, ctx.value.id.toString()))).map {
+            case Some((i, Some(v))) => {
+              println(v.data)
+              (v.data \ "progress").asOpt[Int].getOrElse(0)
+            }
+            case _ => 0
+          }
+        })))
+
+  val RepoCollectionIntentEnum = deriveEnumType[RepoCollectionIntent]()
 
   val Repo = ObjectType(
     "Repo",
@@ -49,11 +117,31 @@ object SchemaDefinition {
       Field("path", StringType,
         Some("the path"),
         resolve = _.value.localPath),
+      Field("intent", RepoCollectionIntentEnum,
+        resolve = ctx => {
+          import ctx.ctx.ec
+          DeferredValue(settingsByRepoFetcher.deferOpt(ctx.value.repoId)).map {
+            case Some((_, Some(v))) => v.intent
+            case _                  => RepoCollectionIntent.Skip
+          }
+        }),
+      // Field("progress", IntType,
+      //   Some("progress for this repo"),
+      //   resolve = ctx => {
+      //     import ctx.ctx.ec
+      //     DeferredValue(indexByRepoFetcher.deferOpt(ctx.value.repoId)).map {
+      //       // how do we know which branch?
+      //     }
+      //   }),
       Field("indexes", ListType(RepoIndexType),
         Some("indexes for the repo"),
-        resolve = ctx => ctx.ctx.repoIndexDataService.getIndexesForRepo(ctx.value.repoId)
-      )
-    ))
+        resolve = ctx => {
+          import ctx.ctx.ec
+          DeferredValue(indexByRepoFetcher.deferOpt(ctx.value.repoId)).map {
+            case None    => Nil
+            case Some(i) => i._2
+          }
+        })))
 
   val Scan = ObjectType(
     "Scan",
@@ -66,10 +154,30 @@ object SchemaDefinition {
       Field("path", StringType,
         Some("the path we're scanning"),
         resolve = _.value.path),
+      Field("progress", OptionType(IntType),
+        Some("the path"),
+        resolve = ctx => {
+          import ctx.ctx.ec
+          DeferredValue(messageByIdFetcher.deferOpt((SocketEventType.ScanStartup, ctx.value.id.toString()))).map {
+            case Some((i, Some(v))) => {
+              (v.data \ "progress").asOpt[Int].getOrElse(0)
+            }
+            case _ => 0
+          }
+        }),
       Field("repos", ListType(Repo),
         Some("repos for this scan"),
-        resolve = ctx => ctx.ctx.localRepoDataService.getReposByScan(ctx.value.id))))
+        resolve = ctx => {
+          import ctx.ctx.ec
+          DeferredValue(repoByScanFetcher.deferOpt(ctx.value.id)).map {
+            case None    => Nil
+            case Some(i) => i._2
+          }
+        })))
 
+  /**
+   * Top level objects
+   */
   val Query = ObjectType(
     "Query", fields[RambutanContext, Any](
       // need to list all objects
@@ -78,7 +186,13 @@ object SchemaDefinition {
         resolve = ctx => ctx.ctx.localScanService.getScanById(ctx.arg(ScanID))),
       Field("scans", ListType(Scan),
         arguments = Nil,
-        resolve = ctx => ctx.ctx.localScanService.listScans())))
+        resolve = ctx => ctx.ctx.localScanService.listScans()),
+      Field("repos", ListType(Repo),
+        arguments = Nil,
+        resolve = ctx => {
+          import ctx.ctx.ec
+          ctx.ctx.localRepoDataService.getAllLocalRepos().map(_.sortBy(_.repoName)) // TODO: by org id
+        })))
 
   val Mutation = {
     val PathArg = Argument("path", StringType, description = "path of the scan")
@@ -87,13 +201,18 @@ object SchemaDefinition {
       "Mutation", fields[RambutanContext, Any](
         Field("createScan", Scan,
           arguments = PathArg :: Nil,
-          resolve = ctx => ctx.ctx.localScanService.createScan(-1, ctx.arg(PathArg), true)),
-        Field("selectRepos", Scan,
-          arguments = PathArg :: Nil,
-          resolve = ctx => ctx.ctx.localScanService.createScan(-1, ctx.arg(PathArg), true))          
-      ))
+          resolve = ctx => ctx.ctx.localScanService.createScan(-1, ctx.arg(PathArg), shouldScan = true)),
+        Field("deleteScan", OptionType(Scan),
+          arguments = ScanID :: Nil,
+          resolve = ctx => ctx.ctx.localScanService.deleteScan(-1, ctx.arg(ScanID))),
+        Field("selectRepo", IntType,
+          arguments = RepoID :: Nil,
+          resolve = ctx => ctx.ctx.localRepoSyncService.setRepoIntent(-1, ctx.arg(RepoID), RepoCollectionIntent.Collect, queue = true))))
   }
 
+  /**
+   * Subscriptions
+   */
   trait Event {
     def id: String
     def version: Long
@@ -103,35 +222,71 @@ object SchemaDefinition {
     Field("id", StringType, resolve = _.value.id)))
 
   case class ScanProgress(
-    id:       String,
+    id:       String, // scanId
     version:  Long,
     progress: Int) extends Event
 
-  // case class ScanProgress(id: String, version: Long, ....)
+  case class CloneProgress(
+    id:       String, // indexId
+    version:  Long,
+    indexId:  Int,
+    repoId:   Int,
+    progress: Int) extends Event
+
+  case class IndexProgress(
+    id:       String, // indexId
+    version:  Long,
+    indexId:  Int,
+    repoId:   Int,
+    progress: Int) extends Event
 
   val ScanProgressType = deriveObjectType[RambutanContext, ScanProgress](Interfaces(EventType))
-
-  // val AuthorNameChangedType = deriveObjectType[Unit, AuthorNameChanged](Interfaces(EventType))
-  // val AuthorDeletedType = deriveObjectType[Unit, AuthorDeleted](Interfaces(EventType))
-
-  // val ArticleCreatedType = deriveObjectType[Unit, ArticleCreated](Interfaces(EventType))
-  // val ArticleTextChangedType = deriveObjectType[Unit, ArticleTextChanged](Interfaces(EventType))
-  // val ArticleDeletedType = deriveObjectType[Unit, ArticleDeleted](Interfaces(EventType))
-
-  // val SubscriptionFields = Map[String, SubscriptionField[Event]](
-  //   "scanProgress" -> Field.subs()
-
-  //     SubscriptionField (ScanProgressType)
-  // "authorNameChanged" → SubscriptionField(AuthorNameChangedType),
-  // "authorDeleted" → SubscriptionField(AuthorDeletedType),
-  // "articleCreated" → SubscriptionField(ArticleCreatedType),
-  // "articleTextChanged" → SubscriptionField(ArticleTextChangedType),
-  // "articleDeleted" → SubscriptionField(ArticleDeletedType))
-  // )
+  val CloneProgressType = deriveObjectType[RambutanContext, CloneProgress](Interfaces(EventType))
+  val IndexProgressType = deriveObjectType[RambutanContext, IndexProgress](Interfaces(EventType))
 
   val SubscriptionType = ObjectType(
     "Subscription",
     fields[RambutanContext, Any](
+      Field("indexProgress", OptionType(IndexProgressType), resolve = (c: Context[RambutanContext, Any]) => {
+        val msg = c.value.asInstanceOf[EventMessage]
+        msg.eventType match {
+          case SocketEventType.IndexingStarted => Option(
+            IndexProgress(
+              msg.id,
+              0L,
+              (msg.data \ "indexId").as[Int],
+              (msg.data \ "repoId").as[Int],
+              (msg.data \ "progress").as[Int]))
+          case SocketEventType.IndexingFinished => Option(
+            IndexProgress(
+              msg.id,
+              0L,
+              (msg.data \ "indexId").as[Int],
+              (msg.data \ "repoId").as[Int],
+              100))
+          case _ => None
+        }
+      }),
+      Field("cloneProgress", OptionType(CloneProgressType), resolve = (c: Context[RambutanContext, Any]) => {
+        val msg = c.value.asInstanceOf[EventMessage]
+        msg.eventType match {
+          case SocketEventType.CloningStarted => Option(
+            CloneProgress(
+              msg.id,
+              0L,
+              (msg.data \ "indexId").as[Int],
+              (msg.data \ "repoId").as[Int],
+              (msg.data \ "progress").as[Int]))
+          case SocketEventType.CloningFinished => Option(
+            CloneProgress(
+              msg.id,
+              0L,
+              (msg.data \ "indexId").as[Int],
+              (msg.data \ "repoId").as[Int],
+              100))
+          case _ => None
+        }
+      }),
       Field("scanProgress", OptionType(ScanProgressType), resolve = (c: Context[RambutanContext, Any]) => {
         val msg = c.value.asInstanceOf[EventMessage]
         msg.eventType match {
@@ -150,6 +305,12 @@ object SchemaDefinition {
       })))
 
   val RambutanSchema = sangria.schema.Schema(Query, Some(Mutation), Some(SubscriptionType))
+
+  val Resolvers = DeferredResolver.fetchers(
+    repoByScanFetcher,
+    indexByRepoFetcher,
+    settingsByRepoFetcher,
+    messageByIdFetcher)
 
   // also define fetchers here
 }

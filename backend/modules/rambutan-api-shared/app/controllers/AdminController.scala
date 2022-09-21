@@ -15,17 +15,6 @@ class AdminController @Inject() (
   authService:   services.AuthService,
   indexService:  services.IndexService)(implicit ec: ExecutionContext, as: akka.actor.ActorSystem) extends API {
 
-  /**
-   * Real-time updates
-   */
-  // def updateSocket() = {
-  //   websocket { implicit request =>
-  //     authService.orgsAuthenticatedFor { orgIds =>
-  //       socketService.openSocket(orgIds)
-  //     }
-  //   }
-  // }
-
   def indexSummary() = {
     api { implicit request =>
       authService.authenticatedSuperUser {

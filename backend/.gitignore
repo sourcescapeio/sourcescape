@@ -13,3 +13,7 @@ service-account.json
 .metals
 .bloop
 metals.sbt
+
+.env
+
+/collections

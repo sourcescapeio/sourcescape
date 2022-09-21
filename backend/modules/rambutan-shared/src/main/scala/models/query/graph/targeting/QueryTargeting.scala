@@ -10,12 +10,6 @@ trait HasBasicExtraction[T] {
   self =>
   def getId(unit: T): String
   def getKey(unit: T): String
-
-  def unitFromJs(js: JsObject, edgeOverride: Option[GraphEdgeType] = None): T
-
-  val ordering = Ordering.by { a: GraphTrace[T] =>
-    a.sortKey(self).mkString("|")
-  }
 }
 
 trait HasTraceKey[T] {
@@ -25,10 +19,8 @@ trait HasTraceKey[T] {
 }
 
 // Actual targeting object
-trait QueryTargeting[T] extends HasBasicExtraction[T] {
-  self =>
+trait QueryTargeting[T] {
 
-  val extractor: HasBasicExtraction[T]
   /**
    * Index level stuff
    */
@@ -61,27 +53,8 @@ trait QueryTargeting[T] extends HasBasicExtraction[T] {
 
   def nodeQuery(traces: List[T]): JsObject
 
-  def traceHop(unit: T, edgeType: GraphEdgeType, edgeJs: JsObject): T
-
-  /**
-   * Graph FSM
-   */
-  def calculateUnwindSequence(traverse: StatefulTraverse, trace: GraphTrace[T]): List[EdgeTypeTarget]
-
   /**
    * Relational
    */
   def relationalKeyItem(unit: T): RelationalKeyItem
-
-  /**
-   * Inherited
-   */
-  // HasBasicExtractor
-  def getId(unit: T) = extractor.getId(unit)
-
-  def getKey(unit: T) = extractor.getKey(unit)
-
-  def unitFromJs(js: JsObject, edgeOverride: Option[GraphEdgeType] = None) = {
-    extractor.unitFromJs(js, edgeOverride)
-  }
 }

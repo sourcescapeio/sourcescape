@@ -1,27 +1,20 @@
 
-##############
-# ADMIN APIS #
-##############
-GET     /health                                     controllers.HealthController.health()
-GET     /all-tables/diff.html                       controllers.HealthController.diff()
-GET     /all-tables/create.html                     controllers.HealthController.create()
-GET     /all-tables/deletes.html                    controllers.HealthController.deletes()
-
-POST    /graphql                                    controllers.GraphQLController.graphqlBody()
-# Websocket
-GET     /graphql                                    controllers.GraphQLController.socket()
-GET     /render-schema                              controllers.GraphQLController.renderSchema
-
-
-POST    /cycle-indexes/:it                          controllers.HealthController.cycleIndexes(it: models.IndexType)
 
 
 GET     /me                                         controllers.UserController.getUserProfile()
 POST    /orgs                                       controllers.UserController.createOrg()
 
 GET     /index-summary                              controllers.AdminController.indexSummary()
-# GET     /socket                                     controllers.AdminController.updateSocket()
 
+
+###########
+# GRAPHQL #
+###########
+
+POST    /graphql                                    controllers.GraphQLController.graphqlBody()
+# Websocket
+GET     /graphql                                    controllers.GraphQLController.socket()
+GET     /render-schema                              controllers.GraphQLController.renderSchema
 
 ###########
 # PROJECT #
@@ -61,12 +54,6 @@ POST    /orgs/:o/repos/:r/finish-watch              controllers.LocalRepoControl
 
 
 
-
-# Onboarding stuff. TODO: better url
-PUT     /orgs/:o/select-repos                       controllers.RepoController.batchSelect(o: Int)
-
-
-
 ###########
 # INDEXES #
 ###########
@@ -102,6 +89,9 @@ POST    /orgs/:o/query/grouped                      controllers.QueryController.
 POST    /orgs/:o/parse/srclog/:it                   controllers.QueryController.parseSrcLog(o: Int, it: models.IndexType)
 POST    /orgs/:o/query/graph/:it                    controllers.QueryController.graphQuery(o: Int, it: models.IndexType)
 POST    /orgs/:o/query/relational/:it               controllers.QueryController.relationalQuery(o: Int, it: models.IndexType)
+
+POST    /orgs/:o/query/relational/xp/:it            controllers.QueryController.relationalQueryExperimental(o: Int, it: models.IndexType)
+POST    /orgs/:o/query/relational/time/:it          controllers.QueryController.relationalQueryTime(o: Int, it: models.IndexType)
 
 
 #################

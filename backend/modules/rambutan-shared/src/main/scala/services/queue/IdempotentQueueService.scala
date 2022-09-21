@@ -80,6 +80,7 @@ private class IdempotentRelayActor(implicit ec: ExecutionContext) extends Actor 
           map -= name
         }
         case message: Message => {
+          println("MSG", message)
           Json.parse(message.data.utf8String).asOpt[IdempotentPing].foreach { ping =>
             val name = ping.name
             map.get(name).foreach { q =>

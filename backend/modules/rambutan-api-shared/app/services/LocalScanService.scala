@@ -20,6 +20,7 @@ class LocalScanService @Inject() (
   repoSyncService:        RepoSyncService,
   gitTreeIndexingService: GitTreeIndexingService,
   gitService:             LocalGitService,
+  sharedDao:              dal.SharedDataAccessLayer,
   localDao:               dal.LocalDataAccessLayer)(implicit val ec: ExecutionContext, mat: akka.stream.Materializer) {
   // add directory (should trigger scan)
 
@@ -38,11 +39,28 @@ class LocalScanService @Inject() (
       obj <- localDao.LocalScanDirectoryTable.insert(obj).map { id =>
         obj.copy(id = id)
       }
-      _ <- withFlag(shouldScan) {
+      // TODO: better way of doing async
+      _ = withFlag(shouldScan) {
         initialScan(orgId, obj.id, path)
       }
     } yield {
       obj
+    }
+  }
+
+  // TODO: needs to be able to cancel scan. Be careful for now
+  def deleteScan(orgId: Int, scanId: Int): Future[Option[LocalScanDirectory]] = {
+    // delete
+    for {
+      // TODO: we should just use cascade yo
+      repoIds <- localDao.LocalRepoConfigTable.byScanId.lookup(scanId).map(_.map(_.repoId))
+      _ <- sharedDao.RepoSHATable.byRepo.deleteBatch(repoIds)
+      _ <- sharedDao.RepoSHAIndexTable.byRepo.deleteBatch(repoIds)
+      _ <- localDao.LocalRepoConfigTable.byScanId.delete(scanId)
+      item <- localDao.LocalScanDirectoryTable.byId.lookup(scanId)
+      _ <- localDao.LocalScanDirectoryTable.byId.delete(scanId)
+    } yield {
+      item
     }
   }
 

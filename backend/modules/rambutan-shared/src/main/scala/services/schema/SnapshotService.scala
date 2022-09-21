@@ -10,6 +10,7 @@ import silvousplay.imports._
 import play.api.libs.json._
 import org.joda.time._
 import akka.stream.scaladsl.{ Source, Sink }
+import silvousplay.api.SpanContext
 
 @Singleton
 class SnapshotService @Inject() (
@@ -46,7 +47,7 @@ class SnapshotService @Inject() (
     }
   }
 
-  def getLatestSnapshot(schema: Schema): Future[Option[HydratedSnapshot]] = {
+  def getLatestSnapshot(schema: Schema)(implicit context: SpanContext): Future[Option[HydratedSnapshot]] = {
     implicit val targeting = GenericGraphTargeting(schema.orgId)
 
     val repoId = schema.selectedRepos.head
@@ -123,7 +124,7 @@ class SnapshotService @Inject() (
     }.runWith(Sink.ignore) map (_ => ())
   }
 
-  def getSnapshotDataForIndex(orgId: Int, schemaId: Int, indexId: Int): Future[(QueryResultHeader, Source[Map[String, JsValue], Any])] = {
+  def getSnapshotDataForIndex(orgId: Int, schemaId: Int, indexId: Int)(implicit context: SpanContext): Future[(QueryResultHeader, Source[Map[String, JsValue], Any])] = {
     implicit val targeting = GenericGraphTargeting(orgId)
     val Row = "Row"
     for {
@@ -203,7 +204,7 @@ class SnapshotService @Inject() (
   }
 
   // TODO: impl
-  def deleteSnapshotForIndex(orgId: Int, schemaId: Int, indexId: Int): Future[Unit] = {
+  def deleteSnapshotForIndex(orgId: Int, schemaId: Int, indexId: Int)(implicit context: SpanContext): Future[Unit] = {
     implicit val targeting = GenericGraphTargeting(orgId)
 
     // snapshot
@@ -218,7 +219,7 @@ class SnapshotService @Inject() (
           NodeClause(GenericGraphNodePredicate.Snapshot, A, None)),
         edges = List(),
         root = None,
-        selected = Nil))(targeting)
+        selected = Nil))
       items <- source.runWith(Sinks.ListAccum)
     } yield {
       items.foreach(println)

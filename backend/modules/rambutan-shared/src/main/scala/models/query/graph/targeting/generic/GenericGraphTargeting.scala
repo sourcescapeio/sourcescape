@@ -10,9 +10,6 @@ case class GenericGraphTargeting(orgId: Int) extends QueryTargeting[GenericGraph
 
   val resultType = QueryResultType.GenericGraphTrace
 
-  // inherits
-  val extractor = implicitly[HasBasicExtraction[GenericGraphUnit]]
-
   val nodeIndexName = GenericGraphNode.globalIndex
   val edgeIndexName = GenericGraphEdge.globalIndex
 
@@ -78,32 +75,6 @@ case class GenericGraphTargeting(orgId: Int) extends QueryTargeting[GenericGraph
       must = List(
         ESQuery.termsSearch("org_id", traces.map(_.orgId)),
         ESQuery.termsSearch("id", traces.map(_.id))))
-  }
-
-  def traceHop(unit: GenericGraphUnit, edgeType: GraphEdgeType, edgeJs: JsObject): GenericGraphUnit = {
-    val oppositeId = edgeType.direction.extractOpposite(edgeJs)
-
-    unit.copy(
-      edgeType = Some(edgeType),
-      id = oppositeId)
-  }
-
-  /**
-   * Hydration
-   */
-  def hydrationQuery(items: List[GenericGraphUnit]): JsObject = {
-    ESQuery.bool(
-      filter = ESQuery.bool(
-        must = List(
-          ESQuery.termsSearch("org_id", items.map(_.orgId).toList.distinct),
-          ESQuery.termsSearch("id", items.map(_.id).toList.distinct))) :: Nil)
-  }
-
-  /**
-   * Graph FSM
-   */
-  def calculateUnwindSequence(traverse: StatefulTraverse, trace: GraphTrace[GenericGraphUnit]) = {
-    List.empty[EdgeTypeTarget]
   }
 
   /**
