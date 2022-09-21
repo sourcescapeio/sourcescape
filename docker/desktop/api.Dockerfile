@@ -3,7 +3,7 @@ FROM openjdk:8u232-jdk-stretch AS builder
 
 ADD ./backend /usr/build/app
 
-ARG SBT_VERSION=1.7.1
+ARG SBT_VERSION=1.3.10
 
 WORKDIR /tmp
 
