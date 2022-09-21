@@ -1,5 +1,5 @@
 # Stage 1
-FROM openjdk:8u342-jdk-stretch AS builder
+FROM amazoncorretto:8u342-alpine3.15-jdk AS builder
 
 ADD ./backend /usr/build/app
 
@@ -21,7 +21,7 @@ RUN sbt "project rambutanLocal" clean stage
 RUN sbt "project rambutanIndexer" clean stage
 
 # Stage 2
-FROM openjdk:8u342-jre-stretch
+FROM amazoncorretto:8u342-alpine3.15-jre
 ADD ./docker/desktop/rambutan.conf /opt/conf/rambutan.conf
 COPY --from=builder /usr/build/app/apps/rambutan-initializer/target/universal /opt/initializer
 COPY --from=builder /usr/build/app/apps/rambutan-local/target/universal /opt/api
