@@ -1,5 +1,5 @@
 # Stage 1
-FROM amazoncorretto:8u342-alpine3.15-jdk AS builder
+FROM amazoncorretto:8u342-alpine3.15 AS builder
 
 ADD ./backend /usr/build/app
 
