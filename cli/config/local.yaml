@@ -1,0 +1,71 @@
+services:
+## Datastores
+- sourcescape_postgres:
+    image: postgres:12.4
+    base: true
+    environment:
+      - POSTGRES_PASSWORD=sourcescape
+      - POSTGRES_DB=sourcescape
+      - POSTGRES_USER=sourcescape
+    complete: "database system is ready to accept connections"
+  sourcescape_elasticsearch:
+    image: elasticsearch:7.5.1
+    base: true
+    environment:
+      - discovery.type=single-node
+    complete: "bound_addresses {0.0.0.0:9200}"
+  sourcescape_redis:
+    image: redis:5.0.10
+    base: true
+    # For some reason unable to attach
+    # complete: "???"
+## Micros
+- sourcescape_prima:
+    image: sourcescape_primadonna
+    complete: "node ./bin/www" # Do better
+  # Initializer (ensures DB and ES)
+  sourcescape_initializer:
+    image: sourcescape_backend
+    environment:
+      - ELASTICSEARCH_HOST=sourcescape_elasticsearch
+      - POSTGRES_HOST=sourcescape_postgres
+    script: true
+    command: /opt/initializer/stage/bin/rambutaninitializer
+# EDGE
+- sourcescape_api:
+    image: sourcescape_backend
+    environment:
+      - DATA_DIR=/data/data
+      - EXTERNAL_DIR=/external
+      - REDIS_HOST=sourcescape_redis
+      - ELASTICSEARCH_HOST=sourcescape_elasticsearch
+      - POSTGRES_HOST=sourcescape_postgres
+      - PRIMADONNA_HOST=sourcescape_prima
+      # - JAVA_OPTS="-Xmx2048m -Xms2048m -Xss32m -XX:ReservedCodeCacheSize=128m -XX:+UseCodeCacheFlushing -XX:+UseCompressedOops -XX:+UseConcMarkSweepGC -XX:+CMSClassUnloadingEnabled"
+    data_volume: /data
+    external_volume: /external
+    command: bash -c "rm -f RUNNING_PID && /opt/api/stage/bin/rambutan-local -Dconfig.file=/opt/conf/rambutan.conf"
+    complete: "Listening for HTTP on /0.0.0.0:9000"
+  sourcescape_indexer:
+    image: sourcescape_backend
+    environment:
+      - DATA_DIR=/data/data
+      - EXTERNAL_DIR=/external
+      - REDIS_HOST=sourcescape_redis
+      - ELASTICSEARCH_HOST=sourcescape_elasticsearch
+      - POSTGRES_HOST=sourcescape_postgres
+      - PRIMADONNA_HOST=sourcescape_prima
+      # - JAVA_OPTS="-Xmx2048m -Xms2048m -Xss32m -XX:ReservedCodeCacheSize=128m -XX:+UseCodeCacheFlushing -XX:+UseCompressedOops -XX:+UseConcMarkSweepGC -XX:+CMSClassUnloadingEnabled"
+    command: bash -c "rm -f RUNNING_PID && /opt/indexer/stage/bin/rambutan-indexer -Dconfig.file=/opt/conf/rambutan.conf"
+    complete: "Listening for HTTP on /0.0.0.0:9000"
+    data_volume: /data
+    external_volume: /external
+  sourcescape_front:
+    image: sourcescape_frontend
+    command: "serve -s build -l 3000"
+    complete: "Accepting connections at http://localhost:3000"
+# LB
+- sourcescape_proxy:
+    image: sourcescape_proxy
+    ports:
+      - "5000:4003"

@@ -1,0 +1,23 @@
+version: "3.4"
+services:
+  primadonna:
+    build:
+      context: .
+      dockerfile: docker/desktop/primadonna.Dockerfile
+    image: sourcescape_primadonna:1.0
+  backend:
+    build:
+      context: .
+      dockerfile: docker/desktop/backend.Dockerfile
+    platform: linux/amd64 # TODO: fix, find a better image
+    image: sourcescape_backend:1.0
+  frontend:
+    build:
+      context: .
+      dockerfile: docker/desktop/frontend.Dockerfile
+    image: sourcescape_frontend:1.0
+  proxy:
+    build:
+      context: .
+      dockerfile: docker/desktop/proxy.Dockerfile
+    image: sourcescape_proxy:1.0
