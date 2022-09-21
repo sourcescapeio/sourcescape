@@ -27,3 +27,12 @@ jobs:
           docker-image-tag: 1.0.0 # optional
           dockerfile-path: ./docker/desktop/api.Dockerfile # optional
           build-context: ./ # optional
+
+      - uses: pmorelli92/github-container-registry-build-push@2.0.0
+        name: Build and Publish Indexer
+        with:
+          github-push-secret: ${{secrets.GITHUB_TOKEN}}
+          docker-image-name: indexer
+          docker-image-tag: 1.0.0 # optional
+          dockerfile-path: ./docker/desktop/indexer.Dockerfile # optional
+          build-context: ./ # optional
