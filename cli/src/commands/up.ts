@@ -20,13 +20,16 @@ export default class Up extends Command {
 
   static flags = {
     help: flags.help({char: 'h'}),
-    "no-watcher": flags.boolean({char: 'n', description: 'Connect to preexisting watcher'}),
+    "force-pull": flags.boolean({char: 'f', description: 'Force pull images'}),
+    port: flags.integer({char: 'p', description: 'Expose this port', default: 5000})
   }
 
   static strict = false
 
   async run() {
     const {argv, flags} = this.parse(Up);
+
+    const { port } = flags;
 
     // TODO: combine with config
     function resolveDirectory(path: string) {
@@ -61,8 +64,7 @@ export default class Up extends Command {
     const missing = allImages.filter((i) => (!imageSet.includes(i)));
     const containsAll = missing.length === 0;
 
-    if (!containsAll) {
-      // TODO: need to pull images
+    if (!containsAll || flags['force-pull']) {
       this.warn('Missing images. Pulling...');
       await reduce(missing, async (prev, item) => {  
         return prev.then(async () => {
@@ -79,12 +81,12 @@ export default class Up extends Command {
 
       return prev.then(async () => {
         console.warn(`===== TIER ${idx} =====`);
-        await ensureTier(remapped, initializeDirectories, minorVersion, this.log)
+        await ensureTier(remapped, initializeDirectories, minorVersion, port, this.log)
         return null;
       });
     }, Promise.resolve(null));
 
-    open('http://localhost:5000')
+    open(`http://localhost:${port}`)
 
     // need to explicitly exit
     exit(0);

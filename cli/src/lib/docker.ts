@@ -27,7 +27,7 @@ interface ServiceConfig {
   data_volume: string | null;
   external_volume: string | null;
   command: string | null;
-  ports: string[] | null;
+  expose_port: string | null;
   complete: string | null;
 }
 
@@ -54,7 +54,7 @@ async function getContainers(args: string): Promise<ContainerState[]> {
   }));
 }
 
-function constructCommand(item: ServiceConfig, directories: string[], minorVersion: string): string {
+function constructCommand(item: ServiceConfig, directories: string[], minorVersion: string, port: number): string {
   const { name, image } = item;
 
   const imageWithVersion = compact([
@@ -74,7 +74,7 @@ function constructCommand(item: ServiceConfig, directories: string[], minorVersi
     item.data_volume && `--volume ${SOURCESCAPE_DIR}:${item.data_volume}`,
     item.external_volume && directories.map((d) => (`--volume ${d}:${item.external_volume}/${d}:cached`)),
     item.environment && item.environment.map((e) => (`--env ${e}`)),
-    item.ports && item.ports.map((p) => (`-p ${p}`)),
+    item.expose_port && `-p ${port}:${item.expose_port}`, // unsafe, but we control the config so this is okay
   ]));
 
   return `run ${args.join(' ')} ${imageWithVersion} ${item.command || ''}`;
@@ -166,7 +166,7 @@ export function remapYAMLTier(items: any): ServiceConfig[] {
       data_volume: v.data_volume,
       external_volume: v.external_volume,
       command: v.command,
-      ports: v.ports,
+      expose_port: v.expose_port,
       complete: v.complete,
     }
   });  
@@ -197,7 +197,7 @@ async function watchContainer(containerId: string, item: ServiceConfig, log: Fun
   }  
 }
 
-export async function ensureTier(items: ServiceConfig[], directories: string[], minorVersion: string, log: Function) {
+export async function ensureTier(items: ServiceConfig[], directories: string[], minorVersion: string, port: number, log: Function) {
   const runningContainers = await getContainers('');
   const stoppedContainers = await getContainers('--filter status=exited')
 
@@ -240,7 +240,7 @@ export async function ensureTier(items: ServiceConfig[], directories: string[], 
     }
 
     // New
-    const command = constructCommand(item, directories, minorVersion);
+    const command = constructCommand(item, directories, minorVersion, port);
     log(`CREATING: ${command}`);
     const containerCreate = await docker.command(command);
     return watchContainer(containerCreate.containerId, item, log);

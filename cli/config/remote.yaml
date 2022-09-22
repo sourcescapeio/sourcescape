@@ -67,5 +67,4 @@ services:
 # LB
 - sourcescape_proxy:
     image: ghcr.io/sourcescapeio/proxy
-    ports:
-      - "5001:4003"
+    expose_port: "4003" # NOTE: no safety checks for this

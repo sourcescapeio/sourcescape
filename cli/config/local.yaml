@@ -67,5 +67,5 @@ services:
 # LB
 - sourcescape_proxy:
     image: sourcescape_proxy
-    ports:
-      - "5000:4003"
+    expose_port: "4003"
+
