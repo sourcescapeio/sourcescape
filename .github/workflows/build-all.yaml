@@ -2,7 +2,7 @@ name: Build all
 on:
   push:
     branches:
-      - drj/actions
+      - master
 jobs:
   build-backend:
     runs-on: ubuntu-latest
