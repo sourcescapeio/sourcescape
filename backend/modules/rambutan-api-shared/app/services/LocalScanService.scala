@@ -41,6 +41,7 @@ class LocalScanService @Inject() (
       }
       // TODO: better way of doing async
       _ = withFlag(shouldScan) {
+        println("INITIAL SCAN", path)
         initialScan(orgId, obj.id, path)
       }
     } yield {
@@ -79,7 +80,6 @@ class LocalScanService @Inject() (
     for {
       _ <- Future.successful(())
       gitDirectories = gitService.scanGitDirectory(directory).filter(_.valid)
-      _ = println(gitDirectories)
       newDirectories <- gitDirectories.mapConcat { scanResult =>
         val remote = scanResult.remotes.flatMap { url =>
           val githubHttpsUrl = "https://github.com/([\\w\\.@\\:/\\-~]+).git".r

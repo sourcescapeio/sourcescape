@@ -4,9 +4,7 @@ object Dependencies {
   object Vsn {
     val Scala = "2.13.8"
 
-    // TODO: Cannot upgrade to 2.8.15 until we fix form binding issue in API.scala
-    // could not find implicit value for parameter formBinding: play.api.data.FormBinding
-    val Play = "2.8.1"
+    val Play = "2.8.15"
 
     val PlaySlick = "5.0.2"
 
@@ -15,7 +13,7 @@ object Dependencies {
 
     // TODO: 2.6.19 once we upgrade Play
     val Akka = "2.5.31"
-    val AkkaHttp = "10.1.11"
+    val AkkaHttp = "10.1.15"
     // val Alpakka = "2.0.2"
 
     // TODO: could use an upgrade
@@ -25,6 +23,9 @@ object Dependencies {
   object Play {
     // val datacommons = "com.typesafe.play" %% "play-datacommons" % Vsn.Play
     // val json = "com.typesafe.play" %% "play-json" % Vsn.Play
+
+    // Need to force this dependency
+    val twirl = "com.typesafe.play" %% "twirl-api" % "1.5.1"
   }
 
   object Core {

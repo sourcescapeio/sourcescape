@@ -25,6 +25,6 @@ services:
     container_name: sourcescape_proxy
     build:
       context: .
-      dockerfile: docker/sourcescape/proxy.Dockerfile
+      dockerfile: docker/local/proxy.Dockerfile
     ports:
       - "4003:4003"

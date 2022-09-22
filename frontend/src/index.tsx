@@ -17,7 +17,7 @@ const httpLink = new HttpLink({
 });
 
 const wsLink = new GraphQLWsLink(createClient({
-  url: 'ws://localhost:4003/api/graphql',
+  url: `ws://${window.location.host}/api/graphql`,
   connectionParams: {
     authToken: '123'
   }

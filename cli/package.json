@@ -1,0 +1,62 @@
+{
+  "name": "sourcescape",
+  "version": "1.0.0",
+  "author": "Jieren Chen @gukjoon",
+  "bin": {
+    "sourcescape": "bin/sourcescape"
+  },
+  "bugs": "https://github.com/sourcescapeio/sourcescape-cli/issues",
+  "dependencies": {
+    "@oclif/command": "^1",
+    "@oclif/config": "^1",
+    "@oclif/plugin-help": "^3",
+    "docker-cli-js": "^2.8.0",
+    "dockerode": "^3.2.1",
+    "find-process": "^1.4.4",
+    "js-yaml": "^4.0.0",
+    "lodash": "^4.17.20",
+    "react-dev-utils": "^11.0.1",
+    "ts-node": "^8",
+    "tslib": "^1"
+  },
+  "devDependencies": {
+    "@oclif/dev-cli": "^1",
+    "@types/dockerode": "^3.2.2",
+    "@types/js-yaml": "^4.0.0",
+    "@types/node": "^12",
+    "@types/react-dev-utils": "^9.0.4",
+    "globby": "^10",
+    "typescript": "^3.3"
+  },
+  "engines": {
+    "node": ">=12.0.0"
+  },
+  "files": [
+    "/bin",
+    "/config",
+    "/lib",
+    "/npm-shrinkwrap.json",
+    "/oclif.manifest.json"
+  ],
+  "homepage": "https://github.com/sourcescapeio/sourcescape",
+  "keywords": [
+    "oclif"
+  ],
+  "license": "MIT",
+  "main": "lib/index.js",
+  "oclif": {
+    "commands": "./lib/commands",
+    "bin": "sourcescape",
+    "plugins": [
+      "@oclif/plugin-help"
+    ]
+  },
+  "repository": "sourcescapeio/sourcescape",
+  "scripts": {
+    "postpack": "rm -f oclif.manifest.json",
+    "prepack": "rm -rf lib && tsc -b && oclif-dev manifest && oclif-dev readme",
+    "test": "echo NO TESTS",
+    "version": "oclif-dev readme && git add README.md"
+  },
+  "types": "lib/index.d.ts"
+}

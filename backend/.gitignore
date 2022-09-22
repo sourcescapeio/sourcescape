@@ -1,6 +1,6 @@
 /logs
-target
-data
+/target
+/data
 service-account.json
 /.idea
 /.idea_modules

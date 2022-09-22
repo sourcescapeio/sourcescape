@@ -17,6 +17,9 @@ object Initializer {
 
   val pgHost = sys.env.get("POSTGRES_HOST").getOrElse("localhost")
 
+  println(esHost)
+  println(pgHost)
+
   // POSTGRES_HOST
   private lazy val db = Databases(
     "org.postgresql.Driver",
@@ -43,9 +46,9 @@ object Initializer {
   }
 
   def main(args: Array[String]): Unit = {
-    // println("Running evolutions...")
-    // Evolutions.applyEvolutions(db)
-    // println("Evolutions complete")
+    println("Running evolutions...")
+    Evolutions.applyEvolutions(db)
+    println("Evolutions complete")
 
     println("Ensuring ES indexes...")
     val esWork = for {
