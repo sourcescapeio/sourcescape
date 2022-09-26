@@ -11,11 +11,11 @@ import { openSync, watch } from 'fs';
 import { SOURCESCAPE_DIR } from '../lib/data';
 import { exit } from 'process';
 
-export default class Up extends Command {
+export default class Start extends Command {
   static description = 'Initialize SourceScape.'
 
   static examples = [
-    `$ sourcescape up <YOUR_DIRECTORY>`,
+    `$ sourcescape start <YOUR_DIRECTORY>`,
   ]
 
   static flags = {
@@ -27,7 +27,7 @@ export default class Up extends Command {
   static strict = false
 
   async run() {
-    const {argv, flags} = this.parse(Up);
+    const {argv, flags} = this.parse(Start);
 
     const { port } = flags;
 

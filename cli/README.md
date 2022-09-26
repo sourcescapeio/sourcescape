@@ -15,11 +15,11 @@ sourcescape-cli
 # Usage
 <!-- usage -->
 ```sh-session
-$ npm install -g @sourcescape/cli
+$ npm install -g sourcescape
 $ sourcescape COMMAND
 running command...
 $ sourcescape (-v|--version|version)
-@sourcescape/cli/0.2.3 darwin-x64 node-v15.8.0
+sourcescape/1.0.2 darwin-arm64 node-v17.6.0
 $ sourcescape --help [COMMAND]
 USAGE
   $ sourcescape COMMAND
@@ -29,11 +29,10 @@ USAGE
 # Commands
 <!-- commands -->
 * [`sourcescape clean`](#sourcescape-clean)
-* [`sourcescape down`](#sourcescape-down)
 * [`sourcescape help [COMMAND]`](#sourcescape-help-command)
+* [`sourcescape start`](#sourcescape-start)
 * [`sourcescape status`](#sourcescape-status)
-* [`sourcescape up`](#sourcescape-up)
-* [`sourcescape watcher [FILE]`](#sourcescape-watcher-file)
+* [`sourcescape stop`](#sourcescape-stop)
 
 ## `sourcescape clean`
 
@@ -52,25 +51,7 @@ EXAMPLE
   $ sourcescape clean
 ```
 
-_See code: [src/commands/clean.ts](https://github.com/sourcescapeio/sourcescape-cli/blob/v0.2.3/src/commands/clean.ts)_
-
-## `sourcescape down`
-
-Shuts down running SourceScape containers.
-
-```
-USAGE
-  $ sourcescape down
-
-OPTIONS
-  -h, --help        show CLI help
-  -n, --no-watcher  Connect to preexisting watcher
-
-EXAMPLE
-  $ sourcescape down
-```
-
-_See code: [src/commands/down.ts](https://github.com/sourcescapeio/sourcescape-cli/blob/v0.2.3/src/commands/down.ts)_
+_See code: [src/commands/clean.ts](https://github.com/sourcescapeio/sourcescape/blob/v1.0.2/src/commands/clean.ts)_
 
 ## `sourcescape help [COMMAND]`
 
@@ -87,7 +68,26 @@ OPTIONS
   --all  see all commands in CLI
 ```
 
-_See code: [@oclif/plugin-help](https://github.com/oclif/plugin-help/blob/v3.2.1/src/commands/help.ts)_
+_See code: [@oclif/plugin-help](https://github.com/oclif/plugin-help/blob/v3.3.1/src/commands/help.ts)_
+
+## `sourcescape start`
+
+Initialize SourceScape.
+
+```
+USAGE
+  $ sourcescape start
+
+OPTIONS
+  -f, --force-pull  Force pull images
+  -h, --help        show CLI help
+  -p, --port=port   [default: 5000] Expose this port
+
+EXAMPLE
+  $ sourcescape start <YOUR_DIRECTORY>
+```
+
+_See code: [src/commands/start.ts](https://github.com/sourcescapeio/sourcescape/blob/v1.0.2/src/commands/start.ts)_
 
 ## `sourcescape status`
 
@@ -104,40 +104,19 @@ EXAMPLE
   $ sourcescape status
 ```
 
-_See code: [src/commands/status.ts](https://github.com/sourcescapeio/sourcescape-cli/blob/v0.2.3/src/commands/status.ts)_
+_See code: [src/commands/status.ts](https://github.com/sourcescapeio/sourcescape/blob/v1.0.2/src/commands/status.ts)_
 
-## `sourcescape up`
+## `sourcescape stop`
 
-Initialize SourceScape.
-
-```
-USAGE
-  $ sourcescape up
-
-OPTIONS
-  -h, --help        show CLI help
-  -n, --no-watcher  Connect to preexisting watcher
-
-EXAMPLE
-  $ sourcescape up <YOUR_DIRECTORY>
-```
-
-_See code: [src/commands/up.ts](https://github.com/sourcescapeio/sourcescape-cli/blob/v0.2.3/src/commands/up.ts)_
-
-## `sourcescape watcher [FILE]`
-
-[DEBUG] Stand up the Watcher daemon.
+Shuts down running SourceScape containers.
 
 ```
 USAGE
-  $ sourcescape watcher [FILE]
-
-OPTIONS
-  -h, --help  show CLI help
+  $ sourcescape stop
 
 EXAMPLE
-  $ sourcescape watcher
+  $ sourcescape stop
 ```
 
-_See code: [src/commands/watcher.ts](https://github.com/sourcescapeio/sourcescape-cli/blob/v0.2.3/src/commands/watcher.ts)_
+_See code: [src/commands/stop.ts](https://github.com/sourcescapeio/sourcescape/blob/v1.0.2/src/commands/stop.ts)_
 <!-- commandsstop -->

@@ -1,6 +1,6 @@
 {
   "name": "sourcescape",
-  "version": "1.0.0",
+  "version": "1.0.2",
   "author": "Jieren Chen @gukjoon",
   "bin": {
     "sourcescape": "bin/sourcescape"
@@ -15,7 +15,7 @@
     "find-process": "^1.4.4",
     "js-yaml": "^4.0.0",
     "lodash": "^4.17.20",
-    "react-dev-utils": "^11.0.1",
+    "open": "^7.3.1",
     "ts-node": "^8",
     "tslib": "^1"
   },
@@ -24,7 +24,6 @@
     "@types/dockerode": "^3.2.2",
     "@types/js-yaml": "^4.0.0",
     "@types/node": "^12",
-    "@types/react-dev-utils": "^9.0.4",
     "globby": "^10",
     "typescript": "^3.3"
   },
