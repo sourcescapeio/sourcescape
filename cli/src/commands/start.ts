@@ -11,23 +11,23 @@ import { openSync, watch } from 'fs';
 import { SOURCESCAPE_DIR } from '../lib/data';
 import { exit } from 'process';
 
-export default class Up extends Command {
+export default class Start extends Command {
   static description = 'Initialize SourceScape.'
 
   static examples = [
-    `$ sourcescape up <YOUR_DIRECTORY>`,
+    `$ sourcescape start <YOUR_DIRECTORY>`,
   ]
 
   static flags = {
     help: flags.help({char: 'h'}),
     "force-pull": flags.boolean({char: 'f', description: 'Force pull images'}),
-    port: flags.integer({char: 'p', description: 'Expose this port', default: 5000})
+    port: flags.integer({char: 'p', description: 'Expose this port', default: 5001})
   }
 
   static strict = false
 
   async run() {
-    const {argv, flags} = this.parse(Up);
+    const {argv, flags} = this.parse(Start);
 
     const { port } = flags;
 
@@ -85,8 +85,6 @@ export default class Up extends Command {
         return null;
       });
     }, Promise.resolve(null));
-
-    open(`http://localhost:${port}`)
 
     // need to explicitly exit
     exit(0);

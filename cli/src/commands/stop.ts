@@ -3,15 +3,15 @@ import * as _ from 'lodash';
 import config from '../config';
 import { stopAll, remapYAMLTier } from '../lib/docker';
 
-export default class Down extends Command {
+export default class Stop extends Command {
   static description = 'Shuts down running SourceScape containers.'
 
   static examples = [
-    `$ sourcescape down`,
+    `$ sourcescape stop`,
   ]
 
   async run() {
-    const {flags} = this.parse(Down)
+    const {flags} = this.parse(Stop)
 
     const flattened = _.flatten((config.services as any[]).map((items: any) => {
       return remapYAMLTier(items);

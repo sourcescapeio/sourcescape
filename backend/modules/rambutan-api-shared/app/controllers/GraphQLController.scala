@@ -205,6 +205,7 @@ class GraphQLController @Inject() (
   }
 
   def graphqlBody() = Action.async(parse.json) { request =>
+    println(request.body)
     val query = (request.body \ "query").as[String]
     val operation = (request.body \ "operationName").asOpt[String]
 
