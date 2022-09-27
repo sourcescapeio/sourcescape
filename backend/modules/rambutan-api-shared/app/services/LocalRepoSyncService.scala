@@ -12,6 +12,7 @@ import play.api.libs.json._
 import java.util.Base64
 import akka.stream.scaladsl.{ Source, Sink }
 import silvousplay.api.SpanContext
+import silvousplay.api.NoopSpanContext
 
 @Singleton
 class LocalRepoSyncService @Inject() (
@@ -124,8 +125,21 @@ class LocalRepoSyncService @Inject() (
       changed <- repoDataService.setRepoIntent(orgId, repoId, intent)
       // need to get repo
       setCollect = (intent =?= RepoCollectionIntent.Collect)
-      _ <- withFlag(changed > 0 && queue && setCollect) {
-        refreshRepoWithoutRootIndex(orgId, repoId)
+      _ <- withFlag(queue && setCollect) {
+        // if (changed > 0) {
+        //   refreshRepoWithoutRootIndex(orgId, repoId)
+        // } else {
+        implicit val spanContext = NoopSpanContext
+        for {
+          repo <- repoDataService.getRepoWithSettings(orgId, repoId).map { f =>
+            f.getOrElse(throw Errors.notFound("repo.dne", "Repo not found"))
+          }
+          gitInfo <- gitService.withRepo(repo.repo)(_.getRepoInfo)
+          maybeDirty = if (gitInfo.isClean) None else Some(gitInfo.statusDiff)
+          _ <- repoSHARefreshSync(repo, gitInfo.sha, maybeDirty)
+        } yield {
+          ()
+        }
       }
       _ <- withFlag(changed > 0) {
         syncWatch(orgId, repoId, queue)

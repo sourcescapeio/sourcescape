@@ -78,6 +78,9 @@ object SchemaDefinition {
       Field("sha", StringType,
         Some("the sha of the index"),
         resolve = _.value.sha),
+      Field("dirty", BooleanType,
+        Some("whether this is a dirty index"),
+        resolve = _.value.dirtySignature.isDefined),
       Field("cloneProgress", IntType,
         Some("clone progress"),
         resolve = { ctx =>
