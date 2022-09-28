@@ -1,5 +1,5 @@
 
-[**Read the Documentation here**](https://github.com/Hexworks/zircon/issues/new)
+[**Read the Documentation here**](https://docs.sourcescape.io)
 
 
 ### Dev ports
