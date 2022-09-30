@@ -1,4 +1,4 @@
-sourcescape-cli
+sourcescape
 ===============
 
 

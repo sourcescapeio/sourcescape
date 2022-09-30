@@ -5,7 +5,7 @@
   "bin": {
     "sourcescape": "bin/sourcescape"
   },
-  "bugs": "https://github.com/sourcescapeio/sourcescape-cli/issues",
+  "bugs": "https://github.com/sourcescapeio/sourcescape/issues",
   "dependencies": {
     "@oclif/command": "^1",
     "@oclif/config": "^1",
