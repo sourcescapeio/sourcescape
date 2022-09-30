@@ -93,6 +93,7 @@ POST    /orgs/:o/query/relational/:it               controllers.QueryController.
 POST    /orgs/:o/query/relational/xp/:it            controllers.QueryController.relationalQueryExperimental(o: Int, it: models.IndexType)
 POST    /orgs/:o/query/relational/time/:it          controllers.QueryController.relationalQueryTime(o: Int, it: models.IndexType)
 
+POST    /orgs/:o/query/srclog/xp/:it                controllers.QueryController.srcLogQueryExperimental(o: Int, it: models.IndexType)
 
 #################
 # SAVED QUERIES #

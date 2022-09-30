@@ -393,7 +393,7 @@ export function LocalOnboardingContainer() {
   }
 
   if(complete) {
-    return <Navigate to="/console" />
+    return <Navigate to="/srclog-console" />
   }
 
   return <OnboardingComponent completeNux={completeNux}/>;

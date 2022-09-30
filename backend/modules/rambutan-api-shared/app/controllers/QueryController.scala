@@ -436,8 +436,60 @@ class QueryController @Inject() (
   }
 
   /**
-   * Lanks
+   * New stuff
    */
+  def srcLogQueryExperimental(orgId: Int, indexType: IndexType) = {
+    api { implicit request =>
+      authService.authenticatedForOrg(orgId, OrgRole.Admin) {
+        withForm(QueryForm.form) { form =>
+          telemetryService.withTelemetry { context =>
+            val query = SrcLogCodeQuery.parseOrDie(form.q, indexType)
+            for {
+              targeting <- queryTargetingService.resolveTargeting(orgId, indexType, QueryTargetingRequest.AllLatest(None))
+              relationalQuery <- srcLogService.compileQuery(query)(targeting)
+              scroll = QueryScroll(None)
+              result <- relationalQueryServiceExperimental.runQuery(
+                relationalQuery,
+                explain = true,
+                progressUpdates = true)(targeting, context, scroll)
+              tableHeader = Json.obj(
+                "results" -> result.header,
+                "explain" -> result.explain.headers)
+              source = result.source
+              // main data
+              withShutdown = source.map(Right.apply).alsoTo(Sink.onComplete({ _ =>
+                result.completeExplain
+              }))
+              // explain stream
+              explainSource = result.explain.source.getOrElse(Source(Nil)).map(Left.apply).map(Left.apply)
+              progressSource = result.progressSource.map(Right.apply).map(Left.apply)
+              // merge together
+              mergedSource = withShutdown.merge(explainSource).merge(progressSource).map {
+                case Left(Left(explain)) => {
+                  Json.obj(
+                    "type" -> "explain",
+                    "obj" -> Json.toJson(explain))
+                }
+                case Left(Right(progress)) => {
+                  Json.obj(
+                    "type" -> "progress",
+                    "progress" -> progress)
+                }
+                case Right(dto) => {
+                  Json.obj(
+                    "type" -> "data",
+                    "obj" -> dto)
+                }
+              }
+            } yield {
+              streamQuery(tableHeader, mergedSource)
+            }
+          }
+        }
+      }
+    }
+  }
+
   def relationalQueryExperimental(orgId: Int, indexType: IndexType) = {
     api { implicit request =>
       authService.authenticatedForOrg(orgId, OrgRole.Admin) {
