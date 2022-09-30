@@ -28,16 +28,22 @@ function SidebarComponent(props: {
         />
       </SidebarHeader>
       <SidebarMenu>
-        <SidebarItem
+        {/* <SidebarItem
           linkTo="/console"
           currentPath={props.currentPath}
           label="Console"
           icon="console"
-        />
+        /> */}
         <SidebarItem
           linkTo="/srclog-console"
           currentPath={props.currentPath}
           label="SrcLog"
+          icon="console"
+        />
+        <SidebarItem
+          linkTo="/srclog-compiler"
+          currentPath={props.currentPath}
+          label="Compiler"
           icon="layout-hierarchy"
         />
         <SidebarItem

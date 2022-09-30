@@ -1,7 +1,7 @@
 version: "3.8"
 services:
   sourcescape_postgres:
-    container_name: sourcescape_postgres
+    container_name: sourcescape_postgres_local
     image: postgres:12.4
     environment:
       - POSTGRES_PASSWORD=sourcescape
@@ -10,19 +10,19 @@ services:
     ports:
       - "5432:5432"
   sourcescape_elasticsearch:
-    container_name: sourcescape_elasticsearch
+    container_name: sourcescape_elasticsearch_local
     image: docker.elastic.co/elasticsearch/elasticsearch:7.10.2
     environment:
       - discovery.type=single-node
     ports:
       - "9200:9200"
   sourcescape_redis:
-    container_name: sourcescape_redis
+    container_name: sourcescape_redis_local
     image: redis:5.0.10
     ports:
       - "6379:6379"
   sourcescape_proxy:
-    container_name: sourcescape_proxy
+    container_name: sourcescape_proxy_local
     build:
       context: .
       dockerfile: docker/local/proxy.Dockerfile
