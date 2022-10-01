@@ -22,7 +22,9 @@ import axios from 'axios';
 import { CopyToClipboard } from 'react-copy-to-clipboard';
 import { useFormik } from 'formik';
 import * as Yup from 'yup';
+import jmespath from 'jmespath';
 
+const toaster = Toaster.create();
 
 type Node = {
   id: string
@@ -211,7 +213,91 @@ function EdgeDBComponent(props: { edges: Edge[]}) {
 
 
 
-const toaster = Toaster.create();
+function AnalysisComponent(props: { analysis: any }) {
+
+  const [result, setResult] = useState<any>(props.analysis)
+  const [query, setQuery] = useState('')
+  
+  const formik = useFormik({
+    initialValues: {
+      query: '',
+    },
+    onSubmit: async (values, { resetForm }) => {
+      console.warn(values)
+
+      if(values.query) {
+        setResult(jmespath.search(props.analysis, values.query));
+      } else {
+        setResult(props.analysis);
+      }
+
+      setQuery(values.query);
+
+      // setResults(results)
+    }
+  });
+
+  // set state if analysis changes
+  React.useEffect(() => {
+    setResult(props.analysis)
+  }, [props.analysis]);
+
+  return <Container>
+    <Row>
+      <CopyToClipboard 
+        text={props.analysis}
+        onCopy={() => {
+          toaster.show({
+            message: "Copied to clipboard",
+            timeout: 3000
+          });
+        }}
+      >
+        <Button icon="clipboard" />
+      </CopyToClipboard>
+    </Row>
+    <Row style={{paddingTop: 20}}>
+      <Col xs={6}>
+        <form onSubmit={formik.handleSubmit}>
+          <FormGroup
+            label="Queries"
+          >
+            <InputGroup
+              onChange={formik.handleChange} 
+              name="query"
+              placeholder="JQ query..."
+              value={formik.values.query}
+            />
+            <ControlGroup>
+              <Button icon="search" intent="primary" minimal={true} type="submit" />
+              <CopyToClipboard
+                    text={JSON.stringify(result, null, 2)}
+                    onCopy={() => {
+                      toaster.show({
+                        message: "Copied to clipboard",
+                        timeout: 3000
+                      });
+                    }}
+                  >
+                <Button icon="clipboard" minimal={true}/>
+              </CopyToClipboard>
+            </ControlGroup>
+          </FormGroup>
+        </form>
+      </Col>
+    </Row>    
+    <Row>
+      <Col>
+        <pre>
+          {query}
+        </pre>
+        <pre>
+          {JSON.stringify(result, null, 2)}
+        </pre>
+      </Col>
+    </Row>
+  </Container>    
+}
 
 export function TestIndexingContainer() {
   const [loading, setLoading] = useState(false);
@@ -265,30 +351,14 @@ export function TestIndexingContainer() {
         <Col xs={12}>
           <Card>
             <Tabs>
+              <Tab id="analysis" title="Analysis" panel={          
+                <AnalysisComponent analysis={JSON.parse(data.analysis || '{}')}/>            
+              }/>              
               <Tab id="nodes" title="Nodes" panel={            
                 <NodeDBComponent nodes={data.nodes || []} />
               }/>
               <Tab id="edges" title="Edges" panel={
                 <EdgeDBComponent edges={data.edges || []} />
-              }/>
-              <Tab id="analysis" title="Analysis" panel={          
-                <div>
-                  <CopyToClipboard 
-                    text={data.analysis}
-                    onCopy={() => {
-                      toaster.show({
-                        message: "Copied to clipboard",
-                        timeout: 3000
-                      });
-                    }}
-                  >
-                    <Button icon="clipboard" />
-                  </CopyToClipboard>
-                  <pre>
-                    {(data.analysis || '').slice(0, 1000)}
-                    ...
-                  </pre>
-                </div>                
               }/>
             </Tabs>
           </Card>

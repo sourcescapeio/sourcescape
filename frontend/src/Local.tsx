@@ -41,7 +41,6 @@ function LocalAppBase() {
             // debug
           }
           <Route path="/test-indexing" element={<TestIndexingContainer />} />
-          {/* <Route path="/test-parsing" element={<TestParsingContainer />} /> */}
         </Route>
       </Routes>
     </Router>
