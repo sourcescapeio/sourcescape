@@ -321,6 +321,9 @@ package object extractor extends LowPriorityImplicits {
           }
         }
       }
+      case JsNull => {
+        Right((context, Nil))
+      }
       case _ => Left(ExtractorError(context, "Expected array", js))
     }
   }
@@ -379,7 +382,7 @@ package object extractor extends LowPriorityImplicits {
     }
   }
 
-  sealed class TupleExtractor[C <: ExtractorContext, T](val key: String, sub: => Extractor[C, T]) extends Extractor[C, T] {
+  sealed class TupleExtractor[C <: ExtractorContext, T](val key: String, sub: => Extractor[C, T], optional: Boolean) extends Extractor[C, T] {
     // single
     def checkConstraints(c: C, typeKey: String, js: JsValue): Boolean = {
       true
@@ -389,6 +392,10 @@ package object extractor extends LowPriorityImplicits {
       case Some(innerJs) => {
         val withDebug = c.pushDebug(s"{${key}}").asInstanceOf[C]
         sub.extract(withDebug, innerJs)
+      }
+      case _ if optional => {
+        val withDebug = c.pushDebug(s"{${key}}").asInstanceOf[C]
+        sub.extract(withDebug, JsNull)
       }
       case _ => Left(ExtractorError(c, s"Invalid key in tuple ${key}", js))
     }
@@ -587,15 +594,15 @@ package object extractor extends LowPriorityImplicits {
   }
 
   def constraint[C <: ExtractorContext](item: (String, Extractor[C, Boolean])) = {
-    new TupleExtractor(item._1, item._2)
+    new TupleExtractor(item._1, item._2, false)
   }
 
   def node[C <: ExtractorContext](`type`: String)(implicit context: Language[C]) = {
-    RootTupleExtractor[C](`type`, new TupleExtractor(context.typeKey, new LiteralExtractor(`type`)), constraints = Nil)
+    RootTupleExtractor[C](`type`, new TupleExtractor(context.typeKey, new LiteralExtractor(`type`), false), constraints = Nil)
   }
 
-  def tup[C <: ExtractorContext, T](item: (String, Extractor[C, T])) = {
-    new TupleExtractor(item._1, item._2)
+  def tup[C <: ExtractorContext, T](item: (String, Extractor[C, T]), optional: Boolean = false) = {
+    new TupleExtractor(item._1, item._2, optional)
   }
 
   // experimental ordered extractor

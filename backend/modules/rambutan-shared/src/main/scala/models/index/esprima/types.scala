@@ -27,6 +27,7 @@ object ESPrimaNodeType extends Plenumeration[ESPrimaNodeType] {
   case object Instance extends ESPrimaNodeType("instance")
   case object Super extends ESPrimaNodeType("super")
   case object This extends ESPrimaNodeType("this")
+  case object Decorator extends ESPrimaNodeType("decorator")
 
   case object Call extends ESPrimaNodeType("call")
 
@@ -126,6 +127,8 @@ object ESPrimaEdgeType extends Plenumeration[ESPrimaEdgeType] {
   case object ClassPropertyKey extends ESPrimaEdgeType("class-property-key")
   case object ClassPropertyValue extends ESPrimaEdgeType("class-property-value")
   case object SuperClass extends ESPrimaEdgeType("super-class")
+  case object ClassDecorator extends ESPrimaEdgeType("class-decorator")
+  case object MethodDecorator extends ESPrimaEdgeType("method-decorator")
 
   case object Assignment extends ESPrimaEdgeType("assignment")
   case object Reference extends ESPrimaEdgeType("reference")

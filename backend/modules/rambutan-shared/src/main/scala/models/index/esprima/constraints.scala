@@ -39,6 +39,8 @@ object ValidEdge {
   implicit object classProperty extends ValidEdge[ClassNode, ClassPropertyNode, ESPrimaEdgeType.ClassProperty.type]
   implicit object classPropertyKey extends ValidEdge[ClassPropertyNode, AnyNode, ESPrimaEdgeType.ClassPropertyKey.type]
   implicit object classPropertyValue extends ValidEdge[ClassPropertyNode, AnyNode, ESPrimaEdgeType.ClassPropertyValue.type]
+  implicit object classDecorator extends ValidEdge[ClassNode, AnyNode, ESPrimaEdgeType.ClassDecorator.type]
+  implicit object methodDecorator extends ValidEdge[MethodNode, AnyNode, ESPrimaEdgeType.MethodDecorator.type]
 
   // Reference
   implicit object reference extends ValidEdge[IdentifierReferenceNode, IdentifierNode, ESPrimaEdgeType.Reference.type]

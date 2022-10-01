@@ -96,6 +96,7 @@ case class MethodNode(id: String, range: CodeRange, computed: Boolean, static: B
 case class ClassPropertyNode(id: String, range: CodeRange, computed: Boolean, static: Boolean, name: Option[String]) extends ESPrimaNodeBuilder(ESPrimaNodeType.ClassProperty, graphName = name)
 case class SuperNode(id: String, range: CodeRange) extends ESPrimaNodeBuilder(ESPrimaNodeType.Super)
 case class ThisNode(id: String, range: CodeRange) extends ESPrimaNodeBuilder(ESPrimaNodeType.This)
+case class DecoratorNode(id: String, range: CodeRange) extends ESPrimaNodeBuilder(ESPrimaNodeType.Decorator)
 
 // Ex: { a: 1, b: 2}
 case class ObjectNode(id: String, range: CodeRange) extends ESPrimaNodeBuilder(ESPrimaNodeType.Object)
