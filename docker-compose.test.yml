@@ -31,7 +31,7 @@ services:
     container_name: sourcescape_primadonna_test
     image: gcr.io/lychee-ai/sourcescape-cli-primadonna:0.2
     ports:
-      - "3001:3001"
+      - "3002:3001"
     networks:
       - sourcescape
   sourcescape_dorothy_test:

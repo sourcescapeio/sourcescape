@@ -40,7 +40,7 @@ class LocalScanService @Inject() (
         obj.copy(id = id)
       }
       // TODO: better way of doing async
-      _ = withFlag(shouldScan) {
+      _ <- withFlag(shouldScan) {
         println("INITIAL SCAN", path)
         initialScan(orgId, obj.id, path)
       }

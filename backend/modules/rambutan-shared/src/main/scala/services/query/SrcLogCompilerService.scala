@@ -99,8 +99,6 @@ class SrcLogCompilerService @Inject() (
         DirectedSrcLogEdge.forward(m)
       }
 
-      nodeClauseMap.get(baseEdge.to)
-
       val intersectTo = Hashing.uuid()
       val mappedEdge = baseEdge.copy(
         to = intersectTo,
