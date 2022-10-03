@@ -22,6 +22,8 @@ import models.RepoSHAIndex
 import silvousplay.imports._
 import models.RepoCollectionIntent
 import models.RepoSettings
+import akka.stream.scaladsl.Source
+import akka.stream.scaladsl.Sink
 
 // Question: how to define GraphQL context
 object SchemaDefinition {
@@ -190,6 +192,12 @@ object SchemaDefinition {
       Field("scans", ListType(Scan),
         arguments = Nil,
         resolve = ctx => ctx.ctx.localScanService.listScans()),
+      Field("repo", OptionType(Repo),
+        arguments = RepoID :: Nil,
+        resolve = ctx => {
+          import ctx.ctx.ec
+          ctx.ctx.localRepoDataService.getRepo(ctx.arg(RepoID))
+        }),
       Field("repos", ListType(Repo),
         arguments = Nil,
         resolve = ctx => {
@@ -208,6 +216,22 @@ object SchemaDefinition {
         Field("deleteScan", OptionType(Scan),
           arguments = ScanID :: Nil,
           resolve = ctx => ctx.ctx.localScanService.deleteScan(-1, ctx.arg(ScanID))),
+        Field("deleteIndexesForRepo", IntType,
+          arguments = RepoID :: Nil,
+          resolve = ctx => {
+            implicit val mat = ctx.ctx.mat
+            implicit val ec = ctx.ctx.ec
+            for {
+              indexes <- ctx.ctx.repoIndexDataService.getIndexesForRepo(ctx.arg(RepoID))
+              _ = println(indexes)
+              _ <- Source(indexes).mapAsync(4) { idx =>
+                ctx.ctx.repoService.doDelete(idx)
+              }.runWith(Sink.ignore)
+            } yield {
+              0
+            }
+          },
+        ),
         Field("selectRepo", IntType,
           arguments = RepoID :: Nil,
           resolve = ctx => ctx.ctx.localRepoSyncService.setRepoIntent(-1, ctx.arg(RepoID), RepoCollectionIntent.Collect, queue = true))))

@@ -6,9 +6,10 @@ import models.extractor._
 
 object Classes {
 
+  // https://github.com/typescript-eslint/typescript-eslint/blob/a8227a6/packages/types/src/ts-estree.ts#L902
   private def Decorator = {
     node("Decorator") ~
-      tup("expression" -> Expressions.expression)
+      tup("expression" -> Expressions.expression) // LeftHandSideExpression
   }
 
   val ThisExpression = {
@@ -189,7 +190,7 @@ object Classes {
         ExpressionWrapper(
           classNode,
           codeRange,
-          superClass.toList ++ onlyMethodBody ++ onlyPropertiesBody,
+          superClass.toList ++ onlyMethodBody ++ onlyPropertiesBody ++ decorators,
           maybeIdent.toList,
           superClassEdge.toList ++ methodEdges ++ propertyEdges ++ decoratorEdges ++ maybeIdentEdge))
     }

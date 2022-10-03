@@ -40,7 +40,7 @@ export default class ListRepos extends Command {
     });
 
     const table = new Table({
-      head: ['Name', 'Status', 'Indexes']
+      head: ['Name', '', 'Status', 'Indexes']
     })
     response.data.data.repos.forEach((r: any) => {      
       const indexes = r.indexes.map((i: any) => {
@@ -49,7 +49,7 @@ export default class ListRepos extends Command {
         return `${i.sha}${dirtyFlag}${progressFlag}`
       })
 
-      table.push([r.name, r.intent, indexes.join('\n')]);
+      table.push([r.name, r.id, r.intent, indexes.join('\n')]);
     });
     console.log(table.toString());
   }

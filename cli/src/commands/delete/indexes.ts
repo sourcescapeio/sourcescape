@@ -6,10 +6,10 @@ import { join, resolve } from 'path';
 import { openSync, watch } from 'fs';
 import { exit } from 'process';
 import axios from 'axios';
-import { runGraphQL } from '../lib/graphql';
-import { getRepo } from '../lib/repo';
+import { runGraphQL } from '../../lib/graphql';
+import { getRepo } from '../../lib/repo';
 
-export default class RunIndex extends Command {
+export default class DeleteIndex extends Command {
 
   static flags = {
     port: flags.integer({char: 'p', description: 'Expose this port', default: 5001}),
@@ -23,17 +23,16 @@ export default class RunIndex extends Command {
   }];
 
   async run() {  
-    const {args, flags} = this.parse(RunIndex);
+    const {args, flags} = this.parse(DeleteIndex);
 
     const chosen = await getRepo(args.repo, flags.port, flags.debug);
 
-    // const fullPath = flags.debug ? resolve(args.directory) : `/external/${resolve(args.directory)}`;
-    // console.warn(fullPath);
+    console.warn(chosen);
 
     const response = await runGraphQL(flags.port, flags.debug, {
-      operationName: "SelectRepo",
-      query: `mutation SelectRepo {
-        selectRepo(id: ${chosen.id})
+      operationName: "DeleteRepoIndexes",
+      query: `mutation DeleteRepoIndexes {
+        deleteIndexesForRepo(id: ${chosen.id})
       }`,
       variables: {}
     });
@@ -41,7 +40,7 @@ export default class RunIndex extends Command {
     if (response.status !== 200) {
       console.warn('Error running indexing')
       console.error(response.data)
-    }    
+    }
 
     console.warn('COMPLETE')
   }

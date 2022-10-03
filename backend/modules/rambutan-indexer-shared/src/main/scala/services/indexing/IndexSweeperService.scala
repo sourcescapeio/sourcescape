@@ -16,6 +16,7 @@ class IndexSweeperService @Inject() (
   indexService:           IndexService,
   repoIndexDataService:   RepoIndexDataService,
   repoDataService:        RepoDataService,
+  repoService:            RepoService,
   cronService:            CronService,
   logService:             LogService,
   socketService:          SocketService,
@@ -91,23 +92,6 @@ class IndexSweeperService @Inject() (
    * Deletion actions
    */
   private def runIndexDeletion(index: RepoSHAIndex): Future[Unit] = {
-    val orgId = index.orgId
-    val repoId = index.repoId
-    val indexId = index.id
-    println("Deleting", indexId)
-    for {
-      _ <- repoIndexDataService.deleteAnalysisTrees(indexId)
-      _ <- dao.SHAIndexTreeTable.byIndex.delete(indexId)
-      _ <- dao.RepoSHAIndexTable.byId.delete(indexId)
-      _ <- logService.deleteWork(orgId, index.workId)
-      _ <- indexService.deleteKey(index)
-      // _ <- queryCacheService.deleteAllCachesForKey(orgId, key)
-      _ <- fileService.deleteRecursively(index.collectionsDirectory)
-      _ <- fileService.deleteRecursively(index.analysisDirectory)
-      // no need to delete compile directory as it's deleted after compile
-      _ <- socketService.indexDeleted(orgId, repoId, indexId)
-    } yield {
-      ()
-    }
+    repoService.doDelete(index)
   }
 }

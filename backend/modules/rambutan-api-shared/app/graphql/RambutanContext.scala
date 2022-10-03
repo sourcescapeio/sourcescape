@@ -3,6 +3,7 @@ package graphql
 import javax.inject._
 import services._
 import scala.concurrent.ExecutionContext
+import akka.stream.Materializer
 
 @Singleton
 class RambutanContext @Inject() (
@@ -11,6 +12,7 @@ class RambutanContext @Inject() (
   val repoIndexDataService: RepoIndexDataService,
   val socketService:        SocketService,
   val localRepoSyncService: LocalRepoSyncService,
-  val localScanService:     LocalScanService)(implicit val ec: ExecutionContext) {
+  val localScanService:     LocalScanService,
+  val repoService:          RepoService)(implicit val ec: ExecutionContext, val mat: Materializer) {
 
 }

@@ -278,6 +278,18 @@ object JavascriptEdgePredicate extends Plenumeration[JavascriptEdgePredicate] {
     }
   }
 
+  case object ClassDecorator extends JavascriptEdgePredicate("class_decorator") {
+    override val fromImplicit = Some(JavascriptNodePredicate.Class)
+
+    override def queryTraverse(name: Option[String], index: Option[Int], props: List[GenericGraphProperty], follow: List[GraphEdgeType]) = {
+      EdgeTraverse(
+        follow = edgeTypeFollow(follow),
+        target = EdgeTypeTarget(
+          EdgeTypeTraverse.basic(
+            JavascriptGraphEdgeType.ClassDecorator) :: Nil)) :: Nil
+    }
+  }
+
   case object ClassProperty extends JavascriptEdgePredicate("class_property") {
     override val fromImplicit = Some(JavascriptNodePredicate.Class)
     override val toImplicit = Some(JavascriptNodePredicate.ClassProperty)
@@ -321,6 +333,18 @@ object JavascriptEdgePredicate extends Plenumeration[JavascriptEdgePredicate] {
           target = EdgeTypeTarget(
             indexedEdge(JavascriptGraphEdgeType.FunctionArgument, index) :: Nil)))
     }
+  }
+
+  case object MethodDecorator extends JavascriptEdgePredicate("method_decorator") {
+    override val fromImplicit = Some(JavascriptNodePredicate.ClassMethod)
+
+    override def queryTraverse(name: Option[String], index: Option[Int], props: List[GenericGraphProperty], follow: List[GraphEdgeType]) = {
+      EdgeTraverse(
+        follow = edgeTypeFollow(follow),
+        target = EdgeTypeTarget(
+          EdgeTypeTraverse.basic(
+            JavascriptGraphEdgeType.MethodDecorator) :: Nil)) :: Nil
+    }    
   }
 
   case object MethodContains extends JavascriptEdgePredicate("method_contains") {

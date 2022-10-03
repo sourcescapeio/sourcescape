@@ -20,7 +20,10 @@ class RepoService @Inject() (
   logService:           LogService,
   repoDataService:      RepoDataService,
   repoIndexDataService: RepoIndexDataService,
-  queryCacheService:    QueryCacheService)(implicit ec: ExecutionContext, mat: akka.stream.Materializer) {
+  queryCacheService:    QueryCacheService,
+  dao:                  dal.SharedDataAccessLayer,
+  socketService:        SocketService,
+  fileService:          FileService)(implicit ec: ExecutionContext, mat: akka.stream.Materializer) {
 
   def getIndexTree(indexId: Int): Future[List[SHAIndexTreeListing]] = {
     for {
@@ -143,5 +146,26 @@ class RepoService @Inject() (
 
   def deleteSHAIndex(orgId: Int, repoId: Int, indexId: Int): Future[Unit] = {
     repoIndexDataService.markIndexDeleted(indexId) map (_ => ())
+  }
+
+  def doDelete(index: RepoSHAIndex): Future[Unit] = {
+    val orgId = index.orgId
+    val repoId = index.repoId
+    val indexId = index.id
+    println("Deleting", indexId)
+    for {
+      _ <- repoIndexDataService.deleteAnalysisTrees(indexId)
+      _ <- dao.SHAIndexTreeTable.byIndex.delete(indexId)
+      _ <- dao.RepoSHAIndexTable.byId.delete(indexId)
+      _ <- logService.deleteWork(orgId, index.workId)
+      _ <- indexService.deleteKey(index)
+      // _ <- queryCacheService.deleteAllCachesForKey(orgId, key)
+      _ <- fileService.deleteRecursively(index.collectionsDirectory)
+      _ <- fileService.deleteRecursively(index.analysisDirectory)
+      // no need to delete compile directory as it's deleted after compile
+      _ <- socketService.indexDeleted(orgId, repoId, indexId)
+    } yield {
+      ()
+    }
   }
 }
