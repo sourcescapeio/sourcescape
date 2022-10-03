@@ -259,10 +259,24 @@ object JavascriptEdgePredicate extends Plenumeration[JavascriptEdgePredicate] {
 
     override def queryTraverse(name: Option[String], index: Option[Int], props: List[GenericGraphProperty], follow: List[GraphEdgeType]) = {
       EdgeTraverse(
-        follow = edgeTypeFollow(follow),
+        follow = edgeTypeFollow(Nil),
         target = EdgeTypeTarget(
           indexedEdge(JavascriptGraphEdgeType.ArgOf, index) :: Nil)) :: Nil
     }
+  }
+
+  case object ClassConstructor extends JavascriptEdgePredicate("class_constructor") with HasName {
+    override val fromImplicit = Some(JavascriptNodePredicate.Class)
+    override val toImplicit = Some(JavascriptNodePredicate.ClassMethod)
+
+    override def queryTraverse(name: Option[String], index: Option[Int], props: List[GenericGraphProperty], follow: List[GraphEdgeType]) = {
+      List(
+        EdgeTraverse(
+          follow = edgeTypeFollow(Nil),
+          target = EdgeTypeTarget(
+            namedEdge(JavascriptGraphEdgeType.ClassConstructor, name) :: Nil)))
+    }
+
   }
 
   case object ClassMethod extends JavascriptEdgePredicate("class_method") with HasName {
@@ -272,7 +286,7 @@ object JavascriptEdgePredicate extends Plenumeration[JavascriptEdgePredicate] {
     override def queryTraverse(name: Option[String], index: Option[Int], props: List[GenericGraphProperty], follow: List[GraphEdgeType]) = {
       List(
         EdgeTraverse(
-          follow = edgeTypeFollow(follow),
+          follow = edgeTypeFollow(Nil),
           target = EdgeTypeTarget(
             namedEdge(JavascriptGraphEdgeType.ClassMethod, name) :: Nil)))
     }
@@ -283,7 +297,7 @@ object JavascriptEdgePredicate extends Plenumeration[JavascriptEdgePredicate] {
 
     override def queryTraverse(name: Option[String], index: Option[Int], props: List[GenericGraphProperty], follow: List[GraphEdgeType]) = {
       EdgeTraverse(
-        follow = edgeTypeFollow(follow),
+        follow = edgeTypeFollow(Nil),
         target = EdgeTypeTarget(
           EdgeTypeTraverse.basic(
             JavascriptGraphEdgeType.ClassDecorator) :: Nil)) :: Nil
@@ -296,7 +310,7 @@ object JavascriptEdgePredicate extends Plenumeration[JavascriptEdgePredicate] {
 
     override def queryTraverse(name: Option[String], index: Option[Int], props: List[GenericGraphProperty], follow: List[GraphEdgeType]) = {
       EdgeTraverse(
-        follow = edgeTypeFollow(follow),
+        follow = edgeTypeFollow(Nil),
         target = EdgeTypeTarget(
           EdgeTypeTraverse.basic(
             JavascriptGraphEdgeType.ClassProperty) :: Nil)) :: Nil

@@ -77,6 +77,7 @@ object JavascriptGraphEdgeType extends Plenumeration[JavascriptGraphEdgeType] {
   case object ArrayMember extends JavascriptGraphEdgeType("array_member", ESPrimaEdgeType.ArrayMember, AccessDirection.From)
   case object ValueInObject extends JavascriptGraphEdgeType("value_in_object", ESPrimaEdgeType.ObjectValue, AccessDirection.From)
 
+  case object ClassConstructor extends JavascriptGraphEdgeType("constructor", ESPrimaEdgeType.Constructor, AccessDirection.From)
   case object ClassExtends extends JavascriptGraphEdgeType("class_extends", ESPrimaEdgeType.SuperClass, AccessDirection.From)
   case object ClassDecorator extends JavascriptGraphEdgeType("class_decorator", ESPrimaEdgeType.ClassDecorator, AccessDirection.From)
   case object ClassMethod extends JavascriptGraphEdgeType("class_method", ESPrimaEdgeType.Method, AccessDirection.From)
