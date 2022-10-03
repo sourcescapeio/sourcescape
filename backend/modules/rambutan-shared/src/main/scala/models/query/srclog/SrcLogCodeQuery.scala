@@ -212,13 +212,16 @@ object SrcLogCodeQuery {
   }
   private def aliasDirective[_: P] = P("%alias(" ~ SrcLogQuery.varChars ~ "=" ~ Lexical.keywordChars ~ ")" ~ ".")
   private def rootDirective[_: P] = P("%root(" ~ SrcLogQuery.varChars ~ ")" ~ ".")
+  private def selectDirective[_: P] = P("%select(" ~ SrcLogQuery.varChars ~ ("," ~ SrcLogQuery.varChars).rep(0) ~ ")" ~ ".") map {
+    case (a, bs) => a :: bs.toList
+  }
 
   private def query[_: P](indexType: IndexType) = {
     for {
       clauses <- P(Start ~ SrcLogQuery.clause(indexType.nodePredicate, indexType.edgePredicate).rep(1))
-      finalDirectives <- P(aliasDirective.rep(0) ~ rootDirective.? ~ End)
+      finalDirectives <- P(aliasDirective.rep(0) ~ rootDirective.? ~ selectDirective.? ~ End)
     } yield {
-      val (aliasDirectives, rootDirective) = finalDirectives
+      val (aliasDirectives, rootDirective, selectDirective) = finalDirectives
 
       val nodes = clauses.flatMap {
         case n @ NodeClause(_, _, _) => Some(n)
@@ -232,7 +235,7 @@ object SrcLogCodeQuery {
 
       val aliases = aliasDirectives.toMap
 
-      SrcLogCodeQuery(indexType, nodes.toList, edges.toList, aliases, rootDirective, Nil)
+      SrcLogCodeQuery(indexType, nodes.toList, edges.toList, aliases, rootDirective, selectDirective.getOrElse(Nil))
     }
   }
 

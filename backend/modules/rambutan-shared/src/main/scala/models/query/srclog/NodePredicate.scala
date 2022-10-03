@@ -128,6 +128,11 @@ object JavascriptNodePredicate extends Plenumeration[JavascriptNodePredicate] {
   case object NotIdentifierRef extends JavascriptNodePredicate("not-identifier-ref", ESPrimaNodeType.IdentifierRef) {
     override protected def typeFilter = NodeNotTypesFilter(nodeType :: Nil)
   }
+
+  //
+  case object AnyNode extends JavascriptNodePredicate("any", ESPrimaNodeType.IdentifierRef) {
+    override protected def typeFilter = NodeNotTypesFilter(Nil)
+  }
 }
 
 sealed abstract class GenericGraphNodePredicate(nodeTypeIn: GenericGraphNodeType)

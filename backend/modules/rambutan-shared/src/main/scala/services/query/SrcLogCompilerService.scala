@@ -16,34 +16,9 @@ class SrcLogCompilerService @Inject() (
 
   val SrcLogLimit = 10
 
-  private def spliceAdditionalNodeTraversals(tree: List[DirectedSrcLogEdge], query: SrcLogQuery) = {
-    val nodesToCheck = {
-      query.allNodes.groupBy(_.variable) flatMap {
-        case (k, vs) => {
-          vs match {
-            case Nil      => None
-            case a :: Nil => Some(k -> a)
-            case a :: more => {
-              val mostExact = more.foldLeft(a) {
-                case (curr, next) => {
-                  if (curr.predicate =/= next.predicate) {
-                    throw new Exception(s"multiple constraints for node ${k} ${curr.predicate} ${next.predicate}")
-                  } else {
-                    if (next.condition.isDefined && curr.condition.isEmpty) {
-                      next
-                    } else {
-                      curr
-                    }
-                  }
-                }
-              }
-              Some(k -> mostExact)
-            }
-          }
-        }
-      }
-    }
+  // private def bestNodeClauseMap
 
+  private def spliceAdditionalNodeTraversals(tree: List[DirectedSrcLogEdge], nodesToCheck: Map[String, NodeClause]) = {
     // This adds an extra node check to the edge
     tree.map { directedEdge =>
       // TODO: this is bad. we need to genericize
@@ -69,8 +44,37 @@ class SrcLogCompilerService @Inject() (
     }
   }
 
+  private def buildNodeClauseMap(query: SrcLogQuery) = {
+    query.allNodes.groupBy(_.variable) flatMap {
+      case (k, vs) => {
+        vs match {
+          case Nil      => None
+          case a :: Nil => Some(k -> a)
+          case a :: more => {
+            val mostExact = more.foldLeft(a) {
+              case (curr, next) => {
+                if (curr.predicate =/= next.predicate) {
+                  throw new Exception(s"multiple constraints for node ${k} ${curr.predicate} ${next.predicate}")
+                } else {
+                  if (next.condition.isDefined && curr.condition.isEmpty) {
+                    next
+                  } else {
+                    curr
+                  }
+                }
+              }
+            }
+            Some(k -> mostExact)
+          }
+        }
+      }
+    }
+  }
+
   private def buildRelationalQuery(root: NodeClause, tree: List[DirectedSrcLogEdge], query: SrcLogQuery) = {
-    val withNodeCheck = spliceAdditionalNodeTraversals(tree, query)
+    val nodeClauseMap = buildNodeClauseMap(query)
+
+    val withNodeCheck = spliceAdditionalNodeTraversals(tree, nodeClauseMap)
 
     // calculate missing edges to fill as intersections
     val missing = query.edges.flatMap { e =>
@@ -78,6 +82,9 @@ class SrcLogCompilerService @Inject() (
         Option(e)
       }
     }
+
+    // what is the nodeclause for the directed edge
+    //
 
     val tups = missing.map { m =>
       val baseEdge = if (m.modifier.isDefined) {
@@ -91,8 +98,14 @@ class SrcLogCompilerService @Inject() (
       } else {
         DirectedSrcLogEdge.forward(m)
       }
+
+      nodeClauseMap.get(baseEdge.to)
+
       val intersectTo = Hashing.uuid()
-      (baseEdge.copy(to = intersectTo), (baseEdge.to, intersectTo))
+      val mappedEdge = baseEdge.copy(
+        to = intersectTo,
+        nodeCheck = nodeClauseMap.get(baseEdge.to))
+      (mappedEdge, (baseEdge.to, intersectTo))
     }
 
     //

@@ -117,6 +117,7 @@ const NodeResultComponent = (props: any) => {
         </Tag>
         <Container>
           <p>{props.id}</p>
+          <p>{props.type}</p>
           <p><a target="_blank" rel="noopener noreferrer" href={`https://github.com/${props.repo}`}>{props.repo}</a></p>
           <p><a target="_blank" rel="noopener noreferrer" href={`/repos/${props.repo}?file=${props.path}`}>
             {props.path} {props.range.start.line}:{props.range.start.column}-{props.range.end.line}:{props.range.end.column}
