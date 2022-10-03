@@ -10,19 +10,16 @@ import {
   Tabs,
   Toaster,
 } from '@blueprintjs/core';
+import { Container, Row, Col } from 'react-bootstrap';
 
-import Row from 'react-bootstrap/Row';
-import Col from 'react-bootstrap/Col';
-
-import { ConsoleQueryComponent } from 'components/console/lib/ConsoleQuery';
 import { Loading } from 'components/shared/Loading';
-import { Container } from 'react-bootstrap';
 import { GrammarContext } from 'contexts/GrammarContext';
 import axios from 'axios';
 import { CopyToClipboard } from 'react-copy-to-clipboard';
 import { useFormik } from 'formik';
 import * as Yup from 'yup';
-import jmespath from 'jmespath';
+import { TestIndexingAnalysisComponent } from './TestIndexingAnalysis';
+import { FileState, TestIndexingCodeEditorComponent } from './TestIndexingCodeEditor';
 
 const toaster = Toaster.create();
 
@@ -30,12 +27,14 @@ type Node = {
   id: string
   name: string
   type: string
+  path: string
 }
 
 type Edge = {
   from: string
   to: string
   type: string
+  path: string
 }
 
 function NodeDBComponent(props: { nodes: Node[]}) {
@@ -46,12 +45,14 @@ function NodeDBComponent(props: { nodes: Node[]}) {
       typeQuery: '',
       nameQuery: '',
       idQuery: '',
+      pathQuery: ''
     },
     onSubmit: (values, { resetForm }) => {
       const results = props.nodes.filter((n) => {
         return (!values.idQuery || (n.id === values.idQuery)) && 
           (!values.nameQuery || (n.name === values.nameQuery)) &&
-          (!values.typeQuery || (n.type === values.typeQuery))
+          (!values.typeQuery || (n.type === values.typeQuery)) &&
+          (!values.pathQuery || (n.path === values.pathQuery))
       })
 
       setResults(results)
@@ -76,11 +77,17 @@ function NodeDBComponent(props: { nodes: Node[]}) {
       </Col>
     </Row>
     <Row style={{paddingTop: 20}}>
-      <Col xs={2}>    
+      <Col>
         <form onSubmit={formik.handleSubmit}>
             <FormGroup
               label="Queries"
             >
+              <InputGroup
+                onChange={formik.handleChange} 
+                name="pathQuery"
+                placeholder="Path Search..."
+                value={formik.values.pathQuery}
+              />              
               <InputGroup
                 onChange={formik.handleChange} 
                 name="typeQuery"
@@ -125,7 +132,6 @@ function NodeDBComponent(props: { nodes: Node[]}) {
   </Container>
 }
 
-
 function EdgeDBComponent(props: { edges: Edge[]}) {
   const [results, setResults] = useState<Edge[]>([]);
 
@@ -134,12 +140,14 @@ function EdgeDBComponent(props: { edges: Edge[]}) {
       typeQuery: '',
       fromQuery: '',
       toQuery: '',
+      pathQuery: '',
     },
     onSubmit: (values, { resetForm }) => {
       const results = props.edges.filter((n) => {
         return (!values.fromQuery || (n.from === values.fromQuery)) && 
           (!values.toQuery || (n.to === values.toQuery)) &&
-          (!values.typeQuery || (n.type === values.typeQuery))
+          (!values.typeQuery || (n.type === values.typeQuery)) && 
+          (!values.pathQuery || (n.path === values.pathQuery))
       })
 
       setResults(results)
@@ -164,11 +172,17 @@ function EdgeDBComponent(props: { edges: Edge[]}) {
       </Col>
     </Row>
     <Row style={{paddingTop: 20}}>
-      <Col xs={2}>
+      <Col>
         <form onSubmit={formik.handleSubmit}>
           <FormGroup
             label="Queries"
           >
+            <InputGroup
+              onChange={formik.handleChange} 
+              name="pathQuery"
+              placeholder="Path Search..."
+              value={formik.values.pathQuery}
+            />            
             <InputGroup
               onChange={formik.handleChange} 
               name="typeQuery"
@@ -211,112 +225,35 @@ function EdgeDBComponent(props: { edges: Edge[]}) {
   </Container>
 }
 
-
-
-function AnalysisComponent(props: { analysis: any }) {
-
-  const [result, setResult] = useState<any>(props.analysis)
-  const [query, setQuery] = useState('')
-  
-  const formik = useFormik({
-    initialValues: {
-      query: '',
-    },
-    onSubmit: async (values, { resetForm }) => {
-      console.warn(values)
-
-      if(values.query) {
-        setResult(jmespath.search(props.analysis, values.query));
-      } else {
-        setResult(props.analysis);
-      }
-
-      setQuery(values.query);
-
-      // setResults(results)
-    }
-  });
-
-  // set state if analysis changes
-  React.useEffect(() => {
-    setResult(props.analysis)
-  }, [props.analysis]);
-
-  return <Container>
-    <Row>
-      <CopyToClipboard 
-        text={props.analysis}
-        onCopy={() => {
-          toaster.show({
-            message: "Copied to clipboard",
-            timeout: 3000
-          });
-        }}
-      >
-        <Button icon="clipboard" />
-      </CopyToClipboard>
-    </Row>
-    <Row style={{paddingTop: 20}}>
-      <Col xs={6}>
-        <form onSubmit={formik.handleSubmit}>
-          <FormGroup
-            label="Queries"
-          >
-            <InputGroup
-              onChange={formik.handleChange} 
-              name="query"
-              placeholder="JQ query..."
-              value={formik.values.query}
-            />
-            <ControlGroup>
-              <Button icon="search" intent="primary" minimal={true} type="submit" />
-              <CopyToClipboard
-                    text={JSON.stringify(result, null, 2)}
-                    onCopy={() => {
-                      toaster.show({
-                        message: "Copied to clipboard",
-                        timeout: 3000
-                      });
-                    }}
-                  >
-                <Button icon="clipboard" minimal={true}/>
-              </CopyToClipboard>
-            </ControlGroup>
-          </FormGroup>
-        </form>
-      </Col>
-    </Row>    
-    <Row>
-      <Col>
-        <pre>
-          {query}
-        </pre>
-        <pre>
-          {JSON.stringify(result, null, 2)}
-        </pre>
-      </Col>
-    </Row>
-  </Container>    
+type DataState = {
+  nodes: Node[]
+  edges: Edge[]
+  analysis: {
+    file: string
+    analysis: string
+  }[]
 }
 
 export function TestIndexingContainer() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<any | null>(null)
-  const [data, setData] = useState<any | null>({})
+  const [data, setData] = useState<DataState>({
+    nodes: [],
+    edges: [],
+    analysis: []
+  })
   const [language, setLanguage] = useState('javascript')
 
   const { grammars, loadingGrammars } = React.useContext(GrammarContext)
 
-  const runAnalysis = React.useCallback((payload: string) => {
+  const runAnalysis = React.useCallback((payload: FileState[]) => {
     setLoading(true);
     setError(null);
 
     return axios({
       method: 'POST',
       url: `/api/orgs/-1/test-index/${language}`,
-      data: {
-        text: payload
-      },
+      data: payload,
     }).then((resp: any) => {
       setLoading(false)
       setData(resp.data)
@@ -334,8 +271,8 @@ export function TestIndexingContainer() {
       <Row style={{paddingTop: 20}}>
         <Col xs={12}>
           <Card>
-            <ConsoleQueryComponent 
-              search={runAnalysis}
+            <TestIndexingCodeEditorComponent
+              performIndex={runAnalysis}
               loading={loading}
               error={error}
               placeholder="Code goes here..."
@@ -352,13 +289,13 @@ export function TestIndexingContainer() {
           <Card>
             <Tabs>
               <Tab id="analysis" title="Analysis" panel={          
-                <AnalysisComponent analysis={JSON.parse(data.analysis || '{}')}/>            
+                <TestIndexingAnalysisComponent analysis={data.analysis}/>            
               }/>              
               <Tab id="nodes" title="Nodes" panel={            
-                <NodeDBComponent nodes={data.nodes || []} />
+                <NodeDBComponent nodes={data.nodes} />
               }/>
               <Tab id="edges" title="Edges" panel={
-                <EdgeDBComponent edges={data.edges || []} />
+                <EdgeDBComponent edges={data.edges} />
               }/>
             </Tabs>
           </Card>

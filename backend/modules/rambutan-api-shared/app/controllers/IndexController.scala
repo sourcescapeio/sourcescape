@@ -146,45 +146,59 @@ class IndexController @Inject() (
   def testIndex(orgId: Int, indexType: IndexType) = {
     api(parse.tolerantJson) { implicit request =>
       authService.authenticatedForOrg(orgId, OrgRole.Admin) {
-        withJson { form: TestIndexForm =>
-          val analysisType = indexType.analysisTypes.head
-          val fakeTree = AnalysisTree(0, "", analysisType)
+        withJson { forms: List[TestIndexForm] =>
+          Source(forms).mapAsync(4) { form =>
+            println(form)
 
-          val content = ByteString(form.text)
-          for {
-            resp <- staticAnalysisService.runAnalysis(
-              "",
-              fakeTree,
-              content).map(_.getOrElse(ByteString.empty))
-            (nodes, edges) <- Future {
-              val logQueue = Source.queue[(CodeRange, String)](10, OverflowStrategy.dropBuffer)
-                .map { item =>
-                  println(item)
-                }
-                .toMat(Sink.ignore)(Keep.left)
-                .run()
-              val graph = indexType.indexer("null", content, resp, logQueue)
-              logQueue.complete()
-              val renderedNodes = graph.nodes.map(_.build(orgId, "null-repo", 0, "null-sha", 0, "null-path")).map(i => Json.toJson(i))
-              val renderedEdges = graph.edges.map(_.build(orgId, "null-repo", 0, 0, "null-path")).map(i => Json.toJson(i))
-              (renderedNodes, renderedEdges)
-            }.recover {
-              case err => {
-                val traceLines = err.getStackTrace().map { i =>
-                  s"${i.getFileName()}:${i.getLineNumber()}"
-                }
+            val analysisType = indexType.analysisTypes.head
+            val fakeTree = AnalysisTree(0, "", analysisType)
 
-                println(s"Uncaught Exception: ${err.getMessage()}")
-                traceLines.foreach(println)
-                (Nil, Nil)
+            val content = ByteString(form.content)
+            for {
+              resp <- staticAnalysisService.runAnalysis(
+                "",
+                fakeTree,
+                content).map(_.getOrElse(ByteString.empty))
+              _ = println("RESP", resp)
+              (nodes, edges) <- Future {
+                val logQueue = Source.queue[(CodeRange, String)](10, OverflowStrategy.dropBuffer)
+                  .map { item =>
+                    println(item)
+                  }
+                  .toMat(Sink.ignore)(Keep.left)
+                  .run()
+                val graph = indexType.indexer("null", content, resp, logQueue)
+                logQueue.complete()
+                val renderedNodes = graph.nodes.map(_.build(orgId, "repo", 0, "null-sha", 0, form.file)).map(i => Json.toJson(i))
+                val renderedEdges = graph.edges.map(_.build(orgId, "repo", 0, 0, form.file)).map(i => Json.toJson(i))
+                (renderedNodes, renderedEdges)
+              }.recover {
+                case err => {
+                  val traceLines = err.getStackTrace().map { i =>
+                    s"${i.getFileName()}:${i.getLineNumber()}"
+                  }
+
+                  println(s"Uncaught Exception: ${err.getMessage()}")
+                  traceLines.foreach(println)
+                  (Nil, Nil)
+                }
               }
+            } yield {
+              (
+                form.file,
+                indexType.prettyPrint(content, resp),
+                nodes,
+                edges)
             }
-          } yield {
+          }.runWith(Sinks.ListAccum[(String, String, List[JsValue], List[JsValue])]).map { items =>
             Json.obj(
-              "analysis" -> indexType.prettyPrint(content, resp),
-              "nodes" -> nodes,
-              "edges" -> edges)
-            // Json.obj("analysis" -> Json.parse(resp))
+              "analysis" -> items.map(i => {
+                Json.obj(
+                  "file" -> i._1,
+                  "analysis" -> i._2)
+              }),
+              "nodes" -> items.foldLeft(List.empty[JsValue])(_ ++ _._3),
+              "edges" -> items.foldLeft(List.empty[JsValue])(_ ++ _._4))
           }
         }
       }
