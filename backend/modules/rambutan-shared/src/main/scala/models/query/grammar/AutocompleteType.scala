@@ -151,14 +151,6 @@ object JavascriptAutocompleteType extends Plenumeration[AutocompleteType] {
 
 }
 
-object ScalaAutocompleteType extends Plenumeration[AutocompleteType] {
-  case object Trait extends AutocompleteType(
-    "null",
-    ScalaPayloadType.Trait,
-    List(
-      ScalaParserType.Default))
-}
-
 object RubyAutocompleteType extends Plenumeration[AutocompleteType] {
   // case object Const extends AutocompleteType(
   //   "const",

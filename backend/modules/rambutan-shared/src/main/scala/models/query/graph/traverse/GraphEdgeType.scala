@@ -8,7 +8,6 @@ import models.IndexType
 import models.graph._
 import silvousplay.imports._
 import play.api.libs.json._
-import models.IndexType.Scala
 
 sealed class GraphEdgeType(
   val identifier: String,
@@ -22,13 +21,6 @@ sealed class GraphEdgeType(
   }
 
   def opposite: GraphEdgeType = new GraphEdgeType(identifier + ".reverse", edgeType, direction.reverse)
-}
-
-sealed class ScalaGraphEdgeType(edgeTypeIn: ScalaMetaEdgeType, direction: AccessDirection)
-  extends GraphEdgeType(s"${IndexType.Javascript.identifier}::${edgeTypeIn.identifier}", edgeTypeIn, direction)
-
-object ScalaGraphEdgeType extends Plenumeration[ScalaGraphEdgeType] {
-  val follows = List.empty[ScalaGraphEdgeType]
 }
 
 sealed class RubyGraphEdgeType(edgeTypeIn: RubyEdgeType, direction: AccessDirection)
@@ -157,9 +149,9 @@ object GenericGraphEdgeType extends Plenumeration[GenericGraphEdgeType] {
 // extends Plenumeration[GraphEdgeType]
 object GraphEdgeType {
 
-  val all = JavascriptGraphEdgeType.all ++ ScalaGraphEdgeType.all ++ RubyGraphEdgeType.all
+  val all = JavascriptGraphEdgeType.all ++ RubyGraphEdgeType.all
 
-  val follows = JavascriptGraphEdgeType.follows ++ ScalaGraphEdgeType.follows ++ RubyGraphEdgeType.follows
+  val follows = JavascriptGraphEdgeType.follows ++ RubyGraphEdgeType.follows
   // This is only used for
 }
 

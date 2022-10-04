@@ -14,6 +14,8 @@ import akka.stream.scaladsl.{ Source, Sink, Keep }
 import akka.stream.OverflowStrategy
 import play.api.libs.json._
 import akka.util.ByteString
+import models.index.GraphNode
+import models.index.GraphEdge
 
 @Singleton
 class IndexController @Inject() (
@@ -55,13 +57,13 @@ class IndexController @Inject() (
           index <- repoIndexDataService.getIndexId(indexId).map {
             _.getOrElse(throw models.Errors.notFound("index.dne", "Index not found"))
           }
-          analysisPath = AnalysisType.ScalaSemanticDB.path(
-            index.analysisDirectory,
-            file)
-          analysisBytes <- FileIO.fromPath(Paths.get(analysisPath + ".semanticdb")).runWith(Sinks.ByteAccum)
+          // analysisPath = AnalysisType.ScalaSemanticDB.path(
+          //   index.analysisDirectory,
+          //   file)
+          // analysisBytes <- FileIO.fromPath(Paths.get(analysisPath + ".semanticdb")).runWith(Sinks.ByteAccum)
           // analysisFile = scala.io.Source.fromFile(path).getLines().mkString("\n")
         } yield {
-          Json.obj("file" -> IndexType.Scala.prettyPrintAnalysis(analysisBytes))
+          Json.obj("file" -> "")
         }
       }
     }
@@ -147,58 +149,79 @@ class IndexController @Inject() (
     api(parse.tolerantJson) { implicit request =>
       authService.authenticatedForOrg(orgId, OrgRole.Admin) {
         withJson { forms: List[TestIndexForm] =>
-          Source(forms).mapAsync(4) { form =>
-            println(form)
+          val indexId = 0
 
-            val analysisType = indexType.analysisTypes.head
-            val fakeTree = AnalysisTree(0, "", analysisType)
+          val analysisType = indexType.analysisTypes.head
 
-            val content = ByteString(form.content)
-            for {
-              resp <- staticAnalysisService.runAnalysis(
-                "",
-                fakeTree,
-                content).map(_.getOrElse(ByteString.empty))
-              _ = println("RESP", resp)
-              (nodes, edges) <- Future {
-                val logQueue = Source.queue[(CodeRange, String)](10, OverflowStrategy.dropBuffer)
-                  .map { item =>
-                    println(item)
+          val contentMap = forms.map { f =>
+            f.file -> f.content
+          }.toMap
+
+          for {
+            _ <- staticAnalysisService.startLanguageServer(analysisType, indexId, contentMap)
+            items <- Source(forms).mapAsync(4) { form =>
+
+              val fakeTree = AnalysisTree(0, "", analysisType)
+
+              val content = ByteString(form.content)
+              for {
+                resp <- staticAnalysisService.runAnalysis(
+                  "",
+                  fakeTree,
+                  content).map(_.getOrElse(ByteString.empty))
+                (nodes, edges) <- Future {
+                  val logQueue = Source.queue[(CodeRange, String)](10, OverflowStrategy.dropBuffer)
+                    .map { item =>
+                      println(item)
+                    }
+                    .toMat(Sink.ignore)(Keep.left)
+                    .run()
+                  val graph = indexType.indexer(form.file, content, resp, logQueue)
+                  logQueue.complete()
+                  val renderedNodes = graph.nodes.map(_.build(orgId, "repo", 0, "null-sha", 0, form.file))
+                  val renderedEdges = graph.edges.map(_.build(orgId, "repo", 0, 0, form.file))
+
+                  // Select nodes to emit
+
+                  (renderedNodes, renderedEdges)
+                }.recover {
+                  case err => {
+                    val traceLines = err.getStackTrace().map { i =>
+                      s"${i.getFileName()}:${i.getLineNumber()}"
+                    }
+
+                    println(s"Uncaught Exception: ${err.getMessage()}")
+                    traceLines.foreach(println)
+                    (Nil, Nil)
                   }
-                  .toMat(Sink.ignore)(Keep.left)
-                  .run()
-                val graph = indexType.indexer("null", content, resp, logQueue)
-                logQueue.complete()
-                val renderedNodes = graph.nodes.map(_.build(orgId, "repo", 0, "null-sha", 0, form.file)).map(i => Json.toJson(i))
-                val renderedEdges = graph.edges.map(_.build(orgId, "repo", 0, 0, form.file)).map(i => Json.toJson(i))
-                (renderedNodes, renderedEdges)
-              }.recover {
-                case err => {
-                  val traceLines = err.getStackTrace().map { i =>
-                    s"${i.getFileName()}:${i.getLineNumber()}"
-                  }
-
-                  println(s"Uncaught Exception: ${err.getMessage()}")
-                  traceLines.foreach(println)
-                  (Nil, Nil)
                 }
+              } yield {
+                (
+                  form.file,
+                  indexType.prettyPrint(content, resp),
+                  nodes,
+                  edges)
               }
-            } yield {
-              (
-                form.file,
-                indexType.prettyPrint(content, resp),
-                nodes,
-                edges)
-            }
-          }.runWith(Sinks.ListAccum[(String, String, List[JsValue], List[JsValue])]).map { items =>
+            }.runWith(Sinks.ListAccum[(String, String, List[GraphNode], List[GraphEdge])])
+            // send a few nodes
+            allNodes = items.foldLeft(List.empty[GraphNode])(_ ++ _._3)
+            allEdges = items.foldLeft(List.empty[GraphEdge])(_ ++ _._4)
+            // get links
+            allLinks <- Source(allNodes.take(10)).mapAsync(4) { n =>
+              staticAnalysisService.languageServerRequest(analysisType, indexId, n.path, n.start_index)
+            }.runWith(Sinks.ListAccum[JsValue])
+            // stop
+            _ <- staticAnalysisService.stopLanguageServer(analysisType, indexId)
+          } yield {
             Json.obj(
               "analysis" -> items.map(i => {
                 Json.obj(
                   "file" -> i._1,
                   "analysis" -> i._2)
               }),
-              "nodes" -> items.foldLeft(List.empty[JsValue])(_ ++ _._3),
-              "edges" -> items.foldLeft(List.empty[JsValue])(_ ++ _._4))
+              "links" -> allLinks,
+              "nodes" -> allNodes.map(i => Json.toJson(i)),
+              "edges" -> allEdges.map(i => Json.toJson(i)))
           }
         }
       }

@@ -117,16 +117,6 @@ object JavascriptParserType extends Plenumeration[ParserType] {
   }
 }
 
-object ScalaParserType extends Plenumeration[ParserType] {
-  case object Default extends ParserType("default") {
-    val grammars = List(
-      scalap.Expressions.Trait)
-
-    val incompletes = List(
-      scalap.Expressions.Trait)
-  }
-}
-
 sealed trait RubyParserType {
   self: ParserType =>
 }

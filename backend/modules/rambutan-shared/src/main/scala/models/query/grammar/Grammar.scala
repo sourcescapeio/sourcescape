@@ -244,12 +244,10 @@ object Grammar {
 
   val GrammarMap = Map[IndexType, Plenumeration[ParserType]](
     IndexType.Javascript -> JavascriptParserType,
-    IndexType.Scala -> ScalaParserType,
     IndexType.Ruby -> RubyParserType)
 
   private val autocompletes = Map(
     IndexType.Javascript -> AutocompleteType.render(JavascriptAutocompleteType.all),
-    IndexType.Scala -> AutocompleteType.render(ScalaAutocompleteType.all),
     IndexType.Ruby -> AutocompleteType.render(RubyAutocompleteType.all))
 
   private def buildGrammarMap(in: Map[IndexType, Plenumeration[ParserType]]) = {
@@ -286,7 +284,6 @@ object Grammar {
       "payloads" -> Json.toJson(Map(
         "universal" -> BasePayloadType.all.map(_.identifier),
         IndexType.Javascript.identifier -> JavascriptPayloadType.all.map(_.identifier),
-        IndexType.Scala.identifier -> ScalaPayloadType.all.map(_.identifier),
         IndexType.Ruby.identifier -> RubyPayloadType.all.map(_.identifier))))
   }
 

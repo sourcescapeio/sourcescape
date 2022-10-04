@@ -232,6 +232,7 @@ type DataState = {
     file: string
     analysis: string
   }[]
+  links: any[]
 }
 
 export function TestIndexingContainer() {
@@ -240,7 +241,8 @@ export function TestIndexingContainer() {
   const [data, setData] = useState<DataState>({
     nodes: [],
     edges: [],
-    analysis: []
+    analysis: [],
+    links: []
   })
   const [language, setLanguage] = useState('javascript')
 
@@ -296,6 +298,11 @@ export function TestIndexingContainer() {
               }/>
               <Tab id="edges" title="Edges" panel={
                 <EdgeDBComponent edges={data.edges} />
+              }/>
+              <Tab id="links" title="Links" panel={
+                <pre>
+                  {JSON.stringify(data.links, null, 2)}
+                </pre>
               }/>
             </Tabs>
           </Card>

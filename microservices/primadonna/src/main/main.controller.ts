@@ -55,6 +55,8 @@ export class MainController {
     @Body() body: { [k: string]: string },
   ) {
     await this.spawnerService.startInMemoryLanguageServer(id, body);
+
+    console.warn('STARTED LANGUAGE SERVER');
     return {
       status: 'ok',
     };
@@ -63,6 +65,8 @@ export class MainController {
   @Delete('/language-server/:id')
   async stopLanguageServer(@Param('id') id: string) {
     await this.spawnerService.stopLanguageServer(id);
+
+    console.warn('TERMINATED LANGUAGE SERVER');
     return {
       status: 'ok',
     };
