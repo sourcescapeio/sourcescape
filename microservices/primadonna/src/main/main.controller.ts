@@ -11,8 +11,8 @@ import {
   Post,
   Req,
 } from '@nestjs/common';
-import { AppService } from './services/app.service';
-import { LanguageService } from './services/language.service';
+import { AnalyzerService } from './analyzer.service';
+import { SpawnerService } from './spawner.service';
 import * as rawBody from 'raw-body';
 
 // https://stackoverflow.com/questions/52283713/how-do-i-pass-plain-text-as-my-request-body-using-nestjs
@@ -27,10 +27,10 @@ const PlainBody = createParamDecorator(async (_, context: ExecutionContext) => {
 });
 
 @Controller()
-export class AppController {
+export class MainController {
   constructor(
-    private readonly appService: AppService,
-    private readonly languageService: LanguageService,
+    private readonly analyzerService: AnalyzerService,
+    private readonly spawnerService: SpawnerService,
   ) {}
 
   @Get('/health')
@@ -42,7 +42,7 @@ export class AppController {
   @HttpCode(200)
   analyze(@PlainBody() body: string) {
     try {
-      return this.languageService.analyze(body);
+      return this.analyzerService.analyze(body);
     } catch (e) {
       throw new BadRequestException('Error parsing')
     }
@@ -54,7 +54,7 @@ export class AppController {
     @Param('id') id: string,
     @Body() body: { [k: string]: string },
   ) {
-    await this.languageService.startInMemoryLanguageServer(id, body);
+    await this.spawnerService.startInMemoryLanguageServer(id, body);
     return {
       status: 'ok',
     };
@@ -62,22 +62,25 @@ export class AppController {
 
   @Delete('/language-server/:id')
   async stopLanguageServer(@Param('id') id: string) {
-    await this.languageService.stopLanguageServer(id);
+    await this.spawnerService.stopLanguageServer(id);
     return {
       status: 'ok',
     };
   }
 
   @Post('/language-server/:id/request')
+  @HttpCode(200)
   async languageServerRequest(@Param('id') id: string, @Body() body: any) {
-    await this.languageService.languageServerRequest(
+    const response = await this.spawnerService.languageServerRequest(
       id,
       body.filename,
       body.location,
     );
 
+    console.warn(response);
+
     return {
-      status: 'ok',
+      response
     };
   }
 }

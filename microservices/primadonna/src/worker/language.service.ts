@@ -1,0 +1,73 @@
+import {
+  BadRequestException,
+  CACHE_MANAGER,
+  Inject,
+  Injectable,
+  InternalServerErrorException,
+} from '@nestjs/common';
+
+import { parse } from '@typescript-eslint/typescript-estree';
+import * as ts from '@ts-morph/bootstrap';
+import { Cache } from 'cache-manager';
+import { ChildProcess, spawn } from 'child_process';
+import { ClientProxyFactory, Transport } from '@nestjs/microservices';
+import * as process from 'process';
+import { firstValueFrom, scan } from 'rxjs';
+
+@Injectable()
+export class LanguageService {
+  project: ts.Project
+  languageServer: ts.ts.LanguageService
+
+  async createInMemoryProject(files: {[k: string]: string})  {
+    const project = await ts.createProject({
+      useInMemoryFileSystem: true,
+      compilerOptions: {
+        target: ts.ts.ScriptTarget.ES2016,
+      },
+    });
+
+    this.project = project;
+
+    for (const k of Object.keys(files)) {
+      const v = files[k];
+      project.createSourceFile(k, v);
+    }
+
+    const program = project.createProgram();
+    const diagnostics = ts.ts.getPreEmitDiagnostics(program);
+    const languageService = project.getLanguageService();
+
+    if (diagnostics.length > 0) {
+      const cleanDiagnostics = diagnostics.map((d) => {
+        return {
+          file: d.file.fileName,
+          start: d.start,
+          message: d.messageText,
+        };
+      });
+      throw new BadRequestException(cleanDiagnostics, 'error while compiling');
+    }
+
+    this.languageServer = languageService;
+  }
+
+  isEmpty() {
+    return !this.languageServer
+  }
+
+  getDefinition(filename: string, location: number) {
+    if (!this.languageServer) {
+      throw new BadRequestException('language service not initialized')
+    }
+
+    try {
+      return this.languageServer.getDefinitionAndBoundSpan(filename, location);
+    } catch(e) {
+      return {
+        message: e.message,
+        data: e,
+      };
+    }
+  }
+}
