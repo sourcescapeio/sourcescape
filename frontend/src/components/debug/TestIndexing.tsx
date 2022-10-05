@@ -248,13 +248,13 @@ export function TestIndexingContainer() {
 
   const { grammars, loadingGrammars } = React.useContext(GrammarContext)
 
-  const runAnalysis = React.useCallback((payload: FileState[]) => {
+  const runAnalysis = React.useCallback((payload: FileState[], useLanguageServer: boolean) => {
     setLoading(true);
     setError(null);
 
     return axios({
       method: 'POST',
-      url: `/api/orgs/-1/test-index/${language}`,
+      url: `/api/orgs/-1/test-index/${language}?languageServer=${useLanguageServer}`,
       data: payload,
     }).then((resp: any) => {
       setLoading(false)
@@ -300,9 +300,12 @@ export function TestIndexingContainer() {
                 <EdgeDBComponent edges={data.edges} />
               }/>
               <Tab id="links" title="Links" panel={
-                <pre>
-                  {JSON.stringify(data.links, null, 2)}
-                </pre>
+                <div>
+                  <div>{data.links.length} links</div>
+                  <pre>                  
+                    {JSON.stringify(data.links, null, 2)}
+                  </pre>
+                </div>
               }/>
             </Tabs>
           </Card>

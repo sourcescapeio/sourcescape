@@ -19,6 +19,8 @@ sealed abstract class RubyNodeBuilder(
   additionalNames: List[String]   = Nil,
   graphIndex:      Option[Int]    = None) extends RubyNode with StandardNodeBuilder[RubyNodeType, RubyTag] {
 
+  def lookupRange: Option[CodeRange] = None
+
   val names = graphName.toList ++ additionalNames
 
   val index = graphIndex
@@ -29,21 +31,6 @@ sealed abstract class RubyNodeBuilder(
 /**
  * Impl
  */
-// case class RequireNode(id: String, range: CodeRange, module: String, searches: List[String]) extends RubyNodeBuilder(ESPrimaNodeType.Require, graphName = Some(module), additionalNames = searches)
-
-// // can be discarded if identifier already exists
-// case class IdentifierNode(id: String, range: CodeRange, name: String) extends ESPrimaNodeBuilder(ESPrimaNodeType.Identifier, graphName = Some(name))
-
-// case class IdentifierReferenceNode(id: String, range: CodeRange, name: String) extends ESPrimaNodeBuilder(ESPrimaNodeType.IdentifierRef, graphName = Some(name)) {
-//   def toIdentifier = IdentifierNode(id, range, name)
-// }
-
-// case class InstantiationNode(id: String, range: CodeRange) extends ESPrimaNodeBuilder(ESPrimaNodeType.Instance)
-
-// case class MemberNode(id: String, range: CodeRange, name: Option[String]) extends ESPrimaNodeBuilder(ESPrimaNodeType.Member, graphName = name)
-
-// case class CallNode(id: String, range: CodeRange) extends ESPrimaNodeBuilder(ESPrimaNodeType.Call)
-
 // Literals
 sealed abstract class LiteralBuilder(nt: RubyNodeType, val name: String) extends RubyNodeBuilder(nt, graphName = Some(name))
 case class IntNode(id: String, range: CodeRange, value: Int) extends LiteralBuilder(RubyNodeType.NumberLiteral, value.toString)

@@ -268,15 +268,6 @@ object JavascriptPayloadType extends Plenumeration[PayloadType] {
 
 }
 
-object ScalaPayloadType extends Plenumeration[PayloadType] {
-  case object Trait extends PayloadType("TRAIT") {
-    override val nodePredicates = Map(
-      "node" -> ScalaNodePredicate.Trait)
-  }
-
-  case object Identifier extends PayloadType("IDENTIFIER")
-}
-
 object RubyPayloadType extends Plenumeration[PayloadType] {
 
   case object Identifier extends PayloadType("IDENTIFIER") {

@@ -321,12 +321,6 @@ object BuilderNodeType {
     }
   }
 
-  private def fromScalaPredicate(s: ScalaNodePredicate): BuilderNodeType = {
-    s match {
-      case ScalaNodePredicate.Trait => ScalaBuilderNodeType.Trait
-    }
-  }
-
   private def fromRubyPredicate(s: RubyNodePredicate): BuilderNodeType = {
     s match {
       case RubyNodePredicate.Const          => RubyBuilderNodeType.Const
@@ -348,7 +342,6 @@ object BuilderNodeType {
   def fromPredicate(predicate: NodePredicate) = {
     predicate match {
       case j: JavascriptNodePredicate    => fromJavascriptPredicate(j)
-      case s: ScalaNodePredicate         => fromScalaPredicate(s)
       case r: RubyNodePredicate          => fromRubyPredicate(r)
       case UniversalNodePredicate.Dep    => BuilderNodeType.Dep
       case UniversalNodePredicate.Search => BuilderNodeType.Search

@@ -206,7 +206,7 @@ object Classes {
       tup("arguments" -> list(Functions.ArgumentListElement))
   } mapExtraction {
     case (context, codeRange, (callee, arguments)) => {
-      val instanceNode = InstantiationNode(Hashing.uuid, codeRange)
+      val instanceNode = InstantiationNode(Hashing.uuid, codeRange, callee.node.lookupRange.getOrElse(codeRange))
       val instanceEdge = CreateEdge(instanceNode, AnyNode(callee.node), ESPrimaEdgeType.Class).edge
 
       val argumentEdges = arguments.zipWithIndex.map {

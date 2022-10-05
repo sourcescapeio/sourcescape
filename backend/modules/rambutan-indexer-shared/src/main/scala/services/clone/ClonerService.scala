@@ -1,6 +1,6 @@
 package services
 
-import models.{ AnalysisType, CompilerType, GenericRepo, RepoSHA, WorkRecord, RepoSHAIndex }
+import models.{ AnalysisType, GenericRepo, RepoSHA, WorkRecord, RepoSHAIndex }
 import models.index.{ GraphEdge, GraphResult }
 import javax.inject._
 import scala.concurrent.{ ExecutionContext, Future }
@@ -29,7 +29,6 @@ class ClonerService @Inject() (
   repoIndexDataService:   RepoIndexDataService,
   clonerQueueService:     ClonerQueueService,
   indexerQueueService:    IndexerQueueService,
-  compilerQueueService:   CompilerQueueService,
   queueManagementService: QueueManagementService,
   logService:             LogService,
   gitService:             GitService,
@@ -246,41 +245,16 @@ class ClonerService @Inject() (
       _ <- logService.event(s"Done copying")(copyRecord)
       _ <- logService.finishRecord(copyRecord)
       //
-      compilations = CompilerType.all.filter { ct =>
-        fileTree.exists(ct.analysisType.isValidBlob)
-      }
-      // conditional queue next
-      disableCompiles = true
-      _ <- if (compilations.isEmpty || disableCompiles) {
-        val queueItem = IndexerQueueItem(
-          orgId,
-          repoName,
-          repoId,
-          sha,
-          indexId,
-          fileTree.toList,
-          workRecord.id,
-          indexRecord.id)
-        indexerQueueService.enqueue(queueItem)
-      } else {
-        for {
-          compilerRecord <- logService.createChild(workRecord, Json.obj("task" -> "compile"))
-          queueItem = CompilerQueueItem(
-            orgId,
-            repoName,
-            repoId,
-            sha,
-            indexId,
-            fileTree.toList,
-            compilations.toList,
-            workRecord.id,
-            compilerRecord.id,
-            indexRecord.id)
-          _ <- compilerQueueService.enqueue(queueItem)
-        } yield {
-          ()
-        }
-      }
+      queueItem = IndexerQueueItem(
+        orgId,
+        repoName,
+        repoId,
+        sha,
+        indexId,
+        fileTree.toList,
+        workRecord.id,
+        indexRecord.id)
+      _ <- indexerQueueService.enqueue(queueItem)
       _ <- socketService.cloningFinished(orgId, additionalOrgIds, copyRecord.id, repoName, repoId, indexId)
     } yield {
       ()

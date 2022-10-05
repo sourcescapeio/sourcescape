@@ -62,7 +62,10 @@ export class LanguageService {
     }
 
     try {
-      return this.languageServer.getDefinitionAndBoundSpan(filename, location);
+      return {
+        definition: this.languageServer.getDefinitionAndBoundSpan(filename, location),
+        typeDefinition: this.languageServer.getTypeDefinitionAtPosition(filename, location)
+      }
     } catch(e) {
       return {
         message: e.message,

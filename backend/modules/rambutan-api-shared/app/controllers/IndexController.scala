@@ -145,7 +145,7 @@ class IndexController @Inject() (
     }
   }
 
-  def testIndex(orgId: Int, indexType: IndexType) = {
+  def testIndex(orgId: Int, indexType: IndexType, languageServer: Boolean) = {
     api(parse.tolerantJson) { implicit request =>
       authService.authenticatedForOrg(orgId, OrgRole.Admin) {
         withJson { forms: List[TestIndexForm] =>
@@ -158,7 +158,9 @@ class IndexController @Inject() (
           }.toMap
 
           for {
-            _ <- staticAnalysisService.startLanguageServer(analysisType, indexId, contentMap)
+            _ <- withFlag(languageServer) {
+              staticAnalysisService.startLanguageServer(analysisType, indexId, contentMap)
+            }
             items <- Source(forms).mapAsync(4) { form =>
 
               val fakeTree = AnalysisTree(0, "", analysisType)
@@ -178,7 +180,9 @@ class IndexController @Inject() (
                     .run()
                   val graph = indexType.indexer(form.file, content, resp, logQueue)
                   logQueue.complete()
-                  val renderedNodes = graph.nodes.map(_.build(orgId, "repo", 0, "null-sha", 0, form.file))
+                  val renderedNodes = graph.nodes.map { node =>
+                    node.build(orgId, "repo", 0, "null-sha", 0, form.file) -> node.lookupRange
+                  }
                   val renderedEdges = graph.edges.map(_.build(orgId, "repo", 0, 0, form.file))
 
                   // Select nodes to emit
@@ -202,16 +206,33 @@ class IndexController @Inject() (
                   nodes,
                   edges)
               }
-            }.runWith(Sinks.ListAccum[(String, String, List[GraphNode], List[GraphEdge])])
+            }.runWith(Sinks.ListAccum[(String, String, List[(GraphNode, Option[CodeRange])], List[GraphEdge])])
             // send a few nodes
-            allNodes = items.foldLeft(List.empty[GraphNode])(_ ++ _._3)
+            collectedNodes = items.foldLeft(List.empty[(GraphNode, Option[CodeRange])])(_ ++ _._3)
+            allNodes = collectedNodes.map(_._1)
             allEdges = items.foldLeft(List.empty[GraphEdge])(_ ++ _._4)
             // get links
-            allLinks <- Source(allNodes.take(10)).mapAsync(4) { n =>
-              staticAnalysisService.languageServerRequest(analysisType, indexId, n.path, n.start_index)
-            }.runWith(Sinks.ListAccum[JsValue])
+            symbolTable = allNodes.map { n =>
+              "a" -> "b"
+            }.toMap
+            allLinks <- withFlag(languageServer) {
+              Source(collectedNodes).mapAsync(4) {
+                case (n, Some(range)) => {
+                  staticAnalysisService.languageServerRequest(analysisType, indexId, n.path, range.startIndex) map { resp =>
+                    Option(Json.obj(
+                      "original" -> n,
+                      "response" -> resp))
+                  }
+                }
+                case _ => {
+                  Future.successful(None)
+                }
+              }.mapConcat(identity).runWith(Sinks.ListAccum[JsValue])
+            }
             // stop
-            _ <- staticAnalysisService.stopLanguageServer(analysisType, indexId)
+            _ <- withFlag(languageServer) {
+              staticAnalysisService.stopLanguageServer(analysisType, indexId)
+            }
           } yield {
             Json.obj(
               "analysis" -> items.map(i => {

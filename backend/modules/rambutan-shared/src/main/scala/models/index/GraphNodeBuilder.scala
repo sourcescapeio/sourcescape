@@ -6,6 +6,8 @@ import silvousplay.imports._
 trait GraphNodeBuilder {
 
   def build(orgId: Int, repo: String, repoId: Int, sha: String, indexId: Int, path: String): GraphNode
+
+  def lookupRange: Option[CodeRange]
 }
 
 trait GraphNodeData[NT <: Identifiable] {

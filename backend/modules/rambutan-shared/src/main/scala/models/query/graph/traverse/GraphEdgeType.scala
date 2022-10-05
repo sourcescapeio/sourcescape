@@ -1,7 +1,6 @@
 package models.query
 
 import models.index.esprima.ESPrimaEdgeType
-import models.index.scalameta.ScalaMetaEdgeType
 import models.index.ruby.RubyEdgeType
 import models.index.{ EdgeType, NodeType }
 import models.IndexType

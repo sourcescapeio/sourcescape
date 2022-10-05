@@ -70,7 +70,7 @@ DELETE  /orgs/:o/repos/:r/shas/:s/index/:i            controllers.IndexControlle
 POST    /orgs/:o/repos/:r/shas/:s/index/:i/reindex    controllers.IndexController.reindex(o: Int, r: Int, s: String, i: Int)
 
 # Need revising
-POST    /orgs/:o/test-index/:it                       controllers.IndexController.testIndex(o: Int, it: models.IndexType)
+POST    /orgs/:o/test-index/:it                       controllers.IndexController.testIndex(o: Int, it: models.IndexType, languageServer: Boolean)
 
 
 ############

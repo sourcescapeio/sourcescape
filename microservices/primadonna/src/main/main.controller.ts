@@ -81,8 +81,6 @@ export class MainController {
       body.location,
     );
 
-    console.warn(response);
-
     return {
       response
     };

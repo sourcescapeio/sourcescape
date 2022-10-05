@@ -39,7 +39,7 @@ class StaticAnalysisService @Inject() (
 
   def startLanguageServer(analysisType: AnalysisType, indexId: Int, contents: Map[String, String]): Future[Unit] = {
     val url = Servers.getOrElse(analysisType, throw new Exception("invalid server analysis type"))
-    println("STARTING IN-MEMORY")
+    println("STARTING IN-MEMORY LANGUAGE SERVER")
     contents.foreach {
       case (k, v) => {
         println(s"=====${k}======")
@@ -58,7 +58,7 @@ class StaticAnalysisService @Inject() (
 
   def stopLanguageServer(analysisType: AnalysisType, indexId: Int): Future[Unit] = {
     val url = Servers.getOrElse(analysisType, throw new Exception("invalid server analysis type"))
-    println("STARTING LANGUAGE SERVER")
+    println("STOPPING LANGUAGE SERVER")
     for {
       response <- wsClient.url(url + "/language-server/" + indexId).delete()
       res = if (response.status =/= 200) {

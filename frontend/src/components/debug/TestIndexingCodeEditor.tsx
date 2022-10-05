@@ -12,6 +12,8 @@ import {
   Tabs,
   Tab,
   ControlGroup,
+  Checkbox,
+  Switch,
 } from '@blueprintjs/core';
 
 import Row from 'react-bootstrap/Row';
@@ -33,8 +35,10 @@ export function TestIndexingCodeEditorComponent (props: {
   placeholder?: string,
   initialize?: string,
   //
-  performIndex: (_: FileState[]) => void,
+  performIndex: (_: FileState[], __: boolean) => void,
 }) {
+
+  const [useLanguageServer, setUseLanguageServer] = React.useState(true);
 
   const [fileState, setFileState] = React.useState<FileState[]>([{
     file: 'test.ts',
@@ -109,7 +113,7 @@ export function TestIndexingCodeEditorComponent (props: {
                           renameFile(idx, rename)
                         }
                       }}
-                    />                    
+                    />
                   </ControlGroup>
                 }
                 panel={
@@ -160,10 +164,14 @@ export function TestIndexingCodeEditorComponent (props: {
             <Button 
               intent="primary"
               icon="download"
-              onClick={() => props.performIndex(fileState)}
+              onClick={() => props.performIndex(fileState, useLanguageServer)}
             >
               Index
-            </Button>                 
+            </Button>
+            <Switch 
+              checked={useLanguageServer} 
+              label="Language Server" 
+              onChange={(v) => (setUseLanguageServer((v.target as HTMLInputElement).checked))}/>
           </ControlGroup>
         </div>
         <div style={{paddingLeft: 10, paddingTop: 5}}>
