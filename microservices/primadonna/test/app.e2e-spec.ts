@@ -68,11 +68,44 @@ describe('AppController (e2e)', () => {
     );
   })
 
+  // TEST_DIRECTORY=/data/blah TEST_FILENAME=blah/blah yarn test:e2e -i test/app.e2e-spec.ts -t 'language_server_directory:request'
+  it('language_server_directory:request', async() => {
+    await curl(app).post(
+      {
+        url: '/language-server/1/directory',
+        body: {
+          'directory': process.env.TEST_DIRECTORY,
+        },
+      },
+      (resp, body) => {}
+    );
+
+    await curl(app).post(
+      {
+        url: '/language-server/1/request',
+        body: {
+          filename: process.env.TEST_FILENAME,
+          location: 339,
+        },
+      },
+      (resp, body) => {
+        console.warn(JSON.stringify(body, null, 2));
+      },
+    );
+
+    await curl(app).delete(
+      {
+        url: '/language-server/1',
+      },
+      (resp, body) => {},
+    );
+  })
+
   // yarn test:e2e -i test/app.e2e-spec.ts -t 'language_server:lifecycle'
-  it('language_server:lifecycle', async() => {
+  it('language_server_memory:lifecycle', async() => {
     // await curl(app).post(
     //   {
-    //     url: '/language-server/1',
+    //     url: '/language-server/1/memory',
     //     body: {
     //       'test.ts': 'function () {}',
     //     },
@@ -86,7 +119,7 @@ describe('AppController (e2e)', () => {
 
     await curl(app).post(
       {
-        url: '/language-server/1',
+        url: '/language-server/1/memory',
         body: {
           'test.ts': 'function Test() {}',
         },
@@ -98,7 +131,7 @@ describe('AppController (e2e)', () => {
 
     // await curl(app).post(
     //   {
-    //     url: '/language-server/1',
+    //     url: '/language-server/1/memory',
     //     body: {
     //       'test.ts': 'function Test() {}',
     //     },
@@ -115,13 +148,13 @@ describe('AppController (e2e)', () => {
       },
       (resp, body) => {},
     );
-  })
+  });
 
-  // yarn test:e2e -i test/app.e2e-spec.ts -t 'language_server:request'
-  it('language_server:request', async () => {
+  // yarn test:e2e -i test/app.e2e-spec.ts -t 'language_server_memory:request'
+  it('language_server_memory:request', async () => {
     await curl(app).post(
       {
-        url: '/language-server/1',
+        url: '/language-server/1/memory',
         body: {
           'test.ts': PROGRAM,
         },
@@ -149,6 +182,6 @@ describe('AppController (e2e)', () => {
         url: '/language-server/1',
       },
       (resp, body) => {},
-    );    
+    );
   });
 });

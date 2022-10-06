@@ -67,7 +67,7 @@ class StaticAnalysisService @Inject() (
     }
   }
 
-  def startLanguageServer(analysisType: AnalysisType, indexId: Int, contents: Map[String, String]): Future[Unit] = {
+  def startInMemoryLanguageServer(analysisType: AnalysisType, indexId: Int, contents: Map[String, String]): Future[Unit] = {
     val url = Servers.getOrElse(analysisType, throw new Exception("invalid server analysis type"))
     println("STARTING IN-MEMORY LANGUAGE SERVER")
     contents.foreach {
@@ -77,7 +77,7 @@ class StaticAnalysisService @Inject() (
       }
     }
     for {
-      response <- wsClient.url(url + "/language-server/" + indexId).post(contents)
+      response <- wsClient.url(url + "/language-server/" + indexId + "/memory").post(contents)
       res = if (response.status =/= 200) {
         throw new Exception("Error starting language server")
       }

@@ -161,7 +161,7 @@ class IndexController @Inject() (
 
           for {
             _ <- withFlag(languageServer) {
-              staticAnalysisService.startLanguageServer(analysisType, IndexId, contentMap)
+              staticAnalysisService.startInMemoryLanguageServer(analysisType, IndexId, contentMap)
             }
             items <- Source(forms).mapAsync(4) { form =>
 

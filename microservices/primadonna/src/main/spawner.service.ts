@@ -9,7 +9,7 @@ import {
 import { parse } from '@typescript-eslint/typescript-estree';
 import { Cache } from 'cache-manager';
 import { spawn } from 'child_process';
-import { ClientProxyFactory, Transport } from '@nestjs/microservices';
+import { ClientProxy, ClientProxyFactory, Transport } from '@nestjs/microservices';
 import * as process from 'process';
 import { firstValueFrom } from 'rxjs';
 import { ts } from '@ts-morph/bootstrap';
@@ -20,10 +20,9 @@ const PORT = 3002;
 export class SpawnerService {
   constructor(@Inject(CACHE_MANAGER) private cacheManager: Cache) {}
 
-  async startInMemoryLanguageServer(
+  async startLanguageServer(
     id: string,
-    files: { [k: string]: string },
-  ) {
+    f: (ClientProxy) => Promise<any>) {
     if (await this.cacheManager.get(id)) {
       throw new BadRequestException('id already exists');
     }
@@ -48,7 +47,11 @@ export class SpawnerService {
     });
 
     child.stdout.on('data', (data) => {
-      console.log(`stdout:\n${data}`);
+      console.log(`child:\n${data}`);
+    });
+
+    child.stderr.on('data', (data) => {
+      console.warn(`child:\n${data}`);
     });
 
     const clientProxy = ClientProxyFactory.create({
@@ -58,10 +61,7 @@ export class SpawnerService {
       }
     })
 
-    await firstValueFrom(
-      clientProxy.send({cmd: 'load'}, files)
-    )
-
+    await f(clientProxy)
 
     if (child.pid) {
       await this.cacheManager.set<number>(id, child.pid);

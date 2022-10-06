@@ -19,6 +19,33 @@ export class LanguageService {
   project: ts.Project
   languageServer: ts.ts.LanguageService
 
+  async createProjectFromTSConfig(directory: string) {
+    const project = await ts.createProject({
+      tsConfigFilePath: directory,
+    });
+
+    this.project = project;
+
+    const program = project.createProgram();
+    const diagnostics = ts.ts.getPreEmitDiagnostics(program);
+    const languageService = project.getLanguageService();
+
+    if (diagnostics.length > 0) {
+      const cleanDiagnostics = diagnostics.map((d) => {
+        return {
+          file: d.file?.fileName,
+          start: d.start,
+          message: d.messageText,
+        };
+      });
+      console.error(cleanDiagnostics);
+      // NOTE: Do not throw. We make best effort
+      // throw new BadRequestException('error while compiling');
+    }
+
+    this.languageServer = languageService;
+  }
+
   async createInMemoryProject(files: {[k: string]: string})  {
     const project = await ts.createProject({
       useInMemoryFileSystem: true,

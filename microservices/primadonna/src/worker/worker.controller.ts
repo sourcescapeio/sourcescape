@@ -16,6 +16,13 @@ export class WorkerController {
     return true
   }
 
+  @MessagePattern({ cmd: 'loadDirectory'})
+  async loadDirectory(directory: string) {
+    await this.languageService.createProjectFromTSConfig(directory);
+
+    return true
+  }
+
   @MessagePattern({ cmd: 'query'})
   queryLanguageServer(data: { filename: string, location: number}) {
     const definition = this.languageService.getDefinition(data.filename, data.location);    
