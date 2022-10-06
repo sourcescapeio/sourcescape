@@ -19,8 +19,6 @@ import sangria.renderer.SchemaRenderer
 import sangria.slowlog.SlowLog
 
 // models
-// import sangria.execution.deferred.{ Fetcher, HasId }
-// import sangria.schema._
 import scala.util.{ Failure, Success }
 import graphql.RambutanContext
 import services._

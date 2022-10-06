@@ -1,9 +1,5 @@
 
 
-
-GET     /me                                         controllers.UserController.getUserProfile()
-POST    /orgs                                       controllers.UserController.createOrg()
-
 GET     /index-summary                              controllers.AdminController.indexSummary()
 
 
@@ -16,16 +12,6 @@ POST    /graphql                                    controllers.GraphQLControlle
 GET     /graphql                                    controllers.GraphQLController.socket()
 GET     /render-schema                              controllers.GraphQLController.renderSchema
 
-###########
-# PROJECT #
-###########
-
-GET     /orgs/:orgId/nux                            controllers.UserController.getNuxState(orgId: Int)
-PUT     /orgs/:orgId/nux                            controllers.UserController.setNuxCompleted(orgId: Int)
-
-# GET     /orgs/:orgId/settings                       controllers.UserController.getOrgSettings(orgId: Int)
-# POST    /orgs/:orgId/settings                       controllers.UserController.updateOrgSettings(orgId: Int)
-
 #############
 # TARGETING #
 #############
@@ -36,23 +22,14 @@ POST    /orgs/:o/targeting                          controllers.TargetingControl
 # REPO #
 ########
 
+# TODO: deprecate all this in favor of graphql
+
 # POST    /orgs/:o/repos/scan                         controllers.RepoController.scanRepos(o: Int)
-POST    /orgs/:o/repos/open                         controllers.LocalRepoController.openItem(o: Int)
 
 GET     /orgs/:o/repos                              controllers.RepoController.getRepoSummary(o: Int)
-PUT     /orgs/:o/repos/:r/intent/:s                 controllers.RepoController.setRepoIntent(o: Int, r: Int, s: models.RepoCollectionIntent)
 GET     /orgs/:o/repos/:r/branches/:b               controllers.RepoController.getBranchSummary(o: Int, r: Int, b: String)
 
 GET     /orgs/:o/repos/:r/shas                      controllers.RepoController.getRepoSHAs(o: Int, r: Int)
-
-# Hard refresh
-# POST    /orgs/:o/repos/:r/refresh                   controllers.GithubRepoController.refreshRepo(o: Int, r: Int)
-
-# Webhook events
-POST    /orgs/:o/repos/:r/watcher                   controllers.LocalRepoController.watcherUpdate(o: Int, r: Int)
-POST    /orgs/:o/repos/:r/finish-watch              controllers.LocalRepoController.finishedWatcherStart(o: Int, r: Int)
-
-
 
 ###########
 # INDEXES #

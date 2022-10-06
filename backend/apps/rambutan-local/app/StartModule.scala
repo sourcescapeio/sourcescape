@@ -6,9 +6,8 @@ import services._
 
 @Singleton
 class ApplicationStart @Inject() (
-  repoSyncService: LocalRepoSyncService,
-  scanService:     LocalScanService,
-  configuration:   play.api.Configuration)(implicit ec: ExecutionContext) {
+  scanService:   LocalScanService,
+  configuration: play.api.Configuration)(implicit ec: ExecutionContext) {
 
   // for {
   //   // initial scan
@@ -30,7 +29,6 @@ class StartModule extends AbstractModule {
     bind(classOf[RepoDataService]).to(classOf[LocalRepoDataService])
     bind(classOf[GitService]).to(classOf[LocalGitService])
     bind(classOf[FileService]).to(classOf[LocalFileService])
-    bind(classOf[RepoSyncService]).to(classOf[LocalRepoSyncService])
     bind(classOf[ConsumerService]).to(classOf[WebhookConsumerService])
 
     bind(classOf[ApplicationStart])

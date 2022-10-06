@@ -232,9 +232,17 @@ object SchemaDefinition {
             }
           },
         ),
-        Field("selectRepo", IntType,
+        Field("indexRepo", IntType,
           arguments = RepoID :: Nil,
-          resolve = ctx => ctx.ctx.localRepoSyncService.setRepoIntent(-1, ctx.arg(RepoID), RepoCollectionIntent.Collect, queue = true))))
+          resolve = { ctx =>
+            println("INDEX REPO")
+            // do refresh directly
+            implicit val ec = ctx.ctx.ec
+            ctx.ctx.repoIndexingService.indexRepo(-1, ctx.arg(RepoID)) map (_._1)
+          }
+        )
+      )
+    )
   }
 
   /**

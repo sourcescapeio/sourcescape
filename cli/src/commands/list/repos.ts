@@ -7,7 +7,8 @@ import { openSync, watch } from 'fs';
 import { exit } from 'process';
 import axios from 'axios';
 import Table from 'cli-table';
-import { runGraphQL } from '../../lib/graphql';
+import { graphQLClient } from '../../lib/graphql';
+import { gql } from '@apollo/client/core';
 
 export default class ListRepos extends Command {
 
@@ -19,9 +20,10 @@ export default class ListRepos extends Command {
   async run() {  
     const {flags} = this.parse(ListRepos);
   
-    const response = await runGraphQL(flags.port, flags.debug, {
-      operationName: "GetRepos",
-      query: `query GetRepos {
+    const client = graphQLClient(flags.port, flags.debug);
+
+    const response = await client.query({
+      query: gql`query GetRepos {
         repos {
           id
           path
@@ -35,21 +37,20 @@ export default class ListRepos extends Command {
             indexProgress
           }
         }
-      }`,
-      variables: {}
-    });
+      }`
+    })
 
     const table = new Table({
-      head: ['Name', '', 'Status', 'Indexes']
+      head: ['Name', 'Indexes']
     })
-    response.data.data.repos.forEach((r: any) => {      
+    response.data.repos.forEach((r: any) => {      
       const indexes = r.indexes.map((i: any) => {
         const progressFlag = (i.indexProgress === 100) ? '[x]' : `[${i.indexProgress}]`;
         const dirtyFlag = i.dirty ? '*' : '';
         return `${i.sha}${dirtyFlag}${progressFlag}`
       })
 
-      table.push([r.name, r.id, r.intent, indexes.join('\n')]);
+      table.push([r.name, indexes.join('\n')]);
     });
     console.log(table.toString());
   }

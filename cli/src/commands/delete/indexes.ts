@@ -6,8 +6,9 @@ import { join, resolve } from 'path';
 import { openSync, watch } from 'fs';
 import { exit } from 'process';
 import axios from 'axios';
-import { runGraphQL } from '../../lib/graphql';
-import { getRepo } from '../../lib/repo';
+import { graphQLClient, runGraphQL } from '../../lib/graphql';
+import { getRepo, getRepo2 } from '../../lib/repo';
+import { gql } from '@apollo/client/core';
 
 export default class DeleteIndex extends Command {
 
@@ -25,22 +26,14 @@ export default class DeleteIndex extends Command {
   async run() {  
     const {args, flags} = this.parse(DeleteIndex);
 
-    const chosen = await getRepo(args.repo, flags.port, flags.debug);
+    const client = graphQLClient(flags.port, flags.debug);
+    const chosen = await getRepo2(args.repo, client);
 
-    console.warn(chosen);
-
-    const response = await runGraphQL(flags.port, flags.debug, {
-      operationName: "DeleteRepoIndexes",
-      query: `mutation DeleteRepoIndexes {
+    await client.mutate({
+      mutation: gql`mutation DeleteRepoIndexes {
         deleteIndexesForRepo(id: ${chosen.id})
-      }`,
-      variables: {}
+      }`
     });
-
-    if (response.status !== 200) {
-      console.warn('Error running indexing')
-      console.error(response.data)
-    }
 
     console.warn('COMPLETE')
   }

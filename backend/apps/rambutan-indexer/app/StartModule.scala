@@ -10,11 +10,9 @@ class ApplicationStart @Inject() (
   configuration:          play.api.Configuration,
   queueManagementService: QueueManagementService,
   // idempotent queues
-  clonerService:          ClonerService,
   cachingService:         CachingService,
   webhookConsumerService: WebhookConsumerService,
   //
-  indexerWorker:     IndexerWorker,
   snapshotterWorker: SnapshotterWorker,
   // sweepers
   indexSweeperService: IndexSweeperService,
@@ -23,8 +21,6 @@ class ApplicationStart @Inject() (
   for {
     _ <- queueManagementService.wipeQueues()
     _ <- webhookConsumerService.startWebhookConsumer()
-    _ <- clonerService.startCloner()
-    _ <- indexerWorker.startRepoIndexing()
     _ <- cachingService.startCaching()
     _ <- snapshotterWorker.startSnapshotter()
     // cron-based sweepers

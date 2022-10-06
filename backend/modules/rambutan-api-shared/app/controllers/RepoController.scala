@@ -19,7 +19,6 @@ class RepoController @Inject() (
   authService:          services.AuthService,
   scanService:          services.LocalScanService,
   repoService:          services.RepoService,
-  repoSyncService:      services.RepoSyncService,
   repoDataService:      services.RepoDataService,
   repoIndexDataService: services.RepoIndexDataService,
   socketService:        services.SocketService)(implicit ec: ExecutionContext, as: ActorSystem) extends API {
@@ -52,14 +51,6 @@ class RepoController @Inject() (
     api { implicit request =>
       authService.authenticatedForOrg(orgId, OrgRole.ReadOnly) {
         repoIndexDataService.getSHAsForRepos(List(repoId)).map(_.map(_.dto))
-      }
-    }
-  }
-
-  def setRepoIntent(orgId: Int, repoId: Int, intent: RepoCollectionIntent) = {
-    api { implicit request =>
-      authService.authenticatedForOrg(orgId, OrgRole.Admin) {
-        repoSyncService.setRepoIntent(orgId, repoId, intent, queue = true)
       }
     }
   }

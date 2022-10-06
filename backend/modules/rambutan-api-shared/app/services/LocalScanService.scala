@@ -17,7 +17,6 @@ class LocalScanService @Inject() (
   configuration:          play.api.Configuration,
   socketService:          SocketService,
   repoDataService:        LocalRepoDataService,
-  repoSyncService:        RepoSyncService,
   gitTreeIndexingService: GitTreeIndexingService,
   gitService:             LocalGitService,
   sharedDao:              dal.SharedDataAccessLayer,
@@ -30,7 +29,7 @@ class LocalScanService @Inject() (
 
   // def getScanByIds(ids: List[Long]) =
   def listScans(): Future[List[LocalScanDirectory]] = {
-    localDao.LocalScanDirectoryTable.all
+    localDao.LocalScanDirectoryTable.all()
   }
 
   def createScan(orgId: Int, path: String, shouldScan: Boolean): Future[LocalScanDirectory] = {

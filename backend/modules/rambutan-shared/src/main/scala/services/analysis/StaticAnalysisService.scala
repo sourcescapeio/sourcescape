@@ -67,6 +67,21 @@ class StaticAnalysisService @Inject() (
     }
   }
 
+  def startDirectoryLanguageServer(analysisType: AnalysisType, indexId: Int, directory: String): Future[Unit] = {
+    val url = Servers.getOrElse(analysisType, throw new Exception("invalid server analysis type"))
+    println("STARTING DIRECTORY LANGUAGE SERVER")
+    for {
+      response <- wsClient.url(url + "/language-server/" + indexId + "/directory").post(Json.obj(
+        "directory" -> directory
+      ))
+      res = if (response.status =/= 200) {
+        throw new Exception("Error starting language server")
+      }
+    } yield {
+      ()
+    }
+  }  
+
   def startInMemoryLanguageServer(analysisType: AnalysisType, indexId: Int, contents: Map[String, String]): Future[Unit] = {
     val url = Servers.getOrElse(analysisType, throw new Exception("invalid server analysis type"))
     println("STARTING IN-MEMORY LANGUAGE SERVER")

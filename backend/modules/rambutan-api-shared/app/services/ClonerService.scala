@@ -24,55 +24,21 @@ import org.eclipse.jgit.api.Git
 
 @Singleton
 class ClonerService @Inject() (
-  configuration:          play.api.Configuration,
-  repoDataService:        RepoDataService,
-  repoIndexDataService:   RepoIndexDataService,
-  clonerQueueService:     ClonerQueueService,
-  indexerQueueService:    IndexerQueueService,
-  queueManagementService: QueueManagementService,
-  logService:             LogService,
-  gitService:             GitService,
-  socketService:          SocketService,
-  fileService:            FileService,
-  applicationLifecycle:   play.api.inject.ApplicationLifecycle)(implicit actorSystem: akka.actor.ActorSystem, ec: ExecutionContext) {
-
-  val ClonerConcurrency = 4
-
-  def startCloner() = {
-    for {
-      _ <- clonerQueueService.clearQueue() // clear queue
-      _ <- queueManagementService.runQueue[ClonerQueueItem](
-        "clone-repo",
-        concurrency = ClonerConcurrency,
-        source = clonerQueueService.source) { item =>
-          runCloneForItem(item)
-        } { item =>
-          println("COMPLETE", item)
-          Future.successful(())
-        }
-    } yield {
-      ()
-    }
-  }
-
-  def consumeOne() = {
-    for {
-      item <- clonerQueueService.source.runWith(Sink.head)
-      _ = println(item)
-      _ <- runCloneForItem(item)
-      // _ <- clonerQueueService.ack(item) // Don't ack?
-    } yield {
-      ()
-    }
-  }
+  configuration:        play.api.Configuration,
+  repoDataService:      RepoDataService,
+  repoIndexDataService: RepoIndexDataService,
+  indexerQueueService:  IndexerQueueService,
+  logService:           LogService,
+  gitService:           GitService,
+  socketService:        SocketService,
+  fileService:          FileService)(implicit actorSystem: akka.actor.ActorSystem, ec: ExecutionContext) {
 
   val RequeueSize = 10
-  private def runCloneForItem(item: ClonerQueueItem): Future[Unit] = {
+  def runCloneForItem(item: ClonerQueueItem): Future[List[IndexerQueueItem]] = {
     val orgId = item.orgId
     val repoId = item.repoId
     val indexId = item.indexId
 
-    println("CLONE", item)
     for {
       dbConfig <- repoDataService.getRepo(repoId).map {
         _.getOrElse(throw new Exception("invalid repo"))
@@ -94,30 +60,15 @@ class ClonerService @Inject() (
             _.getOrElse(throw new Exception("invalid index"))
           }
           diff <- gitRepo.resolveDiff(rootIndex.sha, itemSHA)
-          // if diff is > certain size, queue
-          _ = println("DIFF", diff)
-          // need to completely requeue
-          _ <- withFlag(diff.size > RequeueSize) {
-            for {
-              newParent <- logService.createParent(orgId, Json.obj(
-                "repoId" -> repoId,
-                "sha" -> itemSHA))
-              obj = RepoSHAIndex(0, orgId, repoName, repoId, itemSHA, None, None, newParent.id, false, new org.joda.time.DateTime().getMillis())
-              newIndex <- repoIndexDataService.writeIndex(obj)(parent)
-              rootItem = ClonerQueueItem(orgId, repoId, newIndex.id, None, newParent.id)
-              _ <- clonerQueueService.enqueue(rootItem)
-            } yield {
-              ()
-            }
-          }
         } yield {
           Option(diff)
         }
       }
       fileTree <- gitRepo.getTreeAt(itemSHA)
-      _ <- (maybeDiff, item.dirtyFiles) match {
+      indexerItems <- (maybeDiff, item.dirtyFiles) match {
         case (_, Some(dirty)) if !checkDirtyPaths(dirty) => {
           logService.event(s"Dirty file checksums did not match. Likely files changed while item was in the queue. Discarding")(parent)
+          Future.successful(Nil)
         }
         case (Some(diff), Some(dirty)) => {
           val addPaths = maybeDiff.map(_.addPaths).getOrElse(Set.empty[String])
@@ -125,7 +76,7 @@ class ClonerService @Inject() (
 
           for {
             _ <- logService.event(s"Running dirty index off root")(parent)
-            _ <- runClone(
+            indexerItem <- runSingleClone(
               dbConfig,
               gitRepo,
               index,
@@ -134,7 +85,7 @@ class ClonerService @Inject() (
               deleted = diff.deleted ++ dirty.deleted,
               dirty = true)(parent)
           } yield {
-            ()
+            List(indexerItem)
           }
         }
         case (None, Some(dirty)) => {
@@ -143,7 +94,7 @@ class ClonerService @Inject() (
             // root
             obj = RepoSHAIndex(0, orgId, repoName, repoId, itemSHA, None, dirtySignature = None, parent.id, deleted = false, new org.joda.time.DateTime().getMillis())
             rootIndex <- repoIndexDataService.writeIndex(obj)(parent)
-            _ <- runClone(
+            indexerItemClean <- runSingleClone(
               dbConfig,
               gitRepo,
               rootIndex,
@@ -153,7 +104,7 @@ class ClonerService @Inject() (
               dirty = false)(parent)
             // dirty
             _ <- repoIndexDataService.setIndexRoot(indexId, rootIndex.id)
-            _ <- runClone(
+            indexerItem <- runSingleClone(
               dbConfig,
               gitRepo,
               index.copy(rootIndexId = Some(rootIndex.id)),
@@ -162,13 +113,13 @@ class ClonerService @Inject() (
               deleted = dirty.deleted,
               dirty = true)(parent)
           } yield {
-            ()
+            List(indexerItem, indexerItemClean)
           }
         }
         case (Some(diff), None) => {
           for {
             _ <- logService.event(s"Running diffed index")(parent)
-            _ <- runClone(
+            indexerItem <- runSingleClone(
               dbConfig,
               gitRepo,
               index,
@@ -178,13 +129,13 @@ class ClonerService @Inject() (
               deleted = diff.deleted,
               dirty = false)(parent)
           } yield {
-            ()
+            List(indexerItem)
           }
         }
         case (None, None) => {
           for {
             _ <- logService.event(s"Running full index of root")(parent)
-            _ <- runClone(
+            indexerItem <- runSingleClone(
               dbConfig,
               gitRepo,
               index,
@@ -193,17 +144,17 @@ class ClonerService @Inject() (
               deleted = Set.empty[String],
               dirty = false)(parent)
           } yield {
-            ()
+            List(indexerItem)
           }
         }
       }
     } yield {
       gitRepo.close()
-      ()
+      indexerItems
     }
   }
 
-  private def runClone(
+  private def runSingleClone(
     dbRepo: GenericRepo,
     repo:   GitServiceRepo,
     index:  RepoSHAIndex,
@@ -211,7 +162,7 @@ class ClonerService @Inject() (
     cleanTree: Set[String],
     dirtyTree: Set[String],
     deleted:   Set[String],
-    dirty:     Boolean)(implicit workRecord: WorkRecord): Future[Unit] = {
+    dirty:     Boolean)(implicit workRecord: WorkRecord): Future[IndexerQueueItem] = {
     val orgId = dbRepo.orgId
     val repoName = dbRepo.repoName
     val repoId = dbRepo.repoId
@@ -254,10 +205,9 @@ class ClonerService @Inject() (
         fileTree.toList,
         workRecord.id,
         indexRecord.id)
-      _ <- indexerQueueService.enqueue(queueItem)
       _ <- socketService.cloningFinished(orgId, additionalOrgIds, copyRecord.id, repoName, repoId, indexId)
     } yield {
-      ()
+      queueItem
     }
   }
 

@@ -13,75 +13,27 @@ import play.api.libs.ws._
 import play.api.libs.json._
 import akka.stream.scaladsl.{ Source, Flow, Sink, Keep, GraphDSL, Merge, Broadcast, FileIO }
 import akka.stream.OverflowStrategy
-
-// for jgit
-import org.eclipse.jgit.storage.file.FileRepositoryBuilder
-import org.eclipse.jgit.api.Git
-import org.eclipse.jgit.lib.Repository
-import org.eclipse.jgit.revwalk.RevWalk
-import org.eclipse.jgit.treewalk.TreeWalk
-import org.eclipse.jgit.util.io.NullOutputStream
-import org.eclipse.jgit.diff.{ DiffFormatter, DiffEntry }
-import org.eclipse.jgit.treewalk.CanonicalTreeParser
-
-//
-import scala.jdk.CollectionConverters._
 import akka.util.ByteString
-import org.joda.time._
 
 @Singleton
 class IndexerWorker @Inject() (
-  configuration:          play.api.Configuration,
-  indexService:           IndexService,
-  indexerService:         IndexerService,
-  repoIndexDataService:   RepoIndexDataService,
-  repoDataService:        RepoDataService,
-  fileService:            FileService,
-  staticAnalysisService:  StaticAnalysisService,
-  queueManagementService: QueueManagementService,
-  logService:             LogService,
-  socketService:          SocketService,
-  indexerQueueService:    IndexerQueueService,
-  savedQueryService:      SavedQueryService,
-  cachingQueueService:    CachingQueueService)(implicit ec: ExecutionContext, mat: akka.stream.Materializer) {
-
-  val IndexerConcurrency = 4
-
-  def startRepoIndexing() = {
-    // shutdown everything
-    for {
-      // get repos
-      _ <- indexerQueueService.clearQueue()
-      _ <- queueManagementService.runQueue[IndexerQueueItem](
-        "index-repo",
-        concurrency = IndexerConcurrency,
-        source = indexerQueueService.source) { item =>
-          println("DEQUEUE", item.indexId)
-          runIndex(item)
-        } { item =>
-          println("COMPLETE", item.indexId)
-          Future.successful(())
-        }
-    } yield {
-      ()
-    }
-  }
-
-  def consumeOne() = {
-    for {
-      item <- indexerQueueService.source.runWith(Sink.head)
-      _ = println(item)
-      _ <- runIndex(item)
-      _ <- indexerQueueService.ack(item) // Don't ack?
-    } yield {
-      ()
-    }
-  }
+  configuration:         play.api.Configuration,
+  indexService:          IndexService,
+  indexerService:        IndexerService,
+  repoIndexDataService:  RepoIndexDataService,
+  repoDataService:       RepoDataService,
+  fileService:           FileService,
+  staticAnalysisService: StaticAnalysisService,
+  logService:            LogService,
+  socketService:         SocketService,
+  indexerQueueService:   IndexerQueueService,
+  savedQueryService:     SavedQueryService,
+  cachingQueueService:   CachingQueueService)(implicit ec: ExecutionContext, mat: akka.stream.Materializer) {
 
   /**
    * Indexing. Split into separate service.
    */
-  private def runIndex(item: IndexerQueueItem) = {
+  def runIndex(item: IndexerQueueItem) = {
     val orgId = item.orgId
     val repo = item.repo
     val repoId = item.repoId
@@ -123,6 +75,8 @@ class IndexerWorker @Inject() (
       /**
        * Index pipeline
        */
+      // TODO: fix hardcode
+      // _ <- staticAnalysisService.startDirectoryLanguageServer(AnalysisType.ESPrimaTypescript, indexId, index.collectionsDirectory)
       _ <- Source(fileTree)
         .via(reportProgress(orgId, additionalOrgIds, repo, repoId, indexId, fileTree.length)(indexRecord)) // report earlier for better accuracy
         .via(readFiles(collectionsDirectory, indexId, concurrency = fileService.parallelism)(indexRecord))
@@ -140,6 +94,8 @@ class IndexerWorker @Inject() (
         .via(fanoutIndexing(orgId, repo, repoId, sha)(materializeRecord))
         .via(indexerService.writeElasticSearch(concurrency = (IndexType.all.length * 2))(writeRecord))
         .runWith(Sink.ignore)
+
+      // _ <- staticAnalysisService.stopLanguageServer()
       /**
        * Update pointer
        */

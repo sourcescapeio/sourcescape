@@ -23,22 +23,23 @@ class TargetingController @Inject() (
     api(parse.tolerantJson) { implicit request =>
       authService.authenticatedForOrg(orgId, OrgRole.ReadOnly) {
         withJson { form: TargetingForm =>
-          telemetryService.withTelemetry { implicit c =>
-            form match {
-              case TargetingForm(Some(repoId), None, None) => {
-                targetingService.repoTargeting(orgId, repoId)
-              }
-              case TargetingForm(Some(repoId), Some(branch), None) => {
-                targetingService.branchTargeting(orgId, repoId, branch)
-              }
-              case TargetingForm(Some(repoId), None, Some(sha)) => {
-                targetingService.shaTargeting(orgId, repoId, sha)
-              }
-              case _ => {
-                throw Errors.badRequest("targeting.invalid", "Invalid targeting")
-              }
-            }
-          }
+          Json.obj()
+          // telemetryService.withTelemetry { implicit c =>
+          //   form match {
+          //     case TargetingForm(Some(repoId), None, None) => {
+          //       targetingService.repoTargeting(orgId, repoId)
+          //     }
+          //     case TargetingForm(Some(repoId), Some(branch), None) => {
+          //       targetingService.branchTargeting(orgId, repoId, branch)
+          //     }
+          //     case TargetingForm(Some(repoId), None, Some(sha)) => {
+          //       targetingService.shaTargeting(orgId, repoId, sha)
+          //     }
+          //     case _ => {
+          //       throw Errors.badRequest("targeting.invalid", "Invalid targeting")
+          //     }
+          //   }
+          // }
         }
       }
     }
