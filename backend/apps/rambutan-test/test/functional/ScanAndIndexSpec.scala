@@ -214,8 +214,8 @@ abstract class ScanAndIndexSpec extends RambutanSpec {
         val clonerService = app.injector.instanceOf[ClonerService]
         val indexerWorker = app.injector.instanceOf[IndexerWorker]
         val consumerF = webhookConsumerService.consumeOne()
-        val clonerF = clonerService.consumeOne()
-        val indexF = indexerWorker.consumeOne()
+        // val clonerF = clonerService.consumeOne()
+        // val indexF = indexerWorker.consumeOne()
 
         // val consumerF2 = webhookConsumerService.consumeOne()
         // val clonerF2 = clonerService.consumeOne()
@@ -377,8 +377,8 @@ abstract class ScanAndIndexSpec extends RambutanSpec {
 
         // await(consumerF2)
         // finish these off
-        await(clonerF)
-        await(indexF)
+        // await(clonerF)
+        // await(indexF)
 
         /**
          * Second batch

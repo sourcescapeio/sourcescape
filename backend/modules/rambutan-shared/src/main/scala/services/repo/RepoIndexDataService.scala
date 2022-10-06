@@ -329,13 +329,13 @@ class RepoIndexDataService @Inject() (
 
   }
 
-  def writeIndex(idx: RepoSHAIndex)(record: WorkRecord): Future[RepoSHAIndex] = {
+  def writeIndex(idx: RepoSHAIndex)(implicit context: SpanContext): Future[RepoSHAIndex] = {
     for {
       index <- dao.RepoSHAIndexTable.insert(idx).map { id =>
         idx.copy(id = id)
       }
       wrapper = git.GitWriter.materializeIndex(index)
-      _ <- indexerService.writeWrapper(idx.orgId, wrapper)(record)
+      _ <- indexerService.writeWrapper(idx.orgId, wrapper)
     } yield {
       index
     }

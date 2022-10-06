@@ -13,6 +13,7 @@ import play.api.libs.ws._
 import play.api.libs.json._
 
 import akka.stream.scaladsl.{ Source, Sink, Flow }
+import silvousplay.api.SpanContext
 
 @Singleton
 class GitTreeIndexingService @Inject() (
@@ -25,9 +26,8 @@ class GitTreeIndexingService @Inject() (
 
   // def indexRepo(repo: GenericRepo)
 
-  def updateGitTreeToSha(repo: GenericRepo, sha: String): Future[Unit] = {
+  def updateGitTreeToSha(repo: GenericRepo, sha: String)(implicit context: SpanContext): Future[Unit] = {
     for {
-      parentRecord <- logService.createParent(repo.orgId, Json.obj("task" -> "git-log"))
       repoObj <- gitService.getGitRepo(repo)
       _ <- repoObj.getCommitChain(sha).groupedWithin(100, 1.second).mapAsync(1) { commits =>
         // filter out existing commits
@@ -51,7 +51,7 @@ class GitTreeIndexingService @Inject() (
         .map { sha =>
           git.GitWriter.materializeCommit(sha, repo) // pass in bloom
         }
-        .via(indexerService.wrapperFlow(repo.orgId, parentRecord))
+        .via(indexerService.wrapperFlow(repo.orgId, context))
         .runWith(Sink.ignore)
       _ = repoObj.close()
     } yield {
@@ -60,7 +60,7 @@ class GitTreeIndexingService @Inject() (
   }
 
   // update branch data
-  def updateBranchData(repo: GenericRepo): Future[List[String]] = {
+  def updateBranchData(repo: GenericRepo)(implicit context: SpanContext): Future[List[String]] = {
     for {
       parentRecord <- logService.createParent(repo.orgId, Json.obj("task" -> "git-branch"))
       repoObj <- gitService.getGitRepo(repo)
@@ -72,7 +72,7 @@ class GitTreeIndexingService @Inject() (
       _ <- Source(branchMap).map {
         case (branch, sha) => git.GitWriter.materializeBranch(branch, sha, repo)
       }.via {
-        indexerService.wrapperFlow(repo.orgId, parentRecord)
+        indexerService.wrapperFlow(repo.orgId, context)
       }.runWith(Sink.ignore)
       // index full tree
       _ <- Source(branchMap).mapAsync(1) {

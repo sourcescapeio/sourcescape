@@ -24,8 +24,6 @@ POST    /orgs/:o/targeting                          controllers.TargetingControl
 
 # TODO: deprecate all this in favor of graphql
 
-# POST    /orgs/:o/repos/scan                         controllers.RepoController.scanRepos(o: Int)
-
 GET     /orgs/:o/repos                              controllers.RepoController.getRepoSummary(o: Int)
 GET     /orgs/:o/repos/:r/branches/:b               controllers.RepoController.getBranchSummary(o: Int, r: Int, b: String)
 

@@ -35,9 +35,19 @@ trait IndexHelpers {
 
     for {
       _ <- dal.RepoSHAIndexTable.insert(index)
-      _ <- indexerWorker.runTestIndexing(
-        index,
-        data.toMap)
+      queueItem = IndexerQueueItem(
+        index.orgId,
+        index.repoName, 
+        index.repoId,
+        index.sha, 
+        index.id,
+        data.map(_._1).toList,
+        "",
+        ""
+      )
+      // _ <- indexerWorker.runTestIndexing(
+      //   index,
+      //   data.toMap)
       // force refresh to get data to propagate
       _ <- elasticSearchService.refresh(indexType.nodeIndexName)
       _ <- elasticSearchService.refresh(indexType.edgeIndexName)

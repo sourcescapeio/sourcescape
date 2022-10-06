@@ -195,7 +195,7 @@ class SocketService @Inject() (
   }
 
   // indexing records
-  def cloningProgress(orgId: Int, additionalOrgIds: List[Int], workId: String, repo: String, repoId: Int, indexId: Int, progress: Int) = {
+  def cloningProgress(orgId: Int, additionalOrgIds: List[Int], repo: String, repoId: Int, indexId: Int, progress: Int) = {
     publish(
       EventMessage(
         orgId,
@@ -206,30 +206,30 @@ class SocketService @Inject() (
         Json.obj("repo" -> repo, "repoId" -> repoId, "indexId" -> indexId, "progress" -> progress, "cloningProgress" -> progress)))
   }
 
-  def cloningFinished(orgId: Int, additionalOrgIds: List[Int], workId: String, repo: String, repoId: Int, indexId: Int) = {
+  def cloningFinished(orgId: Int, additionalOrgIds: List[Int], repo: String, repoId: Int, indexId: Int) = {
     publish(EventMessage(orgId, Nil, SocketEventType.CloningStarted, indexId.toString, true, Json.obj("repoId" -> repoId, "indexId" -> indexId, "repo" -> repo, "progress" -> 100)))
   }
 
-  def indexingProgress(orgId: Int, additionalOrgIds: List[Int], workId: String, repo: String, repoId: Int, indexId: Int, progress: Int) = {
+  def indexingProgress(orgId: Int, repo: String, repoId: Int, indexId: Int, progress: Int) = {
     publish(
       EventMessage(
         orgId,
-        additionalOrgIds,
+        Nil,
         SocketEventType.IndexingStarted,
         indexId.toString,
         true,
         Json.obj("repo" -> repo, "repoId" -> repoId, "indexId" -> indexId, "progress" -> progress)))
   }
 
-  def indexingFinished(orgId: Int, additionalOrgIds: List[Int], workId: String, repo: String, repoId: Int, sha: String, indexId: Int, parentId: String) = {
+  def indexingFinished(orgId: Int, repo: String, repoId: Int, sha: String, indexId: Int) = {
     publish(
       EventMessage(
         orgId,
-        additionalOrgIds,
+        Nil,
         SocketEventType.IndexingStarted,
         indexId.toString,
         true,
-        Json.obj("repo" -> repo, "parentId" -> parentId, "indexId" -> indexId, "repoId" -> repoId, "sha" -> sha, "progress" -> 100)))
+        Json.obj("repo" -> repo, "indexId" -> indexId, "repoId" -> repoId, "sha" -> sha, "progress" -> 100)))
   }
 
   def cachingAvailable(orgId: Int, workId: String, available: Int) = {
