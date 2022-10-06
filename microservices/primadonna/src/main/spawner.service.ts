@@ -12,6 +12,7 @@ import { spawn } from 'child_process';
 import { ClientProxyFactory, Transport } from '@nestjs/microservices';
 import * as process from 'process';
 import { firstValueFrom } from 'rxjs';
+import { ts } from '@ts-morph/bootstrap';
 
 const PORT = 3002;
 
@@ -86,7 +87,10 @@ export class SpawnerService {
     })
 
     return firstValueFrom(
-      clientProxy.send<any>({cmd: 'query'}, { filename, location })
+      clientProxy.send<{
+        definition: ts.DefinitionInfo[],
+        typeDefinition: ts.DefinitionInfo[]
+      }>({cmd: 'query'}, { filename, location })
     )
   }
 }

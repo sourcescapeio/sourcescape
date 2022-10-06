@@ -167,6 +167,11 @@ object ValidEdge {
   implicit object templateLiteral extends ValidEdge[TemplateLiteralNode, LiteralNode, ESPrimaEdgeType.TemplateLiteral.type]
   implicit object templateExpression extends ValidEdge[TemplateLiteralNode, TemplateExpressionNode, ESPrimaEdgeType.TemplateLiteral.type]
   implicit object templateContains extends ValidEdge[TemplateExpressionNode, AnyNode, ESPrimaEdgeType.TemplateContains.type]
+
+  /**
+   * Links
+   */
+  implicit object callLink extends ValidEdge[CallNode, LinkedAnyNode, ESPrimaEdgeType.CallLink.type]
 }
 
 sealed trait CanIndex[T <: ESPrimaEdgeType] extends CanIndexConstraint[T]

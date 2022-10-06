@@ -63,14 +63,16 @@ export class LanguageService {
 
     try {
       return {
-        definition: this.languageServer.getDefinitionAndBoundSpan(filename, location),
+        definition: this.languageServer.getDefinitionAtPosition(filename, location),
         typeDefinition: this.languageServer.getTypeDefinitionAtPosition(filename, location)
       }
     } catch(e) {
-      return {
-        message: e.message,
-        data: e,
-      };
+      // TODO: need to handle errors
+      throw e
+      // return {
+      //   message: e.message,
+      //   data: e,
+      // };
     }
   }
 }

@@ -206,4 +206,7 @@ object ESPrimaEdgeType extends Plenumeration[ESPrimaEdgeType] {
   case object IfExpression extends ESPrimaEdgeType("if-exp")
 
   case object TemplateLiteral extends ESPrimaEdgeType("template-literal")
+
+  // Links
+  case object CallLink extends ESPrimaEdgeType("call-link")
 }

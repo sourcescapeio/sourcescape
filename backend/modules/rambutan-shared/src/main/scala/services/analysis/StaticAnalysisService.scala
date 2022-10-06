@@ -12,6 +12,36 @@ import akka.util.ByteString
 import akka.stream.scaladsl.FileIO
 import java.nio.file.{ Files, Paths }
 
+case class SymbolLookup(
+  file: String,
+  startIndex: Int,
+  endIndex: Int,
+  // debug
+  kind: String,
+  name: String,
+  containerName: String
+) {
+  def key = s"${file}:${startIndex}:${endIndex}"
+}
+
+object SymbolLookup {
+
+  implicit val writes = Json.writes[SymbolLookup]
+
+  def parse(d: JsValue) = {
+    val start = (d \ "contextSpan" \ "start").as[Int]
+    val length = (d \ "contextSpan" \ "length").as[Int]
+    SymbolLookup(
+      (d \ "fileName").as[String],
+      start,
+      start + length,
+      (d \ "kind").as[String],
+      (d \ "name").as[String],
+      (d \ "containerName").as[String],
+    )
+  }
+}
+
 @Singleton
 class StaticAnalysisService @Inject() (
   wsClient:      WSClient,
@@ -69,7 +99,7 @@ class StaticAnalysisService @Inject() (
     }
   }
 
-  def languageServerRequest(analysisType: AnalysisType, indexId: Int, filename: String, location: Int): Future[JsValue] = {
+  def languageServerRequest(analysisType: AnalysisType, indexId: Int, filename: String, location: Int): Future[(List[SymbolLookup], List[SymbolLookup], JsValue)] = {
     val url = Servers.getOrElse(analysisType, throw new Exception("invalid server analysis type"))
     for {
       response <- wsClient.url(url + "/language-server/" + indexId + "/request").post(Json.obj(
@@ -79,7 +109,13 @@ class StaticAnalysisService @Inject() (
         throw new Exception("Error stopping language server")
       }
     } yield {
-      response.json
+      val json = response.json \ "response"
+
+      (
+        (json \ "definition").as[List[JsValue]].map(SymbolLookup.parse),
+        (json \ "typeDefinition").as[List[JsValue]].map(SymbolLookup.parse),
+        json.as[JsValue]
+      )
     }
   }
 

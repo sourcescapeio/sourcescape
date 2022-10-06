@@ -11,7 +11,6 @@ class ApplicationStart @Inject() (
   queueManagementService: QueueManagementService,
   // idempotent queues
   clonerService:          ClonerService,
-  compilerService:        CompilerService,
   cachingService:         CachingService,
   webhookConsumerService: WebhookConsumerService,
   //
@@ -26,7 +25,6 @@ class ApplicationStart @Inject() (
     _ <- webhookConsumerService.startWebhookConsumer()
     _ <- clonerService.startCloner()
     _ <- indexerWorker.startRepoIndexing()
-    _ <- compilerService.startRepoCompilation()
     _ <- cachingService.startCaching()
     _ <- snapshotterWorker.startSnapshotter()
     // cron-based sweepers

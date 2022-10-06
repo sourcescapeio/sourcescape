@@ -19,7 +19,11 @@ sealed abstract class RubyNodeBuilder(
   additionalNames: List[String]   = Nil,
   graphIndex:      Option[Int]    = None) extends RubyNode with StandardNodeBuilder[RubyNodeType, RubyTag] {
 
-  def lookupRange: Option[CodeRange] = None
+  // TODO: linking stubbed out right now
+  def lookupIndex: Option[Int] = None
+  def symbolLookup: Boolean = false
+  def definitionLink(orgId: Int, repo: String, repoId: Int, indexId: Int, path: String)(other: GraphNode) = None
+  def typeDefinitionLink(orgId: Int, repo: String, repoId: Int, indexId: Int, path: String)(other: GraphNode) = None
 
   val names = graphName.toList ++ additionalNames
 

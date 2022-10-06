@@ -133,7 +133,7 @@ object Export {
       val all = specifiers.map { id =>
         val name = id.node.name
 
-        val memberNode = MemberNode(Hashing.uuid, id.node.range, Some(name))
+        val memberNode = MemberNode(Hashing.uuid, codeRange, Some(name))
         val exportKeyNode = ExportKeyNode(Hashing.uuid, codeRange, name)
 
         val exportedEdge = CreateEdge(AnyNode(memberNode), exportKeyNode, ESPrimaEdgeType.Export).edge

@@ -14,8 +14,7 @@ import akka.stream.scaladsl.{ Source, Sink, Keep }
 import akka.stream.OverflowStrategy
 import play.api.libs.json._
 import akka.util.ByteString
-import models.index.GraphNode
-import models.index.GraphEdge
+import models.index.{ GraphNode, GraphEdge, GraphNodeBuilder }
 
 @Singleton
 class IndexController @Inject() (
@@ -149,7 +148,10 @@ class IndexController @Inject() (
     api(parse.tolerantJson) { implicit request =>
       authService.authenticatedForOrg(orgId, OrgRole.Admin) {
         withJson { forms: List[TestIndexForm] =>
-          val indexId = 0
+          val IndexId = 0
+          val RepoId = 0
+          val RepoName = "repo"
+          val Sha = "null-sha"
 
           val analysisType = indexType.analysisTypes.head
 
@@ -159,7 +161,7 @@ class IndexController @Inject() (
 
           for {
             _ <- withFlag(languageServer) {
-              staticAnalysisService.startLanguageServer(analysisType, indexId, contentMap)
+              staticAnalysisService.startLanguageServer(analysisType, IndexId, contentMap)
             }
             items <- Source(forms).mapAsync(4) { form =>
 
@@ -181,9 +183,11 @@ class IndexController @Inject() (
                   val graph = indexType.indexer(form.file, content, resp, logQueue)
                   logQueue.complete()
                   val renderedNodes = graph.nodes.map { node =>
-                    node.build(orgId, "repo", 0, "null-sha", 0, form.file) -> node.lookupRange
+                    (
+                      node.build(orgId, RepoName, RepoId, Sha, IndexId, form.file),
+                      node)
                   }
-                  val renderedEdges = graph.edges.map(_.build(orgId, "repo", 0, 0, form.file))
+                  val renderedEdges = graph.edges.map(_.build(orgId, RepoName, RepoId, IndexId, form.file))
 
                   // Select nodes to emit
 
@@ -206,33 +210,65 @@ class IndexController @Inject() (
                   nodes,
                   edges)
               }
-            }.runWith(Sinks.ListAccum[(String, String, List[(GraphNode, Option[CodeRange])], List[GraphEdge])])
+            }.runWith(Sinks.ListAccum[(String, String, List[(GraphNode, GraphNodeBuilder)], List[GraphEdge])])
             // send a few nodes
-            collectedNodes = items.foldLeft(List.empty[(GraphNode, Option[CodeRange])])(_ ++ _._3)
+            collectedNodes = items.foldLeft(List.empty[(GraphNode, GraphNodeBuilder)])(_ ++ _._3)
             allNodes = collectedNodes.map(_._1)
-            allEdges = items.foldLeft(List.empty[GraphEdge])(_ ++ _._4)
             // get links
-            symbolTable = allNodes.map { n =>
-              "a" -> "b"
+            symbolTable = collectedNodes.flatMap {
+              case (nn, nb) if nb.symbolLookup => {
+                Option(s"/${nn.path}:${nn.start_index}:${nn.end_index}" -> nn)
+              }
+              case _ => None
             }.toMap
             allLinks <- withFlag(languageServer) {
               Source(collectedNodes).mapAsync(4) {
-                case (n, Some(range)) => {
-                  staticAnalysisService.languageServerRequest(analysisType, indexId, n.path, range.startIndex) map { resp =>
-                    Option(Json.obj(
-                      "original" -> n,
-                      "response" -> resp))
+                case (n, nb) => {
+                  withDefined(nb.lookupIndex) { lookupIndex =>
+                    for {
+                      (defs, typeDefs, resp) <- staticAnalysisService.languageServerRequest(analysisType, IndexId, n.path, lookupIndex)
+                      defResult = defs.flatMap { d =>
+                        symbolTable.get(d.key)
+                      }
+                      typeResult = typeDefs.flatMap { d =>
+                        symbolTable.get(d.key)
+                      }
+                    } yield {
+                      // create edges
+                      val defEdges = defResult.flatMap { d =>
+                        nb.definitionLink(orgId, RepoName, RepoId, IndexId, n.path)(d)
+                      }
+
+                      val typeEdges = typeResult.flatMap { dt =>
+                        // n.typeLink
+                        nb.typeDefinitionLink(orgId, RepoName, RepoId, IndexId, n.path)(dt)
+                      }
+
+                      val edges = defEdges ++ typeEdges
+
+                      Option(edges -> Json.obj(
+                        "original" -> n,
+                        "edges" -> edges,
+                        "resp" -> resp,
+                        // "defLookup" -> defs,
+                        // "typeLookup" -> typeDefs,
+                        "def" -> defResult,
+                        "types" -> typeResult))
+                    }
                   }
                 }
                 case _ => {
                   Future.successful(None)
                 }
-              }.mapConcat(identity).runWith(Sinks.ListAccum[JsValue])
+              }.mapConcat(identity).runWith(Sinks.ListAccum[(List[GraphEdge], JsValue)])
             }
             // stop
             _ <- withFlag(languageServer) {
-              staticAnalysisService.stopLanguageServer(analysisType, indexId)
+              staticAnalysisService.stopLanguageServer(analysisType, IndexId)
             }
+            linkedEdges = allLinks.flatMap(_._1)
+            linkDebugInfo = allLinks.map(_._2)
+            allEdges = items.foldLeft(List.empty[GraphEdge])(_ ++ _._4) ++ linkedEdges
           } yield {
             Json.obj(
               "analysis" -> items.map(i => {
@@ -240,7 +276,9 @@ class IndexController @Inject() (
                   "file" -> i._1,
                   "analysis" -> i._2)
               }),
-              "links" -> allLinks,
+              "links" -> Json.obj(
+                "symbols" -> symbolTable,
+                "links" -> linkDebugInfo),
               "nodes" -> allNodes.map(i => Json.toJson(i)),
               "edges" -> allEdges.map(i => Json.toJson(i)))
           }

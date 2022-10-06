@@ -7,7 +7,11 @@ trait GraphNodeBuilder {
 
   def build(orgId: Int, repo: String, repoId: Int, sha: String, indexId: Int, path: String): GraphNode
 
-  def lookupRange: Option[CodeRange]
+  // used for linking
+  def lookupIndex: Option[Int]
+  def symbolLookup: Boolean
+  def definitionLink(orgId: Int, repo: String, repoId: Int, indexId: Int, path: String)(other: GraphNode): Option[GraphEdge]
+  def typeDefinitionLink(orgId: Int, repo: String, repoId: Int, indexId: Int, path: String)(other: GraphNode): Option[GraphEdge]
 }
 
 trait GraphNodeData[NT <: Identifiable] {
