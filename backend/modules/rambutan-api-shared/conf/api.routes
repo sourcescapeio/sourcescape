@@ -38,13 +38,7 @@ GET     /orgs/:o/indexes/:i/tree                      controllers.IndexControlle
 GET     /orgs/:o/indexes/:i/file                      controllers.IndexController.getFile(o: Int, i: Int, file: String)
 GET     /orgs/:o/indexes/:i/analysis                  controllers.IndexController.getAnalysis(o: Int, i: Int, file: String)
 
-DELETE  /orgs/:o/indexes                              controllers.IndexController.deleteAllIndexes(o: Int)
-
-POST    /orgs/:o/repos/:r/shas/:s/index               controllers.IndexController.runIndexForSHA(o: Int, r: Int, s: String, forceRoot: Boolean)
-DELETE  /orgs/:o/repos/:r/shas/:s/index/:i            controllers.IndexController.deleteIndexForSHA(o: Int, r: Int, s: String, i: Int)
-POST    /orgs/:o/repos/:r/shas/:s/index/:i/reindex    controllers.IndexController.reindex(o: Int, r: Int, s: String, i: Int)
-
-# Need revising
+# Keep this for debug
 POST    /orgs/:o/test-index/:it                       controllers.IndexController.testIndex(o: Int, it: models.IndexType, languageServer: Boolean)
 
 

@@ -41,29 +41,8 @@ class IndexerWorker @Inject() (
     val sha = item.sha
     val indexId = item.indexId
     for {
-      // hydrate first
-      // parentRecord <- {
-      //   logService.getRecord(item.workRecordId).map(_.getOrElse(throw new Exception("invalid record")))
-      // }
-      // indexRecord <- {
-      //   logService.getRecord(item.indexRecordId).map(_.getOrElse(throw new Exception("invalid record")))
-      // }
-      additionalOrgIds <- repoDataService.getAdditionalOrgs(repoId)
       index <- repoIndexDataService.getIndexId(indexId).map(_.getOrElse(throw new Exception("invalid index")))
       _ <- socketService.indexingProgress(orgId, repo, repoId, indexId, 0)
-      /**
-       * Child records
-       */
-      // analysisRecord <- logService.createChild(indexRecord, Json.obj("task" -> "analysis"))
-      // materializeRecord <- logService.createChild(indexRecord, Json.obj("task" -> "materialize"))
-      // writeRecord <- logService.createChild(indexRecord, Json.obj("task" -> "write"))
-      // cacheRecord <- logService.createChild(indexRecord, Json.obj("task" -> "cache", "indexId" -> indexId, "repo" -> repo))
-      // allRecords = List(
-      //   indexRecord,
-      //   analysisRecord,
-      //   materializeRecord,
-      //   writeRecord)
-      // _ <- logService.startRecords(allRecords)
       /**
        * Analysis pipeline
        */
@@ -83,7 +62,7 @@ class IndexerWorker @Inject() (
       // _ <- staticAnalysisService.startDirectoryLanguageServer(AnalysisType.ESPrimaTypescript, indexId, index.collectionsDirectory)
       _ <- Source(fileTree)
         .via(reportProgress(orgId, repo, repoId, indexId, fileTree.length)) // report earlier for better accuracy
-        .via(readFiles(collectionsDirectory, indexId, concurrency = fileService.parallelism)(context))
+        .via(readFiles(collectionsDirectory, indexId, concurrency = 1)(context))
         .via(runAnalysis(analysisDirectoryBase, concurrency = 4)(analysisSpan)) // limited by primadonna
         // .via(writeAnalysisFiles(analysisDirectoryBase, concurrency = 1)(analysisRecord))
         // careful with batchSize, because we'll hold analysis JSONs in memory on backpressure (groupedWithin)
@@ -208,6 +187,11 @@ class IndexerWorker @Inject() (
           res <- staticAnalysisService.runAnalysis(analysisDirectoryBase, tree, content)
         } yield {
           res.map { analyzed =>
+            println(tree.file)
+            println("Content")
+            println(content.utf8String)
+            println("Analysis")
+            println(analyzed.utf8String)
             (tree, content, analyzed)
           }
         }

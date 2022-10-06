@@ -12,7 +12,7 @@ import play.api.libs.ws._
 import play.api.libs.json._
 import akka.stream.scaladsl.{ Source, Sink }
 
-case class IndexerQueueItem(orgId: Int, repo: String, repoId: Int, sha: String, indexId: Int, paths: List[String], workRecordId: String, indexRecordId: String)
+case class IndexerQueueItem(orgId: Int, repo: String, repoId: Int, sha: String, indexId: Int, paths: List[String])
 
 object IndexerQueueItem {
   implicit val format = Json.format[IndexerQueueItem]

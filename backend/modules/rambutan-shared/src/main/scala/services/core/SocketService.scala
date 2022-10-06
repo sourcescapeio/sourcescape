@@ -195,7 +195,7 @@ class SocketService @Inject() (
   }
 
   // indexing records
-  def cloningProgress(orgId: Int, additionalOrgIds: List[Int], repo: String, repoId: Int, indexId: Int, progress: Int) = {
+  def cloningProgress(orgId: Int, repo: String, repoId: Int, indexId: Int, progress: Int) = {
     publish(
       EventMessage(
         orgId,
@@ -206,7 +206,7 @@ class SocketService @Inject() (
         Json.obj("repo" -> repo, "repoId" -> repoId, "indexId" -> indexId, "progress" -> progress, "cloningProgress" -> progress)))
   }
 
-  def cloningFinished(orgId: Int, additionalOrgIds: List[Int], repo: String, repoId: Int, indexId: Int) = {
+  def cloningFinished(orgId: Int, repo: String, repoId: Int, indexId: Int) = {
     publish(EventMessage(orgId, Nil, SocketEventType.CloningStarted, indexId.toString, true, Json.obj("repoId" -> repoId, "indexId" -> indexId, "repo" -> repo, "progress" -> 100)))
   }
 

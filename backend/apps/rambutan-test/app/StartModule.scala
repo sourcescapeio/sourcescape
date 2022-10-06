@@ -10,6 +10,5 @@ class StartModule extends AbstractModule {
     bind(classOf[AuthService]).to(classOf[LocalAuthService])
     bind(classOf[GitService]).to(classOf[LocalGitService])
     bind(classOf[FileService]).to(classOf[LocalFileService])
-    bind(classOf[ConsumerService]).to(classOf[WebhookConsumerService])
   }
 }

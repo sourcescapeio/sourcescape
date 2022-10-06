@@ -101,8 +101,8 @@ class RepoIndexingService @Inject() (
               "repoId" -> repoId,
               "sha" -> sha))
             obj = RepoSHAIndex(0, orgId, repoName, repoId, sha, maybeRootId, dirtySignature = None, parent.id, deleted = false, new DateTime().getMillis())
-            index <- repoIndexDataService.writeIndex(obj)(parent)
-            item = ClonerQueueItem(orgId, repoId, index.id, None, parent.id)
+            index <- repoIndexDataService.writeIndex(obj)
+            item = ClonerQueueItem(orgId, repoId, index.id, None)
           } yield {
             (index, Some(item))
           }
@@ -132,8 +132,8 @@ class RepoIndexingService @Inject() (
               "repoId" -> repoId,
               "sha" -> sha))
             obj = RepoSHAIndex(0, orgId, repoName, repoId, sha, maybeRootId, Some(Json.toJson(dirtySignature)), parent.id, deleted = false, new DateTime().getMillis())
-            index <- repoIndexDataService.writeIndex(obj)(parent)
-            item = ClonerQueueItem(orgId, repoId, index.id, Some(dirtyFiles), parent.id)
+            index <- repoIndexDataService.writeIndex(obj)
+            item = ClonerQueueItem(orgId, repoId, index.id, Some(dirtyFiles))
           } yield {
             (index, Some(item))
           }

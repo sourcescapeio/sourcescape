@@ -21,6 +21,7 @@ import java.nio.file.{ Paths, Files }
 import java.io.File
 import org.eclipse.jgit.lib.Repository
 import org.eclipse.jgit.api.Git
+import silvousplay.api.SpanContext
 
 @Singleton
 class ClonerService @Inject() (
@@ -34,7 +35,7 @@ class ClonerService @Inject() (
   fileService:          FileService)(implicit actorSystem: akka.actor.ActorSystem, ec: ExecutionContext) {
 
   val RequeueSize = 10
-  def runCloneForItem(item: ClonerQueueItem): Future[List[IndexerQueueItem]] = {
+  def runCloneForItem(item: ClonerQueueItem)(implicit context: SpanContext): Future[List[IndexerQueueItem]] = {
     val orgId = item.orgId
     val repoId = item.repoId
     val indexId = item.indexId
@@ -49,10 +50,7 @@ class ClonerService @Inject() (
       itemSHA = index.sha
       // get index
       repoName = dbConfig.repoName
-      parent <- logService.upsertParent(orgId, item.workId, Json.obj(
-        "repo" -> repoName,
-        "repoId" -> repoId,
-        "sha" -> itemSHA))
+      runCloneContext = context.decoupledSpan("Running clone")
       gitRepo <- gitService.getGitRepo(dbConfig)
       maybeDiff <- withDefined(index.rootIndexId) { rootIndexId =>
         for {
@@ -67,15 +65,15 @@ class ClonerService @Inject() (
       fileTree <- gitRepo.getTreeAt(itemSHA)
       indexerItems <- (maybeDiff, item.dirtyFiles) match {
         case (_, Some(dirty)) if !checkDirtyPaths(dirty) => {
-          logService.event(s"Dirty file checksums did not match. Likely files changed while item was in the queue. Discarding")(parent)
+          runCloneContext.event(s"Dirty file checksums did not match. Likely files changed while item was in the queue. Discarding")
           Future.successful(Nil)
         }
         case (Some(diff), Some(dirty)) => {
           val addPaths = maybeDiff.map(_.addPaths).getOrElse(Set.empty[String])
           val deleted = maybeDiff.map(_.deleted).getOrElse(Set.empty[String])
 
+          runCloneContext.event(s"Running dirty index off root")
           for {
-            _ <- logService.event(s"Running dirty index off root")(parent)
             indexerItem <- runSingleClone(
               dbConfig,
               gitRepo,
@@ -83,17 +81,17 @@ class ClonerService @Inject() (
               cleanTree = diff.addPaths -- dirty.addPaths,
               dirtyTree = dirty.addPaths,
               deleted = diff.deleted ++ dirty.deleted,
-              dirty = true)(parent)
+              dirty = true)(runCloneContext)
           } yield {
             List(indexerItem)
           }
         }
         case (None, Some(dirty)) => {
+          runCloneContext.event(s"No root. Running a clean root index and then a dirty index")
+          val obj = RepoSHAIndex(0, orgId, repoName, repoId, itemSHA, None, dirtySignature = None, "", deleted = false, new org.joda.time.DateTime().getMillis())
           for {
-            _ <- logService.event(s"No root. Running a clean root index and then a dirty index")(parent)
             // root
-            obj = RepoSHAIndex(0, orgId, repoName, repoId, itemSHA, None, dirtySignature = None, parent.id, deleted = false, new org.joda.time.DateTime().getMillis())
-            rootIndex <- repoIndexDataService.writeIndex(obj)(parent)
+            rootIndex <- repoIndexDataService.writeIndex(obj)
             indexerItemClean <- runSingleClone(
               dbConfig,
               gitRepo,
@@ -101,7 +99,7 @@ class ClonerService @Inject() (
               cleanTree = fileTree,
               dirtyTree = Set.empty[String],
               deleted = Set.empty[String],
-              dirty = false)(parent)
+              dirty = false)(runCloneContext)
             // dirty
             _ <- repoIndexDataService.setIndexRoot(indexId, rootIndex.id)
             indexerItem <- runSingleClone(
@@ -111,14 +109,14 @@ class ClonerService @Inject() (
               cleanTree = Set.empty[String],
               dirtyTree = dirty.addPaths,
               deleted = dirty.deleted,
-              dirty = true)(parent)
+              dirty = true)(runCloneContext)
           } yield {
             List(indexerItem, indexerItemClean)
           }
         }
         case (Some(diff), None) => {
+          runCloneContext.event(s"Running diffed index")
           for {
-            _ <- logService.event(s"Running diffed index")(parent)
             indexerItem <- runSingleClone(
               dbConfig,
               gitRepo,
@@ -127,14 +125,14 @@ class ClonerService @Inject() (
               cleanTree = diff.addPaths,
               dirtyTree = Set.empty[String],
               deleted = diff.deleted,
-              dirty = false)(parent)
+              dirty = false)(runCloneContext)
           } yield {
             List(indexerItem)
           }
         }
         case (None, None) => {
+          runCloneContext.event(s"Running full index of root")
           for {
-            _ <- logService.event(s"Running full index of root")(parent)
             indexerItem <- runSingleClone(
               dbConfig,
               gitRepo,
@@ -142,13 +140,14 @@ class ClonerService @Inject() (
               cleanTree = fileTree,
               dirtyTree = Set.empty[String],
               deleted = Set.empty[String],
-              dirty = false)(parent)
+              dirty = false)(runCloneContext)
           } yield {
             List(indexerItem)
           }
         }
       }
     } yield {
+      runCloneContext.terminate()
       gitRepo.close()
       indexerItems
     }
@@ -162,59 +161,52 @@ class ClonerService @Inject() (
     cleanTree: Set[String],
     dirtyTree: Set[String],
     deleted:   Set[String],
-    dirty:     Boolean)(implicit workRecord: WorkRecord): Future[IndexerQueueItem] = {
-    val orgId = dbRepo.orgId
-    val repoName = dbRepo.repoName
-    val repoId = dbRepo.repoId
-    //
-    val indexId = index.id
-    val rootIndexId = index.rootIndexId
-    val sha = index.sha
-
-    for {
-      // write index
-      // create sub records
-      copyRecord <- logService.createChild(workRecord, Json.obj("task" -> "copy"))
-      indexRecord <- logService.createChild(workRecord, Json.obj("task" -> "indexing"))
-      /**
-       * Copy pipeline
-       */
-      _ <- logService.startRecord(copyRecord)
-      additionalOrgIds <- repoDataService.getAdditionalOrgs(repoId)
-      _ <- socketService.cloningProgress(orgId, additionalOrgIds, copyRecord.id, repoName, repoId, indexId, 0)
-      collectionsDirectory = index.collectionsDirectory
-      _ <- logService.event(s"Starting copying. Ensuring collections directory ${collectionsDirectory}")(copyRecord)
-      _ <- logService.event(s"Copying clean files ${cleanTree.mkString(", ")}")(copyRecord)
-      _ <- copyClean(cleanTree.toList, repo, sha, collectionsDirectory)(copyRecord, additionalOrgIds, repoName, repoId, indexId)
-      _ <- logService.event(s"Copying dirty files ${dirtyTree.mkString(", ")}")(copyRecord)
-      _ <- withDefined(dbRepo.dirtyPath) { dirtyPath =>
-        copyDirty(dirtyTree.toList, dirtyPath, collectionsDirectory)
-      }
-      fileTree = cleanTree ++ dirtyTree
-      _ <- logService.event(s"Writing out ${fileTree.size} trees")(copyRecord)
-      _ <- repoIndexDataService.writeTrees(indexId, fileTree.toList, deleted.toList)
-      _ <- logService.event(s"Done copying")(copyRecord)
-      _ <- logService.finishRecord(copyRecord)
+    dirty:     Boolean)(context: SpanContext): Future[IndexerQueueItem] = {
+    context.withSpan("Doing clone...") { implicit subContext =>
+      val orgId = dbRepo.orgId
+      val repoName = dbRepo.repoName
+      val repoId = dbRepo.repoId
       //
-      queueItem = IndexerQueueItem(
-        orgId,
-        repoName,
-        repoId,
-        sha,
-        indexId,
-        fileTree.toList,
-        workRecord.id,
-        indexRecord.id)
-      _ <- socketService.cloningFinished(orgId, additionalOrgIds, copyRecord.id, repoName, repoId, indexId)
-    } yield {
-      queueItem
+      val indexId = index.id
+      val rootIndexId = index.rootIndexId
+      val sha = index.sha
+
+      for {
+        /**
+         * Copy pipeline
+         */
+        _ <- socketService.cloningProgress(orgId, repoName, repoId, indexId, 0)
+        collectionsDirectory = index.collectionsDirectory
+        _ = subContext.event(s"Starting copying. Ensuring collections directory ${collectionsDirectory}")
+        _ = subContext.event(s"Copying clean files ${cleanTree.mkString(", ")}")
+        _ <- copyClean(orgId, cleanTree.toList, repo, sha, collectionsDirectory)(repoName, repoId, indexId)
+        _ = subContext.event(s"Copying dirty files ${dirtyTree.mkString(", ")}")
+        _ <- withDefined(dbRepo.dirtyPath) { dirtyPath =>
+          copyDirty(dirtyTree.toList, dirtyPath, collectionsDirectory)
+        }
+        fileTree = cleanTree ++ dirtyTree
+        _ = subContext.event(s"Writing out ${fileTree.size} trees")
+        _ <- repoIndexDataService.writeTrees(indexId, fileTree.toList, deleted.toList)
+        _ = subContext.event(s"Done copying")
+        //
+        queueItem = IndexerQueueItem(
+          orgId,
+          repoName,
+          repoId,
+          sha,
+          indexId,
+          fileTree.toList)
+        _ <- socketService.cloningFinished(orgId, repoName, repoId, indexId)
+      } yield {
+        queueItem
+      }
     }
   }
 
   /**
    * Helpers
    */
-  private def copyClean(files: List[String], repo: GitServiceRepo, sha: String, to: String)(record: WorkRecord, additionalOrgIds: List[Int], repoName: String, repoId: Int, indexId: Int) = {
+  private def copyClean(orgId: Int, files: List[String], repo: GitServiceRepo, sha: String, to: String)(repoName: String, repoId: Int, indexId: Int) = {
     ifNonEmpty(files) {
       val fileSet = files.toSet
       for {
@@ -223,7 +215,7 @@ class ClonerService @Inject() (
         _ <- Source(files).scanAsync((0, "", akka.util.ByteString.empty)) {
           case ((counter, _, _), (f, content)) => {
             val progress = (counter / fileTotal.toDouble * 100).toInt
-            socketService.cloningProgress(record.orgId, additionalOrgIds, record.id, repoName, repoId, indexId, progress) map { _ =>
+            socketService.cloningProgress(orgId, repoName, repoId, indexId, progress) map { _ =>
               (counter + 1, f, content)
             }
           }

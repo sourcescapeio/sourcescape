@@ -23,7 +23,7 @@ const PlainBody = createParamDecorator(async (_, context: ExecutionContext) => {
     throw new BadRequestException('Invalid body');
   }
 
-  const body = (await rawBody(req)).toString('utf8').trim();
+  const body = (await rawBody(req)).toString('utf8');
   return body;
 });
 

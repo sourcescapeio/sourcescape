@@ -29,7 +29,6 @@ class StartModule extends AbstractModule {
     bind(classOf[RepoDataService]).to(classOf[LocalRepoDataService])
     bind(classOf[GitService]).to(classOf[LocalGitService])
     bind(classOf[FileService]).to(classOf[LocalFileService])
-    bind(classOf[ConsumerService]).to(classOf[WebhookConsumerService])
 
     bind(classOf[ApplicationStart])
       .asEagerSingleton()

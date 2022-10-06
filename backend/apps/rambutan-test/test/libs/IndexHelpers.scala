@@ -13,6 +13,7 @@ import akka.util.ByteString
 import play.api.libs.json._
 import models.Schema
 import org.mockito.MockitoSugar
+import silvousplay.api.NoopSpanContext
 
 trait IndexHelpers {
   self: RambutanSpec =>
@@ -28,7 +29,9 @@ trait IndexHelpers {
       case (path, v) => {
         val fullPath = s"${RepoSHAHelpers.CollectionsDirectory}/${index.esKey}/${path}"
         when(fileService.readFile(fullPath)).thenReturn {
-          Future.successful(ByteString(v))
+          println("GOT", fullPath)
+          println(v)
+          Future.successful(ByteString(v, "UTF-8"))
         }
       }
     }
@@ -37,14 +40,12 @@ trait IndexHelpers {
       _ <- dal.RepoSHAIndexTable.insert(index)
       queueItem = IndexerQueueItem(
         index.orgId,
-        index.repoName, 
+        index.repoName,
         index.repoId,
-        index.sha, 
+        index.sha,
         index.id,
-        data.map(_._1).toList,
-        "",
-        ""
-      )
+        data.map(_._1).toList)
+      _ <- indexerWorker.runIndex(queueItem)(NoopSpanContext)
       // _ <- indexerWorker.runTestIndexing(
       //   index,
       //   data.toMap)
@@ -55,48 +56,4 @@ trait IndexHelpers {
       ()
     }
   }
-
-  // protected def createSchema(title: String, index: RepoSHAIndex, indexType: IndexType, fieldAliases: Map[String, String] = Map.empty[String, String])(q: String*)(selected: String*)(implicit ec: ExecutionContext) = {
-  //   val schemaService = app.injector.instanceOf[SchemaService]
-
-  //   for {
-  //     schema <- schemaService.createSchema(
-  //       index.orgId,
-  //       title = title,
-  //       fieldAliases = fieldAliases,
-  //       context = SrcLogCodeQuery.parseOrDie(q.mkString("\n"), indexType).dto,
-  //       selected = selected.toList,
-  //       named = Nil,
-  //       fileFilter = None,
-  //       selectedRepos = List(index.repoId))
-  //   } yield {
-  //     schema.schema
-  //   }
-  // }
-
-  // protected def runSnapshot(index: RepoSHAIndex, schema: Schema)(implicit ec: ExecutionContext) = {
-  //   val logService = app.injector.instanceOf[LogService]
-  //   val snapshotter = app.injector.instanceOf[SnapshotterWorker]
-
-  //   for {
-  //     workRecord <- logService.createParent(index.orgId, Json.obj("test" -> "test"))
-  //     queueItem = SnapshotterQueueItem(index.orgId, schema.id, index.id, workRecord.id)
-  //     _ <- snapshotter.runSnapshot(queueItem)
-  //     // force refresh
-  //     // _ <- refreshGenericIndexes()
-  //   } yield {
-  //     ()
-  //   }
-  // }
-
-  // protected def refreshGenericIndexes()(implicit ec: ExecutionContext) = {
-  //   val elasticSearchService = app.injector.instanceOf[ElasticSearchService]
-
-  //   for {
-  //     _ <- elasticSearchService.refresh(GenericGraphNode.globalIndex)
-  //     _ <- elasticSearchService.refresh(GenericGraphEdge.globalIndex)
-  //   } yield {
-  //     ()
-  //   }
-  // }
 }

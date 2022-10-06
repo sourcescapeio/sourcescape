@@ -20,7 +20,6 @@ import models.index.{ GraphNode, GraphEdge, GraphNodeBuilder }
 class IndexController @Inject() (
   configuration:         play.api.Configuration,
   telemetryService:      TelemetryService,
-  consumerService:       services.ConsumerService,
   repoService:           services.RepoService,
   repoDataService:       services.RepoDataService,
   repoIndexDataService:  services.RepoIndexDataService,
@@ -63,82 +62,6 @@ class IndexController @Inject() (
           // analysisFile = scala.io.Source.fromFile(path).getLines().mkString("\n")
         } yield {
           Json.obj("file" -> "")
-        }
-      }
-    }
-  }
-
-  def deleteAllIndexes(orgId: Int) = {
-    api { implicit request =>
-      authService.authenticatedForOrg(orgId, OrgRole.Admin) {
-        for {
-          indexes <- repoIndexDataService.getIndexesForOrg(orgId)
-          _ <- Source(indexes).mapAsync(4) { idx =>
-            repoService.deleteSHAIndex(orgId, idx.repoId, idx.id)
-          }.runWith(Sink.ignore)
-        } yield {
-          ()
-        }
-      }
-    }
-  }
-
-  def runIndexForSHA(orgId: Int, repoId: Int, sha: String, forceRoot: Boolean) = {
-    api { implicit request =>
-      authService.authenticatedForOrg(orgId, OrgRole.Admin) {
-        telemetryService.withTelemetry { implicit c =>
-          for {
-            repo <- repoDataService.getRepo(repoId).map {
-              _.getOrElse(throw models.Errors.notFound("repo.dne", "Repo not found"))
-            }
-            _ <- consumerService.runCleanIndexForSHA(orgId, repo.repoName, repoId, sha, forceRoot)
-          } yield {
-            ()
-          }
-        }
-      }
-    }
-  }
-
-  def deleteIndexForSHA(orgId: Int, repoId: Int, sha: String, indexId: Int) = {
-    api { implicit request =>
-      authService.authenticatedForOrg(orgId, OrgRole.Admin) {
-        repoService.deleteSHAIndex(orgId, repoId, indexId)
-      }
-    }
-  }
-
-  import services.IndexerQueueItem
-  def reindex(orgId: Int, repoId: Int, sha: String, indexId: Int) = {
-    api { implicit request =>
-      authService.authenticatedForOrg(orgId, OrgRole.Admin) {
-        // We only use this to debug so only going to do clean ones
-        for {
-          index <- repoIndexDataService.getIndexId(indexId).map {
-            _.getOrElse(throw models.Errors.notFound("index.dne", "Index not found"))
-          }
-          // create records
-          parentRecord <- logService.createParent(orgId, Json.obj("repoId" -> repoId, "sha" -> sha))
-          indexRecord <- logService.createChild(parentRecord, Json.obj("task" -> "indexing"))
-          // get trees
-          paths <- repoIndexDataService.getSHAIndexTreeBatch(List(indexId)).map(_.getOrElse(indexId, Nil))
-          // delete
-          // no need to delete trees as will be wiped by indexer
-          _ <- indexService.deleteKey(index)
-          // index
-          item = IndexerQueueItem(
-            index.orgId,
-            index.repoName,
-            index.repoId,
-            index.sha,
-            index.id,
-            paths,
-            parentRecord.id,
-            indexRecord.id)
-          _ <- indexerQueueService.ack(item)
-          _ <- indexerQueueService.enqueue(item)
-        } yield {
-          ()
         }
       }
     }

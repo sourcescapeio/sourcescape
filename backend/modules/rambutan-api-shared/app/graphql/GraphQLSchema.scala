@@ -212,7 +212,12 @@ object SchemaDefinition {
       "Mutation", fields[RambutanContext, Any](
         Field("createScan", Scan,
           arguments = PathArg :: Nil,
-          resolve = ctx => ctx.ctx.localScanService.createScan(-1, ctx.arg(PathArg), shouldScan = true)),
+          resolve = ctx => {
+            implicit val ec = ctx.ctx.ec
+            ctx.ctx.telemetryService.withTelemetry { implicit context => 
+              ctx.ctx.localScanService.createScan(-1, ctx.arg(PathArg), shouldScan = true)
+            }
+          }),
         Field("deleteScan", OptionType(Scan),
           arguments = ScanID :: Nil,
           resolve = ctx => ctx.ctx.localScanService.deleteScan(-1, ctx.arg(ScanID))),

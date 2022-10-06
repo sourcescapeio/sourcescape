@@ -244,7 +244,7 @@ class QuerySpecCompose
 
   def config() = {
     Map(
-      "primadonna.server" -> s"http://localhost:${3002}",
+      "primadonna.server" -> s"http://localhost:${3001}", // use 3002 to test against docker
       "dorothy.server" -> s"http://localhost:${3004}",
       "redis.port" -> s"${6380}",
       "elasticsearch.port" -> s"${9201}",

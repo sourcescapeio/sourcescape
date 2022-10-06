@@ -210,10 +210,9 @@ abstract class ScanAndIndexSpec extends RambutanSpec {
           """)
 
         // Need to start up indexers here first before we schedule the mutation
-        val webhookConsumerService = app.injector.instanceOf[WebhookConsumerService]
-        val clonerService = app.injector.instanceOf[ClonerService]
-        val indexerWorker = app.injector.instanceOf[IndexerWorker]
-        val consumerF = webhookConsumerService.consumeOne()
+        // val clonerService = app.injector.instanceOf[ClonerService]
+        // val indexerWorker = app.injector.instanceOf[IndexerWorker]
+        // // val consumerF = webhookConsumerService.consumeOne()
         // val clonerF = clonerService.consumeOne()
         // val indexF = indexerWorker.consumeOne()
 
@@ -231,7 +230,7 @@ abstract class ScanAndIndexSpec extends RambutanSpec {
           println(res)
         }
 
-        await(consumerF)
+        // await(consumerF)
 
         await {
           socket.waitFor {
