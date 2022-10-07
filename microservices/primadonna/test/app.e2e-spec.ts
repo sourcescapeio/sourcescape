@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
 import * as request from 'supertest';
-import { MainModule } from './../src/main/main.module';
+import { MainModule } from '../src/main/main.module';
 import { curl } from './lib/curl';
 
 const PROGRAM = `

@@ -26,6 +26,7 @@
     "@nestjs/microservices": "^9.1.2",
     "@nestjs/platform-express": "^8.0.0",
     "@ts-morph/bootstrap": "^0.17.0",
+    "@ts-morph/common": "^0.17.0",
     "@typescript-eslint/typescript-estree": "^5.39.0",
     "cache-manager": "^4.0.0",
     "raw-body": "^2.5.1",
