@@ -72,10 +72,6 @@ create table "query_cache_cursor" ("cache_id" INTEGER NOT NULL,"key" VARCHAR NOT
 
 alter table "query_cache_cursor" add constraint "query_cache_cursor_pk" primary key("cache_id","key","start");
 
-create table "work_record" ("id" VARCHAR NOT NULL PRIMARY KEY,"parents" text [] NOT NULL,"tags" jsonb NOT NULL,"org_id" INTEGER NOT NULL,"status" VARCHAR NOT NULL,"started" BIGINT,"finished" BIGINT);
-
-create index "work_record_parents_idx" on "work_record" ("org_id","parents");
-
 -- !Downs
 
 alter table "local_repo_config" drop constraint "local_repo_config_pk";
@@ -137,5 +133,3 @@ drop table "query_cache_key";
 alter table "query_cache_cursor" drop constraint "query_cache_cursor_pk";
 
 drop table "query_cache_cursor";
-
-drop table "work_record";

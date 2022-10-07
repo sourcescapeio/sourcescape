@@ -18,7 +18,6 @@ class IndexSweeperService @Inject() (
   repoDataService:        RepoDataService,
   repoService:            RepoService,
   cronService:            CronService,
-  logService:             LogService,
   socketService:          SocketService,
   fileService:            FileService,
   queueManagementService: QueueManagementService)(implicit ec: ExecutionContext, mat: akka.stream.Materializer) {

@@ -83,31 +83,3 @@ GET     /orgs/:orgId/saved-queries/:id              controllers.SavedQueryContro
 POST    /orgs/:orgId/saved-targeting                controllers.SavedTargetingController.createSavedTargeting(orgId: Int)
 GET     /orgs/:orgId/saved-targeting                controllers.SavedTargetingController.listSavedTargeting(orgId: Int)
 # DELETE
-
-
-#########
-# CACHE #
-#########
-
-POST    /orgs/:orgId/cache                          controllers.CacheController.createCache(orgId: Int)
-GET     /orgs/:orgId/cache/:id                      controllers.CacheController.getCache(orgId: Int, id: Int, keys: List[String])
-GET     /orgs/:orgId/cache/:id/data                 controllers.CacheController.getCacheData(orgId: Int, id: Int, start: Int, end: Int, keys: List[String])
-GET     /orgs/:orgId/cache/:id/plan                 controllers.CacheController.getQueryPlan(orgId: Int, id: Int, start: Int, end: Int, keys: List[String])
-
-
-################
-# Logging APIs #
-################
-
-GET     /orgs/:oId/work                       controllers.LogController.listWork(oId: Int)
-GET     /orgs/:oId/work/summary               controllers.LogController.getWorkSummary(oId: Int, status: Option[models.WorkStatus])
-GET     /orgs/:oId/work/:wId                  controllers.LogController.getWorkTree(oId: Int, wId: String)
-GET     /orgs/:oId/work/:wId/logs             controllers.LogController.getLogs(oId: Int, wId: String, parentOnly: Option[Boolean], errorOnly: Option[Boolean])
-GET     /orgs/:oId/work/:wId/logs/:lId        controllers.LogController.getLogItem(oId: Int, wId: String, lId: String)
-
-POST    /orgs/:oId/work/clean                 controllers.LogController.cleanWork(oId: Int)
-DELETE  /orgs/:oId/work/:wId                  controllers.LogController.deleteWork(oId: Int, wId: String)
-
-# Collection logs
-POST    /orgs/:oId/logs/es-index              controllers.LogController.cycleLogIndex(oId: Int)
-GET     /orgs/:oId/logs/es-index              controllers.LogController.getLogIndex(oId: Int)

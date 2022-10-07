@@ -11,10 +11,6 @@ case class RepoSHA(
   refs:     List[String],
   message:  String) {
 
-  private def extractTask(children: List[WorkRecord], task: String) = {
-    children.filter(c => (c.tags \ "task").asOpt[String] =?= Some(task)).sortBy(_.started).reverse.headOption
-  }
-
   def dto = HydratedRepoSHA(this, Nil, None).dto
 }
 

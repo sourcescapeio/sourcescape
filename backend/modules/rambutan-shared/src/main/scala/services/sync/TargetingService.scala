@@ -17,15 +17,11 @@ class TargetingService @Inject() (
   configuration:        play.api.Configuration,
   repoDataService:      RepoDataService,
   repoIndexDataService: RepoIndexDataService,
-  gitService:           GitService,
-  logService:           LogService)(implicit ec: ExecutionContext, mat: akka.stream.Materializer) {
+  gitService:           GitService)(implicit ec: ExecutionContext, mat: akka.stream.Materializer) {
 
-  private def indexObj(index: RepoSHAIndex, maybeWork: Option[WorkRecord]) = {
-    maybeWork match {
-      case Some(work) => Json.obj("work" -> true, "indexId" -> index.id)
-      case _          => Json.obj("indexId" -> index.id)
-    }
-  }
+  // private def indexObj(index: RepoSHAIndex) = {
+  //   case _          => Json.obj("indexId" -> index.id)
+  // }
 
   // def repoTargeting(orgId: Int, repoId: Int)(implicit context: SpanContext): Future[JsObject] = {
   //   for {

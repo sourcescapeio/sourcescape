@@ -1,6 +1,6 @@
 package services
 
-import models.{ AnalysisType, GenericRepo, RepoSHA, WorkRecord, RepoSHAIndex }
+import models.{ AnalysisType, GenericRepo, RepoSHA, RepoSHAIndex }
 import models.index.{ GraphEdge, GraphResult }
 import javax.inject._
 import scala.concurrent.{ ExecutionContext, Future }
@@ -29,7 +29,6 @@ class ClonerService @Inject() (
   repoDataService:      RepoDataService,
   repoIndexDataService: RepoIndexDataService,
   indexerQueueService:  IndexerQueueService,
-  logService:           LogService,
   gitService:           GitService,
   socketService:        SocketService,
   fileService:          FileService)(implicit actorSystem: akka.actor.ActorSystem, ec: ExecutionContext) {

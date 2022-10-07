@@ -13,7 +13,6 @@ import play.api.libs.json._
 @Singleton
 class IndexerHealthController @Inject() (
   configuration:          play.api.Configuration,
-  logService:             services.LogService,
   queueManagementService: services.QueueManagementService,
   indexService:           services.IndexService)(implicit ec: ExecutionContext, as: ActorSystem) extends API {
 
@@ -25,13 +24,7 @@ class IndexerHealthController @Inject() (
 
   def health() = {
     api { implicit request =>
-      for {
-        // resp1 <- indexService.getNodesIndex()
-        // resp2 <- indexService.getEdgesIndex()
-        resp3 <- logService.getLogIndex()
-      } yield {
-        "Healthy"
-      }
+      "Healthy"
     }
   }
 }

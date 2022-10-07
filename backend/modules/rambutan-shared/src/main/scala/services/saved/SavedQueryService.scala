@@ -12,13 +12,10 @@ import org.joda.time._
 class SavedQueryService @Inject() (
   dao:                   dal.SharedDataAccessLayer,
   configuration:         play.api.Configuration,
-  savedQueryDataService: SavedQueryDataService,
-  queryCacheService:     QueryCacheService,
-  logService:            LogService)(implicit ec: ExecutionContext) {
+  savedQueryDataService: SavedQueryDataService)(implicit ec: ExecutionContext) {
 
   def deleteSavedQuery(orgId: Int, id: Int): Future[Unit] = {
     for {
-      _ <- queryCacheService.deleteCacheForQuery(orgId, id)
       _ <- savedQueryDataService.deleteSavedQuery(orgId, id)
     } yield {
       ()

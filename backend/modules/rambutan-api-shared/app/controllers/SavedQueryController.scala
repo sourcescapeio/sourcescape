@@ -20,9 +20,7 @@ class SavedQueryController @Inject() (
   authService:           services.AuthService,
   savedQueryService:     services.SavedQueryService,
   savedQueryDataService: services.SavedQueryDataService,
-  queryCacheService:     services.QueryCacheService,
-  queryTargetingService: services.QueryTargetingService,
-  cachingQueueService:   services.CachingQueueService)(implicit ec: ExecutionContext, as: ActorSystem) extends API {
+  queryTargetingService: services.QueryTargetingService)(implicit ec: ExecutionContext, as: ActorSystem) extends API {
 
   def createSavedQuery(orgId: Int) = {
     api(parse.tolerantJson) { implicit request =>

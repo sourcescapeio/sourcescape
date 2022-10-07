@@ -25,11 +25,9 @@ class IndexerWorker @Inject() (
   repoDataService:       RepoDataService,
   fileService:           FileService,
   staticAnalysisService: StaticAnalysisService,
-  logService:            LogService,
   socketService:         SocketService,
   indexerQueueService:   IndexerQueueService,
-  savedQueryService:     SavedQueryService,
-  cachingQueueService:   CachingQueueService)(implicit ec: ExecutionContext, mat: akka.stream.Materializer) {
+  savedQueryService:     SavedQueryService)(implicit ec: ExecutionContext, mat: akka.stream.Materializer) {
 
   /**
    * Indexing. Split into separate service.
@@ -48,6 +46,12 @@ class IndexerWorker @Inject() (
        */
       fileTree = item.paths
       collectionsDirectory = index.collectionsDirectory
+      // TODO: fix hardcode
+      _ <- staticAnalysisService.startDirectoryLanguageServer(
+        AnalysisType.ESPrimaTypescript,
+        indexId,
+        collectionsDirectory
+      )
       analysisDirectoryBase = index.analysisDirectory
       _ = context.event("Starting indexing.")
       _ <- repoIndexDataService.deleteAnalysisTrees(indexId)
@@ -58,8 +62,6 @@ class IndexerWorker @Inject() (
       /**
        * Index pipeline
        */
-      // TODO: fix hardcode
-      // _ <- staticAnalysisService.startDirectoryLanguageServer(AnalysisType.ESPrimaTypescript, indexId, index.collectionsDirectory)
       _ <- Source(fileTree)
         .via(reportProgress(orgId, repo, repoId, indexId, fileTree.length)) // report earlier for better accuracy
         .via(readFiles(collectionsDirectory, indexId, concurrency = 1)(context))
@@ -77,12 +79,10 @@ class IndexerWorker @Inject() (
         .via(fanoutIndexing(orgId, repo, repoId, sha)(materializeSpan))
         .via(indexerService.writeElasticSearch(concurrency = (IndexType.all.length * 2))(writeSpan))
         .runWith(Sink.ignore)
-
       //
       _ = analysisSpan.terminate()
       _ = materializeSpan.terminate()
       _ = writeSpan.terminate()
-      // _ <- staticAnalysisService.stopLanguageServer()
       /**
        * Update pointer
        */
@@ -91,6 +91,8 @@ class IndexerWorker @Inject() (
       /**
        * Finish up
        */
+      // TODO: fix hardcode
+      _ <- staticAnalysisService.stopLanguageServer(AnalysisType.ESPrimaTypescript, indexId)
       _ <- socketService.indexingFinished(orgId, repo, repoId, sha, indexId)
     } yield {
       ()
@@ -250,7 +252,12 @@ class IndexerWorker @Inject() (
   private def fanoutIndexing(orgId: Int, repo: String, repoId: Int, sha: String)(context: SpanContext) = {
     indexerService.fanoutIndexing(
       materializeNodes(orgId, repo, repoId, sha)(context),
-      materializeEdges(orgId, repo, repoId, sha)(context))
+      materializeEdges(orgId, repo, repoId, sha)(context),
+
+      // setup links
+      // buildSymbolTable,
+      // filter
+    )
   }
 
   private def materializeEdges(orgId: Int, repo: String, repoId: Int, sha: String)(context: SpanContext) = {

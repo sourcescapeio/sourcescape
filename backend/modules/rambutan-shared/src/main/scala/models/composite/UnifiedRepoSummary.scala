@@ -30,14 +30,12 @@ case class UnifiedRepoSummary(
 }
 
 case class UnifiedIndexItem(
-  indexId: Int,
-  status:  Option[WorkStatus]) {
-  def dto = UnifiedIndexItemDTO(indexId, status)
+  indexId: Int) {
+  def dto = UnifiedIndexItemDTO(indexId)
 }
 
 case class UnifiedIndexItemDTO(
-  indexId: Int,
-  status:  Option[WorkStatus])
+  indexId: Int)
 
 object UnifiedIndexItemDTO {
   implicit val writes = Json.writes[UnifiedIndexItemDTO]

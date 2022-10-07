@@ -33,9 +33,7 @@ class SharedDataAccessLayer @Inject() (
   // Cache
   with QueryCacheTableComponent
   with QueryCacheKeyTableComponent
-  with QueryCacheCursorTableComponent
-  // Logging
-  with WorkRecordTableComponent {
+  with QueryCacheCursorTableComponent {
 
   lazy val allTables = Enums.extract[data.CanInitializeTable]
 }

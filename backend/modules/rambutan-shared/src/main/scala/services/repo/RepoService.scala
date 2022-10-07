@@ -17,10 +17,8 @@ import silvousplay.api.SpanContext
 class RepoService @Inject() (
   configuration:        play.api.Configuration,
   indexService:         IndexService,
-  logService:           LogService,
   repoDataService:      RepoDataService,
   repoIndexDataService: RepoIndexDataService,
-  queryCacheService:    QueryCacheService,
   dao:                  dal.SharedDataAccessLayer,
   socketService:        SocketService,
   fileService:          FileService)(implicit ec: ExecutionContext, mat: akka.stream.Materializer) {
@@ -119,28 +117,10 @@ class RepoService @Inject() (
       shaMap <- repoIndexDataService.getSHAsBatch(shas).map {
         _.values.flatten.map(i => i.repoId -> i).toMap
       }
-      logs <- logService.getRecords(flattened.map(_.workId)).map {
-        _.map(i => i.id -> i).toMap
-      }
     } yield {
       repos.map { repo =>
-        repo.unified(indexMap, latestIndexes, logs, shaMap)
+        repo.unified(indexMap, latestIndexes, shaMap)
       }.sortBy(_.repo)
-    }
-  }
-
-  def cleanWork(orgId: Int): Future[Unit] = {
-    for {
-      works <- logService.listWorkRecords(orgId)
-      indexes <- repoIndexDataService.getIndexesForOrg(orgId)
-      // get indexes
-      validWork = indexes.map(_.workId).toSet
-      toDelete = works.filterNot(validWork contains _.self.id).map(_.self.id)
-      _ <- Source(toDelete).mapAsync(4) { workId =>
-        logService.deleteWork(orgId, workId)
-      }.runWith(Sink.ignore)
-    } yield {
-      ()
     }
   }
 
@@ -157,7 +137,6 @@ class RepoService @Inject() (
       _ <- repoIndexDataService.deleteAnalysisTrees(indexId)
       _ <- dao.SHAIndexTreeTable.byIndex.delete(indexId)
       _ <- dao.RepoSHAIndexTable.byId.delete(indexId)
-      _ <- logService.deleteWork(orgId, index.workId)
       _ <- indexService.deleteKey(index)
       // _ <- queryCacheService.deleteAllCachesForKey(orgId, key)
       _ <- fileService.deleteRecursively(index.collectionsDirectory)

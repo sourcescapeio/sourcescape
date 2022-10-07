@@ -16,8 +16,7 @@ import org.joda.time._
 @Singleton
 class SavedQueryDataService @Inject() (
   dao:           dal.SharedDataAccessLayer,
-  configuration: play.api.Configuration,
-  logService:    LogService)(implicit ec: ExecutionContext) {
+  configuration: play.api.Configuration)(implicit ec: ExecutionContext) {
 
   def createSavedQuery(orgId: Int, name: String, context: query.SrcLogCodeQuery, selected: String, temporary: Boolean): Future[SavedQuery] = {
     val selectedContext = context.withSelected(selected :: Nil) // does this do anything?

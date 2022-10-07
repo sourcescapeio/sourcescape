@@ -7,7 +7,6 @@ import akka.stream.scaladsl.{ Source, Sink }
 @Singleton
 class IndexUpgradeService @Inject() (
   indexService: IndexService,
-  logService: LogService,
   dao:                    dal.SharedDataAccessLayer, // eww
 )(implicit ec: ExecutionContext, mat: akka.stream.Materializer) {
 
@@ -16,7 +15,6 @@ class IndexUpgradeService @Inject() (
       allIndexes <- dao.RepoSHAIndexTable.all()
       _ <- Source(allIndexes).mapAsync(1) { index =>
         for {
-          _ <- logService.deleteWork(index.orgId, index.workId)
           _ <- indexService.deleteKey(index)    
         } yield {
           ()

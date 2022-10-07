@@ -29,8 +29,6 @@ trait IndexHelpers {
       case (path, v) => {
         val fullPath = s"${RepoSHAHelpers.CollectionsDirectory}/${index.esKey}/${path}"
         when(fileService.readFile(fullPath)).thenReturn {
-          println("GOT", fullPath)
-          println(v)
           Future.successful(ByteString(v, "UTF-8"))
         }
       }
@@ -46,9 +44,6 @@ trait IndexHelpers {
         index.id,
         data.map(_._1).toList)
       _ <- indexerWorker.runIndex(queueItem)(NoopSpanContext)
-      // _ <- indexerWorker.runTestIndexing(
-      //   index,
-      //   data.toMap)
       // force refresh to get data to propagate
       _ <- elasticSearchService.refresh(indexType.nodeIndexName)
       _ <- elasticSearchService.refresh(indexType.edgeIndexName)

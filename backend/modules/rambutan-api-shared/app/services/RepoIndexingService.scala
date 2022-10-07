@@ -22,7 +22,6 @@ class RepoIndexingService @Inject() (
   repoDataService:        RepoDataService,
   gitService:             GitService,
   repoIndexDataService:   RepoIndexDataService,
-  logService:             LogService,
   gitTreeIndexingService: GitTreeIndexingService,
   clonerService:          ClonerService,
   indexerWorker:          IndexerWorker)(implicit val ec: ExecutionContext, mat: akka.stream.Materializer) {
@@ -96,11 +95,8 @@ class RepoIndexingService @Inject() (
           }
         }
         case _ => {
+          val obj = RepoSHAIndex(0, orgId, repoName, repoId, sha, maybeRootId, dirtySignature = None, "", deleted = false, new DateTime().getMillis())
           for {
-            parent <- logService.createParent(orgId, Json.obj(
-              "repoId" -> repoId,
-              "sha" -> sha))
-            obj = RepoSHAIndex(0, orgId, repoName, repoId, sha, maybeRootId, dirtySignature = None, parent.id, deleted = false, new DateTime().getMillis())
             index <- repoIndexDataService.writeIndex(obj)
             item = ClonerQueueItem(orgId, repoId, index.id, None)
           } yield {
@@ -128,10 +124,7 @@ class RepoIndexingService @Inject() (
         case None => {
           for {
             maybeRootId <- getRootId(orgId, repoId, sha, includeSelf = true)
-            parent <- logService.createParent(orgId, Json.obj(
-              "repoId" -> repoId,
-              "sha" -> sha))
-            obj = RepoSHAIndex(0, orgId, repoName, repoId, sha, maybeRootId, Some(Json.toJson(dirtySignature)), parent.id, deleted = false, new DateTime().getMillis())
+            obj = RepoSHAIndex(0, orgId, repoName, repoId, sha, maybeRootId, Some(Json.toJson(dirtySignature)), "", deleted = false, new DateTime().getMillis())
             index <- repoIndexDataService.writeIndex(obj)
             item = ClonerQueueItem(orgId, repoId, index.id, Some(dirtyFiles))
           } yield {

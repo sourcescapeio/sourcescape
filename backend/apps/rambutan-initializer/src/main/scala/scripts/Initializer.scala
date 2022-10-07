@@ -63,8 +63,6 @@ object Initializer {
         }
       }.runWith(Sink.ignore)
       // static indexes
-      _ <- elasticSearchService.ensureIndex(WorkLogDocument.globalIndex, WorkLogDocument.mappings)
-      _ = println("Ensured log index")
       _ <- elasticSearchService.ensureIndex(GenericGraphNode.globalIndex, GenericGraphNode.mappings)
       _ <- elasticSearchService.ensureIndex(GenericGraphEdge.globalIndex, GenericGraphEdge.mappings)
       _ = println("Ensured generic graph indexes")

@@ -23,7 +23,6 @@ class IndexController @Inject() (
   repoService:           services.RepoService,
   repoDataService:       services.RepoDataService,
   repoIndexDataService:  services.RepoIndexDataService,
-  logService:            services.LogService,
   indexService:          services.IndexService,
   indexerQueueService:   services.IndexerQueueService,
   socketService:         services.SocketService,

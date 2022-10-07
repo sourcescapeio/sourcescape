@@ -21,8 +21,7 @@ class GitTreeIndexingService @Inject() (
   gitService:           GitService,
   indexerService:       IndexerService,
   repoDataService:      RepoDataService,
-  repoIndexDataService: RepoIndexDataService,
-  logService:           LogService)(implicit ec: ExecutionContext, mat: akka.stream.Materializer) {
+  repoIndexDataService: RepoIndexDataService)(implicit ec: ExecutionContext, mat: akka.stream.Materializer) {
 
   // def indexRepo(repo: GenericRepo)
 
@@ -62,7 +61,6 @@ class GitTreeIndexingService @Inject() (
   // update branch data
   def updateBranchData(repo: GenericRepo)(implicit context: SpanContext): Future[List[String]] = {
     for {
-      parentRecord <- logService.createParent(repo.orgId, Json.obj("task" -> "git-branch"))
       repoObj <- gitService.getGitRepo(repo)
       branchMap <- repoObj.getRepoBranches
       branches = branchMap.keySet.toList

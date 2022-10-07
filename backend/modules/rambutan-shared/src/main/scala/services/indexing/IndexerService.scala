@@ -21,8 +21,7 @@ import silvousplay.api.SpanContext
 @Singleton
 class IndexerService @Inject() (
   configuration:        play.api.Configuration,
-  elasticSearchService: ElasticSearchService,
-  logService:           LogService)(implicit ec: ExecutionContext, mat: akka.stream.Materializer) {
+  elasticSearchService: ElasticSearchService)(implicit ec: ExecutionContext, mat: akka.stream.Materializer) {
 
   def reportProgress[T](total: Int)(report: Int => Any) = {
     Flow[T].statefulMapConcat { () =>
