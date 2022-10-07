@@ -68,7 +68,7 @@ class IndexController @Inject() (
 
   def testIndex(orgId: Int, indexType: IndexType, languageServer: Boolean) = {
     api(parse.tolerantJson) { implicit request =>
-      authService.authenticatedForOrg(orgId, OrgRole.Admin) {
+      telemetryService.withTelemetry { implicit context =>
         withJson { forms: List[TestIndexForm] =>
           val IndexId = 0
           val RepoId = 0
@@ -96,14 +96,7 @@ class IndexController @Inject() (
                   fakeTree,
                   content).map(_.getOrElse(ByteString.empty))
                 (nodes, edges) <- Future {
-                  val logQueue = Source.queue[(CodeRange, String)](10, OverflowStrategy.dropBuffer)
-                    .map { item =>
-                      println(item)
-                    }
-                    .toMat(Sink.ignore)(Keep.left)
-                    .run()
-                  val graph = indexType.indexer(form.file, content, resp, logQueue)
-                  logQueue.complete()
+                  val graph = indexType.indexer(form.file, content, resp, context)
                   val renderedNodes = graph.nodes.map { node =>
                     (
                       node.build(orgId, RepoName, RepoId, Sha, IndexId, form.file),

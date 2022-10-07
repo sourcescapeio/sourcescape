@@ -13,72 +13,90 @@ import { ChildProcess, spawn } from 'child_process';
 import { ClientProxyFactory, Transport } from '@nestjs/microservices';
 import * as process from 'process';
 import { firstValueFrom, scan } from 'rxjs';
+import { CompositeFileSystem } from './composite.fs';
+import { RealFileSystemHost } from '@ts-morph/common';
 
-
+export type LanguageError = {
+  file: string | null;
+  start: number,
+  message: string,
+}
 
 @Injectable()
 export class LanguageService {
   project: ts.Project
   languageServer: ts.ts.LanguageService
 
-  async createProjectFromTSConfig(directory: string) {
-    const project = await ts.createProject({
-      tsConfigFilePath: directory,
-    });
+  private async compileProject(projectF: () => Promise<ts.Project>): Promise<LanguageError[]> {
+    const project = await projectF();
 
-    this.project = project;
+    this.project = project;    
 
     const program = project.createProgram();
     const diagnostics = ts.ts.getPreEmitDiagnostics(program);
     const languageService = project.getLanguageService();
+
+    this.languageServer = languageService;    
 
     if (diagnostics.length > 0) {
       const cleanDiagnostics = diagnostics.map((d) => {
         return {
           file: d.file?.fileName,
           start: d.start,
-          message: d.messageText,
+          message: (typeof d.messageText === "string") ? d.messageText : d.messageText.messageText,
         };
       });
-      console.error(cleanDiagnostics);
+
+      return cleanDiagnostics;
       // NOTE: Do not throw. We make best effort
       // throw new BadRequestException('error while compiling');
+    } else {
+      return [];
     }
+  }
 
-    this.languageServer = languageService;
+  async createProjectFromTSConfig(directories: string[]) {
+    return this.compileProject(() => {
+
+      if (directories.length === 1) {
+        return ts.createProject({
+          tsConfigFilePath: `${directories[0]}/tsconfig.json`,
+        });
+      } else {
+        // maybe throw a helpful error?
+        const fileSystem = new RealFileSystemHost();
+        const innerFileSystems = directories.map((d) => {
+          return {
+            root: d,
+            fileSystem,
+          }
+        });
+        const composite = new CompositeFileSystem(innerFileSystems);
+
+        return ts.createProject({
+          tsConfigFilePath: '/tsconfig.json',
+          fileSystem: composite
+        });
+      }
+    })
   }
 
   async createInMemoryProject(files: {[k: string]: string})  {
-    const project = await ts.createProject({
-      useInMemoryFileSystem: true,
-      compilerOptions: {
-        target: ts.ts.ScriptTarget.ES2016,
-      },
-    });
-
-    this.project = project;
-
-    for (const k of Object.keys(files)) {
-      const v = files[k];
-      project.createSourceFile(k, v);
-    }
-
-    const program = project.createProgram();
-    const diagnostics = ts.ts.getPreEmitDiagnostics(program);
-    const languageService = project.getLanguageService();
-
-    if (diagnostics.length > 0) {
-      const cleanDiagnostics = diagnostics.map((d) => {
-        return {
-          file: d.file.fileName,
-          start: d.start,
-          message: d.messageText,
-        };
+    return this.compileProject(async () => {
+      const project = await ts.createProject({
+        useInMemoryFileSystem: true,
+        compilerOptions: {
+          target: ts.ts.ScriptTarget.ES2016,
+        },
       });
-      throw new BadRequestException(cleanDiagnostics, 'error while compiling');
-    }
+  
+      for (const k of Object.keys(files)) {
+        const v = files[k];
+        project.createSourceFile(k, v);
+      }
 
-    this.languageServer = languageService;
+      return project;
+    })
   }
 
   isEmpty() {

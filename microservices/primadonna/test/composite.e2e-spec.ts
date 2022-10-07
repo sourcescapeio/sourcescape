@@ -63,8 +63,6 @@ describe('CompositeFileSystem (e2e)', () => {
       }
     ]);
 
-    console.warn(await composite.readFile('/tsconfig.json'))
-
     const project = await createProject({
       tsConfigFilePath: 'tsconfig.json',
       fileSystem: composite

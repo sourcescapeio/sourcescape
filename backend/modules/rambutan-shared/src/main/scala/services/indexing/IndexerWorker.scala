@@ -15,6 +15,9 @@ import akka.stream.scaladsl.{ Source, Flow, Sink, Keep, GraphDSL, Merge, Broadca
 import akka.stream.OverflowStrategy
 import akka.util.ByteString
 import silvousplay.api.SpanContext
+import scala.util.Success
+import scala.util.Try
+import scala.util.Failure
 
 @Singleton
 class IndexerWorker @Inject() (
@@ -32,7 +35,7 @@ class IndexerWorker @Inject() (
   /**
    * Indexing. Split into separate service.
    */
-  def runIndex(item: IndexerQueueItem)(implicit context: SpanContext) = {
+  def runIndex(item: IndexerQueueItem, fakeData: Map[String, String])(implicit context: SpanContext) = {
     val orgId = item.orgId
     val repo = item.repo
     val repoId = item.repoId
@@ -41,17 +44,35 @@ class IndexerWorker @Inject() (
     for {
       index <- repoIndexDataService.getIndexId(indexId).map(_.getOrElse(throw new Exception("invalid index")))
       _ <- socketService.indexingProgress(orgId, repo, repoId, indexId, 0)
+      rootIndex <- withDefined(index.rootIndexId) { rootIndexId =>
+        repoIndexDataService.getIndexId(rootIndexId)
+      }
       /**
-       * Analysis pipeline
+       * Start up servers
        */
       fileTree = item.paths
       collectionsDirectory = index.collectionsDirectory
+      _ <- if(fakeData.isEmpty) {
+        staticAnalysisService.startDirectoryLanguageServer(
+          AnalysisType.ESPrimaTypescript,
+          indexId,
+          List(
+            Option {
+              fileService.realPath(index.collectionsDirectory)
+            },
+            rootIndex.map { idx =>
+              fileService.realPath(idx.collectionsDirectory)
+            }
+          ).flatten
+        )
+      } else {
+        staticAnalysisService.startInMemoryLanguageServer(
+          AnalysisType.ESPrimaTypescript,
+          indexId,
+          fakeData          
+        )
+      }
       // TODO: fix hardcode
-      _ <- staticAnalysisService.startDirectoryLanguageServer(
-        AnalysisType.ESPrimaTypescript,
-        indexId,
-        collectionsDirectory
-      )
       analysisDirectoryBase = index.analysisDirectory
       _ = context.event("Starting indexing.")
       _ <- repoIndexDataService.deleteAnalysisTrees(indexId)
@@ -100,63 +121,6 @@ class IndexerWorker @Inject() (
   }
 
   /**
-   * Deprecate below in favor of real interactions
-   *
-   * @param indexId
-   * @return
-   */
-  // private def fakeReadFiles(indexId: Int) = {
-  //   Flow[(String, String)].mapConcat {
-  //     case (path, data) => {
-  //       val validAnalysis = AnalysisType.all.filter(_.isValidBlob(path))
-  //       val bytes = ByteString(data)
-  //       validAnalysis.map { at =>
-  //         val tree = AnalysisTree(indexId, path, at)
-  //         (tree, bytes)
-  //       }
-  //     }
-  //   }
-  // }
-
-  // def runTestIndexing(index: RepoSHAIndex, fileTree: Map[String, String]): Future[Unit] = {
-  //   val repo = index.repoName
-  //   val repoId = index.repoId
-  //   val sha = index.sha
-  //   val orgId = index.orgId
-  //   val indexId = index.id
-  //   val analysisDirectoryBase = "" // we may need to mock up grabbing compiled analysis
-  //   for {
-  //     // TODO: create realistic log record
-  //     parentRecord <- {
-  //       logService.createParent(orgId, Json.obj())
-  //     }
-  //     indexRecord = parentRecord // should be child of parentRecord
-  //     analysisRecord = indexRecord // should be child of indexRecord
-  //     materializeRecord = indexRecord // should be child of indexRecord
-  //     writeRecord = indexRecord // should be child of indexRecord
-  //     _ <- Source(fileTree)
-  //       .via(reportProgress(orgId, Nil, repo, repoId, indexId, fileTree.size)(indexRecord))
-  //       .via(fakeReadFiles(indexId))
-  //       // may need to mock differently for compiled stuff (Scala)
-  //       .via(runAnalysis(analysisDirectoryBase, concurrency = 4)(analysisRecord)) // limited by primadonna
-  //       // skip
-  //       // .via(writeAnalysisTrees(concurrency = 1, batchSize = 10)(analysisRecord))
-  //       .mapConcat {
-  //         case (tree, originalContent, analyzedContent) => {
-  //           // convert analysis type to IndexType
-  //           IndexType.all.filter(_.analysisTypes.contains(tree.analysisType)).map(_ -> (tree, originalContent, analyzedContent))
-  //         }
-  //       }
-  //       .via(getGraph(concurrency = 4)(materializeRecord)) // cpu bound
-  //       .via(fanoutIndexing(orgId, repo, repoId, sha)(materializeRecord))
-  //       .via(indexerService.writeElasticSearch(concurrency = (IndexType.all.length * 2))(writeRecord))
-  //       .runWith(Sink.ignore)
-  //   } yield {
-  //     ()
-  //   }
-  // }
-
-  /**
    * Sub-tasks
    */
   private def reportProgress[T](orgId: Int, repo: String, repoId: Int, indexId: Int, fileTotal: Int) = {
@@ -189,11 +153,6 @@ class IndexerWorker @Inject() (
           res <- staticAnalysisService.runAnalysis(analysisDirectoryBase, tree, content)
         } yield {
           res.map { analyzed =>
-            println(tree.file)
-            println("Content")
-            println(content.utf8String)
-            println("Analysis")
-            println(analyzed.utf8String)
             (tree, content, analyzed)
           }
         }
@@ -230,23 +189,15 @@ class IndexerWorker @Inject() (
   private def getGraph(concurrency: Int)(context: SpanContext) = {
     Flow[(IndexType, (AnalysisTree, ByteString, ByteString))].mapAsyncUnordered(concurrency) {
       case (indexType, (tree, originalContent, analyzedContent)) => {
-        val logQueue = Source.queue[(CodeRange, String)](1000, OverflowStrategy.backpressure)
-          .groupedWithin(100, 10.milliseconds)
-          .map { grouped =>
-            val messages = grouped.map {
-              case (range, msg) => s"[${tree.file} ${range.displayString}] ${msg}"
-            }
-            messages.foreach { message =>
-              context.event(message)
-            }
+        Try(indexType.indexer(tree.file, originalContent, analyzedContent, context)) match {
+          case Success(res) => Future.successful(Some(indexType, tree, res))
+          case Failure(e) => Future.successful {
+            context.event("Error while parsing", "e" -> e.getMessage())
+            None
           }
-          .toMat(Sink.ignore)(Keep.left)
-          .run()
-        val res = indexType.indexer(tree.file, originalContent, analyzedContent, logQueue)
-        logQueue.complete()
-        Future.successful((indexType, tree, res))
+        }
       }
-    }
+    }.mapConcat(identity)
   }
 
   private def fanoutIndexing(orgId: Int, repo: String, repoId: Int, sha: String)(context: SpanContext) = {

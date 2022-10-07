@@ -186,7 +186,7 @@ class RepoIndexingService @Inject() (
       }
       _ = indexerItems.foreach(println)
       _ <- Source(indexerItems).mapAsync(1) { item =>
-        indexerWorker.runIndex(item)
+        indexerWorker.runIndex(item, Map.empty[String, String])
       }.runWith(Sink.ignore)
     } yield {
       println("COMPLETE")

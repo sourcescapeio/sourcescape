@@ -63,21 +63,21 @@ class LocalFileService @Inject() (
   /**
    * FileService overrides
    */
-  private def toPath(path: String) = s"${WorkingDirectory}/${path}"
+  def realPath(path: String) = s"${WorkingDirectory}/${path}"
 
   override def writeFile(path: String, content: ByteString): Future[Unit] = {
-    writeAbsolute(toPath(path), content)
+    writeAbsolute(realPath(path), content)
   }
 
   override def readFile(path: String): Future[ByteString] = {
-    readAbsolute(toPath(path))
+    readAbsolute(realPath(path))
   }
 
   override def listDirectory(path: String): Source[(String, ByteString), Any] = {
-    listAbsolute(toPath(path))
+    listAbsolute(realPath(path))
   }
 
   override def deleteRecursively(path: String): Future[Unit] = {
-    deleteRecursiveAbsolute(toPath(path))
+    deleteRecursiveAbsolute(realPath(path))
   }
 }

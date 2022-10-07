@@ -15,6 +15,7 @@ import { AnalyzerService } from './analyzer.service';
 import { SpawnerService } from './spawner.service';
 import * as rawBody from 'raw-body';
 import { firstValueFrom } from 'rxjs';
+import { LanguageError } from 'src/worker/language.service';
 
 // https://stackoverflow.com/questions/52283713/how-do-i-pass-plain-text-as-my-request-body-using-nestjs
 const PlainBody = createParamDecorator(async (_, context: ExecutionContext) => {
@@ -55,8 +56,8 @@ export class MainController {
     @Param('id') id: string,
     @Body() body: { [k: string]: string },
   ) {
-    await this.spawnerService.startLanguageServer(id, async (clientProxy) => {
-      await firstValueFrom(
+    const errors = await this.spawnerService.startLanguageServer(id, (clientProxy) => {
+      return firstValueFrom<LanguageError[]>(
         clientProxy.send({cmd: 'load'}, body)
       )
     });
@@ -64,6 +65,7 @@ export class MainController {
     console.warn('STARTED IN MEMORY LANGUAGE SERVER');
     return {
       status: 'ok',
+      errors,
     };
   }
 
@@ -71,17 +73,18 @@ export class MainController {
   @HttpCode(200)
   async startDirectoryLanguageServer(
     @Param('id') id: string,
-    @Body() body: { directory: string },
+    @Body() body: { directories: string },
   ) {
-    await this.spawnerService.startLanguageServer(id, async (clientProxy) => {
-      await firstValueFrom(
-        clientProxy.send({cmd: 'loadDirectory'}, body.directory)
+    const errors = await this.spawnerService.startLanguageServer(id, (clientProxy) => {
+      return firstValueFrom<LanguageError[]>(
+        clientProxy.send({cmd: 'loadDirectory'}, body.directories)
       )
     });
 
     console.warn('STARTED DIRECTORY LANGUAGE SERVER');
     return {
       status: 'ok',
+      errors,
     };
   }  
 

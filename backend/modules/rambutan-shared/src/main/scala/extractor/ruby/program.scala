@@ -7,6 +7,7 @@ import play.api.libs.json._
 import play.api.libs.functional.syntax._
 import akka.stream.scaladsl.SourceQueue
 import silvousplay.imports._
+import silvousplay.api.SpanContext
 
 package object ruby {
 
@@ -70,8 +71,8 @@ package object ruby {
   }
 
   case class RubyContext(
-    path:     String,
-    logQueue: SourceQueue[(CodeRange, String)],
+    path:    String,
+    context: SpanContext,
     // currentMethod
     currentMethod: Option[MethodNodeBuilder],
     //
@@ -115,10 +116,10 @@ package object ruby {
   }
 
   object RubyContext {
-    def empty(path: String, logQueue: SourceQueue[(CodeRange, String)]) = {
+    def empty(path: String, context: SpanContext) = {
       RubyContext(
         path,
-        logQueue,
+        context,
         currentMethod = None,
         localVars = Map.empty[String, LVarNode],
         instanceVars = Map.empty[String, IVarNode],

@@ -1,6 +1,6 @@
 package services
 
-import models.{ AnalysisType, GenericRepo, RepoSHA, RepoSHAIndex }
+import models.{ GenericRepo, RepoSHA, RepoSHAIndex }
 import models.index.{ GraphEdge, GraphResult }
 import javax.inject._
 import scala.concurrent.{ ExecutionContext, Future }

@@ -20,9 +20,9 @@ const PORT = 3002;
 export class SpawnerService {
   constructor(@Inject(CACHE_MANAGER) private cacheManager: Cache) {}
 
-  async startLanguageServer(
+  async startLanguageServer<T>(
     id: string,
-    f: (ClientProxy) => Promise<any>) {
+    f: (ClientProxy) => Promise<T>) {
     if (await this.cacheManager.get(id)) {
       throw new BadRequestException('id already exists');
     }
@@ -61,13 +61,15 @@ export class SpawnerService {
       }
     })
 
-    await f(clientProxy)
+    const result = await f(clientProxy)
 
     if (child.pid) {
-      await this.cacheManager.set<number>(id, child.pid);
+      await this.cacheManager.set<number>(id, child.pid, { ttl: 0 });
     } else {
       throw new InternalServerErrorException("improper spawn. no process id")
     }
+
+    return result;
   }
 
   async stopLanguageServer(id: string) {

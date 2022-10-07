@@ -11,16 +11,16 @@ export class WorkerController {
 
   @MessagePattern({ cmd: 'load'})
   async loadFilesIntoMemory(files: {[k: string]: string}) {
-    await this.languageService.createInMemoryProject(files);
+    const errors = await this.languageService.createInMemoryProject(files);
 
-    return true
+    return errors;
   }
 
   @MessagePattern({ cmd: 'loadDirectory'})
-  async loadDirectory(directory: string) {
-    await this.languageService.createProjectFromTSConfig(directory);
+  async loadDirectory(directories: string[]) {
+    const errors = await this.languageService.createProjectFromTSConfig(directories);
 
-    return true
+    return errors;
   }
 
   @MessagePattern({ cmd: 'query'})

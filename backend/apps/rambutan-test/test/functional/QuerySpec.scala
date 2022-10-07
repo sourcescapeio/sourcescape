@@ -43,6 +43,39 @@ abstract class QuerySpec
   // to override. not using val cuz we want to force laziness for testcontainers
   def config(): Map[String, Any]
 
+  val TSCONFIG = """
+{
+  "compilerOptions": {
+    "module": "commonjs",
+    "declaration": true,
+    "removeComments": true,
+    "emitDecoratorMetadata": true,
+    "experimentalDecorators": true,
+    "target": "es2017",
+    "sourceMap": true,
+    "outDir": "./dist",
+    "baseUrl": "./",
+    "incremental": true,
+    "resolveJsonModule": true,
+    "esModuleInterop": true,
+    "lib": ["ESNext.String", "es2015"]
+  },
+  "exclude": ["node_modules", "dist"]
+}
+  """
+
+  val PROGRAM = """
+import { Controller, Post} from '@nestjs/common'
+@Controller('app')
+class Hello {
+
+  @Post('/test')
+  async doSomething() {
+    return true;
+  }
+}
+  """
+
   override def fakeApplication() = {
     val mockFileService = mock[FileService]
     val mockGitService = mock[LocalGitService]
@@ -117,17 +150,8 @@ abstract class QuerySpec
             deleted = false,
             created = new DateTime().getMillis()),
           IndexType.Javascript)(
-            "test.ts" -> """
-            import { Controller, Post} from '@nestjs/common'
-            @Controller('app')
-            class Hello {
-
-              @Post('/test')
-              async doSomething() {
-                return true;
-              }
-            }
-          """)
+            "tsconfig.json" -> TSCONFIG,
+            "test.ts" -> PROGRAM)
       }
 
       val data = await {

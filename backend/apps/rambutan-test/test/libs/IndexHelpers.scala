@@ -43,7 +43,7 @@ trait IndexHelpers {
         index.sha,
         index.id,
         data.map(_._1).toList)
-      _ <- indexerWorker.runIndex(queueItem)(NoopSpanContext)
+      _ <- indexerWorker.runIndex(queueItem, data.toMap)(NoopSpanContext)
       // force refresh to get data to propagate
       _ <- elasticSearchService.refresh(indexType.nodeIndexName)
       _ <- elasticSearchService.refresh(indexType.edgeIndexName)

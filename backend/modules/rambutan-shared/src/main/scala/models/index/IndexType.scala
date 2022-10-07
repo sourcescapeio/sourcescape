@@ -10,6 +10,7 @@ import scala.meta._
 import pprint._
 import scala.meta.internal.semanticdb.TextDocuments
 import models.query._
+import silvousplay.api.SpanContext
 
 sealed abstract class IndexType(
   val identifier:    String,
@@ -17,7 +18,7 @@ sealed abstract class IndexType(
   val nodePredicate: Plenumeration[_ <: NodePredicate],
   val edgePredicate: Plenumeration[_ <: EdgePredicate]) extends Identifiable {
 
-  def indexer(path: String, content: ByteString, analysis: ByteString, logQueue: SourceQueue[(CodeRange, String)]): GraphResult
+  def indexer(path: String, content: ByteString, analysis: ByteString, context: SpanContext): GraphResult
 
   def isValidBlob(path: String) = analysisTypes.exists(_.isValidBlob(path))
 
@@ -34,9 +35,9 @@ object IndexType extends Plenumeration[IndexType] {
     JavascriptNodePredicate,
     JavascriptEdgePredicate) {
 
-    def indexer(path: String, content: ByteString, analysis: ByteString, logQueue: SourceQueue[(CodeRange, String)]) = {
+    def indexer(path: String, content: ByteString, analysis: ByteString, context: SpanContext) = {
       val js = Json.parse(analysis.utf8String)
-      val emptyAcc = extractor.esprima.ESPrimaContext.empty(path, logQueue)
+      val emptyAcc = extractor.esprima.ESPrimaContext.empty(path, context)
       extractor.esprima.Program.extract(
         emptyAcc,
         js) match {
@@ -55,9 +56,9 @@ object IndexType extends Plenumeration[IndexType] {
     AnalysisType.RubyParser :: Nil,
     RubyNodePredicate,
     RubyEdgePredicate) {
-    def indexer(path: String, content: ByteString, analysis: ByteString, logQueue: SourceQueue[(CodeRange, String)]) = {
+    def indexer(path: String, content: ByteString, analysis: ByteString, context: SpanContext) = {
       val js = Json.parse(analysis.utf8String)
-      val emptyAcc = extractor.ruby.RubyContext.empty(path, logQueue)
+      val emptyAcc = extractor.ruby.RubyContext.empty(path, context)
       // emptyAcc
       extractor.ruby.Start.extract(
         emptyAcc,
