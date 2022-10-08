@@ -76,6 +76,28 @@ class Hello {
 }
   """
 
+  val PROGRAM2 = """
+class TestService {
+	start() {
+		console.warn('test');
+	}
+}
+
+
+class Test {
+	constructor(private testService: TestService) {
+	}
+
+	test2({a: number, b: string}) {
+	
+	}
+
+	test() {
+		this.testService.start()
+	}
+}  
+  """
+
   override def fakeApplication() = {
     val mockFileService = mock[FileService]
     val mockGitService = mock[LocalGitService]
@@ -136,6 +158,8 @@ class Hello {
         (res \ "data" \ "repos" \\ "id").map(_.as[Int])(0)
       }
 
+      println("BEFORE INDEX")
+
       await {
         runTestIndex(
           RepoSHAIndex(
@@ -151,7 +175,8 @@ class Hello {
             created = new DateTime().getMillis()),
           IndexType.Javascript)(
             "tsconfig.json" -> TSCONFIG,
-            "test.ts" -> PROGRAM)
+            "test.ts" -> PROGRAM,
+            "test2.ts" -> PROGRAM2)
       }
 
       val data = await {

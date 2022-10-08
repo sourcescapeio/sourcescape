@@ -19,10 +19,10 @@ sealed abstract class ESPrimaNodeBuilder(
   graphIndex:      Option[Int]     = None) extends ESPrimaNode with StandardNodeBuilder[ESPrimaNodeType, ESPrimaTag] {
 
   def lookupIndex: Option[Int] = None
-  def symbolLookup = false
-  def definitionLink(orgId: Int, repo: String, repoId: Int, indexId: Int, path: String)(other: GraphNode): Option[GraphEdge] = None
-  def typeDefinitionLink(orgId: Int, repo: String, repoId: Int, indexId: Int, path: String)(other: GraphNode): Option[GraphEdge] = None
+  def definitionLink: Option[String] = None
+  def typeDefinitionLink: Option[String] = None
 
+  def generateSymbol = false
   val names = graphName.toList ++ additionalNames
 
   val index = graphIndex
@@ -34,7 +34,7 @@ sealed abstract class ESPrimaNodeBuilder(
  * Impl
  */
 case class RequireNode(id: String, range: CodeRange, module: String, searches: List[String]) extends ESPrimaNodeBuilder(ESPrimaNodeType.Require, graphName = Some(module), additionalNames = searches) {
-  override def symbolLookup = true
+  override def generateSymbol = true
 }
 
 // can be discarded if identifier already exists
@@ -58,15 +58,7 @@ case class MemberNode(id: String, range: CodeRange, name: Option[String]) extend
 case class CallNode(id: String, range: CodeRange, lookupRangeIn: CodeRange) extends ESPrimaNodeBuilder(ESPrimaNodeType.Call) {
   override def lookupIndex = Some(lookupRangeIn.endIndex)
 
-  override def definitionLink(orgId: Int, repo: String, repoId: Int, indexId: Int, path: String)(other: GraphNode) = Option {
-    val nodeType = ESPrimaNodeType.withNameUnsafe(other.`type`)
-    CreateEdge(this, LinkedAnyNode(other.id, nodeType), ESPrimaEdgeType.CallLink).edge.build(
-      orgId,
-      repo,
-      repoId,
-      indexId,
-      path)
-  }
+  override def definitionLink: Option[String] = Some(ESPrimaEdgeType.CallLink.identifier)
 }
 
 case class LiteralNode(id: String, range: CodeRange, raw: String, value: JsValue) extends ESPrimaNodeBuilder(ESPrimaNodeType.Literal, graphName = Some(Json.stringify(value)))
@@ -118,13 +110,13 @@ case class ThrowNode(id: String, range: CodeRange) extends ESPrimaNodeBuilder(ES
 
 // Ex: class
 case class ClassNode(id: String, range: CodeRange, name: Option[String]) extends ESPrimaNodeBuilder(ESPrimaNodeType.Class, graphName = name) {
-  override def symbolLookup = true
+  override def generateSymbol = true
 }
 case class MethodNode(id: String, range: CodeRange, computed: Boolean, static: Boolean, constructor: Boolean, name: Option[String]) extends ESPrimaNodeBuilder(ESPrimaNodeType.Method, graphName = name) {
-  override def symbolLookup = true
+  override def generateSymbol = true
 }
 case class ClassPropertyNode(id: String, range: CodeRange, computed: Boolean, static: Boolean, name: Option[String]) extends ESPrimaNodeBuilder(ESPrimaNodeType.ClassProperty, graphName = name) {
-  override def symbolLookup = true
+  override def generateSymbol = true
 }
 case class SuperNode(id: String, range: CodeRange) extends ESPrimaNodeBuilder(ESPrimaNodeType.Super)
 case class ThisNode(id: String, range: CodeRange) extends ESPrimaNodeBuilder(ESPrimaNodeType.This) {
@@ -143,7 +135,7 @@ case class ObjectPropertyNode(id: String, range: CodeRange, key: String) extends
  */
 // Ex: function() { }
 case class FunctionNode(id: String, range: CodeRange, async: Boolean, name: Option[String]) extends ESPrimaNodeBuilder(ESPrimaNodeType.Function, graphName = name) {
-  override def symbolLookup = true
+  override def generateSymbol = true
 }
 case class SpreadNode(id: String, range: CodeRange) extends ESPrimaNodeBuilder(ESPrimaNodeType.Spread)
 
@@ -181,7 +173,4 @@ case class TaggedTemplateNode(id: String, range: CodeRange) extends ESPrimaNodeB
 case class AnyNode(node: ESPrimaNodeBuilder) extends ESPrimaNode {
   val id = node.id
   val nodeType = node.nodeType
-}
-case class LinkedAnyNode(id: String, nodeType: ESPrimaNodeType) extends ESPrimaNode {
-
 }

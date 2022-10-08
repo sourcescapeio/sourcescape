@@ -58,26 +58,25 @@ export class LanguageService {
   async createProjectFromTSConfig(directories: string[]) {
     return this.compileProject(() => {
 
-      if (directories.length === 1) {
-        return ts.createProject({
-          tsConfigFilePath: `${directories[0]}/tsconfig.json`,
-        });
-      } else {
+      // if (directories.length === 1) {
+      //   return ts.createProject({
+      //     tsConfigFilePath: `${directories[0]}/tsconfig.json`,
+      //   });
+      // } else {
         // maybe throw a helpful error?
-        const fileSystem = new RealFileSystemHost();
-        const innerFileSystems = directories.map((d) => {
-          return {
-            root: d,
-            fileSystem,
-          }
-        });
-        const composite = new CompositeFileSystem(innerFileSystems);
+      const fileSystem = new RealFileSystemHost();
+      const innerFileSystems = directories.map((d) => {
+        return {
+          root: d,
+          fileSystem,
+        }
+      });
+      const composite = new CompositeFileSystem(innerFileSystems);
 
-        return ts.createProject({
-          tsConfigFilePath: '/tsconfig.json',
-          fileSystem: composite
-        });
-      }
+      return ts.createProject({
+        tsConfigFilePath: '/tsconfig.json',
+        fileSystem: composite
+      });
     })
   }
 
@@ -111,7 +110,7 @@ export class LanguageService {
     try {
       return {
         definition: this.languageServer.getDefinitionAtPosition(filename, location),
-        typeDefinition: this.languageServer.getTypeDefinitionAtPosition(filename, location)
+        typeDefinition: this.languageServer.getTypeDefinitionAtPosition(filename, location) || []
       }
     } catch(e) {
       // TODO: need to handle errors

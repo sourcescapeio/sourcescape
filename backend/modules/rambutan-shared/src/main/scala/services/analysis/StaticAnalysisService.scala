@@ -1,6 +1,7 @@
 package services
 
 import models._
+import models.index.SymbolLookup
 import javax.inject._
 import scala.concurrent.{ ExecutionContext, Future }
 import silvousplay.imports._
@@ -11,36 +12,6 @@ import play.api.libs.json._
 import akka.util.ByteString
 import akka.stream.scaladsl.FileIO
 import java.nio.file.{ Files, Paths }
-
-case class SymbolLookup(
-  file: String,
-  startIndex: Int,
-  endIndex: Int,
-  // debug
-  kind: String,
-  name: String,
-  containerName: String
-) {
-  def key = s"${file}:${startIndex}:${endIndex}"
-}
-
-object SymbolLookup {
-
-  implicit val writes = Json.writes[SymbolLookup]
-
-  def parse(d: JsValue) = {
-    val start = (d \ "contextSpan" \ "start").as[Int]
-    val length = (d \ "contextSpan" \ "length").as[Int]
-    SymbolLookup(
-      (d \ "fileName").as[String],
-      start,
-      start + length,
-      (d \ "kind").as[String],
-      (d \ "name").as[String],
-      (d \ "containerName").as[String],
-    )
-  }
-}
 
 @Singleton
 class StaticAnalysisService @Inject() (
@@ -72,15 +43,14 @@ class StaticAnalysisService @Inject() (
     println("STARTING DIRECTORY LANGUAGE SERVER", directories)
     for {
       response <- wsClient.url(url + "/language-server/" + indexId + "/directory").post(Json.obj(
-        "directories" -> directories
-      ))
+        "directories" -> directories))
       res = if (response.status =/= 200) {
         throw new Exception("Error starting language server")
       }
     } yield {
       ()
     }
-  }  
+  }
 
   def startInMemoryLanguageServer(analysisType: AnalysisType, indexId: Int, contents: Map[String, String]): Future[Unit] = {
     val url = Servers.getOrElse(analysisType, throw new Exception("invalid server analysis type"))
@@ -131,8 +101,7 @@ class StaticAnalysisService @Inject() (
       (
         (json \ "definition").as[List[JsValue]].map(SymbolLookup.parse),
         (json \ "typeDefinition").as[List[JsValue]].map(SymbolLookup.parse),
-        json.as[JsValue]
-      )
+        json.as[JsValue])
     }
   }
 

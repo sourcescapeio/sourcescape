@@ -3,7 +3,7 @@ package workers
 import services._
 import models._
 import javax.inject._
-import models.index.{ GraphEdge, GraphResult }
+import models.index._
 import scala.concurrent.{ ExecutionContext, Future }
 import scala.concurrent.duration._
 import silvousplay.imports._
@@ -30,28 +30,31 @@ class IndexerWorker @Inject() (
   staticAnalysisService: StaticAnalysisService,
   socketService:         SocketService,
   indexerQueueService:   IndexerQueueService,
-  savedQueryService:     SavedQueryService)(implicit ec: ExecutionContext, mat: akka.stream.Materializer) {
+  savedQueryService:     SavedQueryService,
+  elasticSearchService: ElasticSearchService
+  )(implicit ec: ExecutionContext, mat: akka.stream.Materializer) {
 
   /**
-   * Indexing. Split into separate service.
+   * Linking
+   * TODO: having this decoupled from indexer is super dangerous
    */
-  def runIndex(item: IndexerQueueItem, fakeData: Map[String, String])(implicit context: SpanContext) = {
+  def runLinker(item: IndexerQueueItem, fakeData: Map[String, String])(implicit context: SpanContext) = {
     val orgId = item.orgId
     val repo = item.repo
     val repoId = item.repoId
-    val sha = item.sha
     val indexId = item.indexId
+    val key = models.RepoSHAHelpers.esKey(orgId, repo, repoId, indexId)
+
+    val javascriptSymbolIndex = IndexType.Javascript.symbolIndexName(indexId)
+    val javascriptLookupIndex = IndexType.Javascript.lookupIndexName(indexId)
+    // elasticSearchService.source(javascriptLookupIndex, Json.obj)
+
     for {
       index <- repoIndexDataService.getIndexId(indexId).map(_.getOrElse(throw new Exception("invalid index")))
-      _ <- socketService.indexingProgress(orgId, repo, repoId, indexId, 0)
+      _ <- socketService.linkingProgress(orgId, repo, repoId, indexId, 0)
       rootIndex <- withDefined(index.rootIndexId) { rootIndexId =>
         repoIndexDataService.getIndexId(rootIndexId)
-      }
-      /**
-       * Start up servers
-       */
-      fileTree = item.paths
-      collectionsDirectory = index.collectionsDirectory
+      }      
       _ <- if(fakeData.isEmpty) {
         staticAnalysisService.startDirectoryLanguageServer(
           AnalysisType.ESPrimaTypescript,
@@ -72,6 +75,114 @@ class IndexerWorker @Inject() (
           fakeData          
         )
       }
+      symbolCount <- elasticSearchService.count(javascriptSymbolIndex, ESQuery.matchAll)
+      (lookupCount, lookupSource) <- elasticSearchService.source(
+        javascriptLookupIndex,
+        ESQuery.matchAll,
+        List("id" -> "asc"),
+        100        
+      )
+      _ = println(lookupCount)
+      _ = println(symbolCount)      
+      _ <- lookupSource.map { l =>
+        (l \ "_source").as[GraphLookup]
+      }.via {
+        // TODO: danger zone
+        indexerService.reportProgress(lookupCount.toInt) { progress =>
+          socketService.linkingProgress(orgId, repo, repoId, indexId, progress)
+        }
+      }.mapAsyncUnordered(4) { fromLookup =>
+        for {
+          (defs, typeDefs, resp) <- staticAnalysisService.languageServerRequest(
+            AnalysisType.ESPrimaTypescript,
+            indexId,
+            fromLookup.path,
+            fromLookup.index
+          )
+          defEdges <- Source(defs).mapAsync(1) { symbolLookup =>
+            withDefined(fromLookup.definitionLink) { definitionLink =>
+              for {
+                symbolLookupResult <- elasticSearchService.get(javascriptSymbolIndex, symbolLookup.key)
+              } yield {
+                symbolLookupResult.map { l =>
+                  val toSymbol = (l \ "_source").as[GraphSymbol]                  
+                  GraphEdge(
+                    key,
+                    fromLookup.path,
+                    definitionLink,
+                    fromLookup.node_id,
+                    toSymbol.node_id,
+                    Hashing.uuid(),
+                    None,
+                    None,
+                    None)
+                }
+              }
+            }
+          }.mapConcat(i => i).runWith(Sinks.ListAccum[GraphEdge])
+          typeDefEdges <- Source(typeDefs).mapAsync(1) { symbolLookup =>
+            withDefined(fromLookup.typeDefinitionLink) { typeDefinitionLink =>
+              for {
+                symbolLookupResult <- elasticSearchService.get(javascriptSymbolIndex, symbolLookup.key)
+              } yield {
+                symbolLookupResult.map { l =>
+                  val toSymbol = (l \ "_source").as[GraphSymbol]                   
+                  GraphEdge(
+                    key,
+                    fromLookup.path,
+                    typeDefinitionLink,
+                    fromLookup.node_id,
+                    toSymbol.node_id,
+                    Hashing.uuid(),
+                    None,
+                    None,
+                    None)
+                }
+              }
+            }
+          }.mapConcat(i => i).runWith(Sinks.ListAccum[GraphEdge])
+        } yield {
+          defEdges ++ typeDefEdges
+        }
+      }.mapConcat(i => i).groupedWithin(100, 100.millis).mapAsync(1) { documents =>
+        elasticSearchService.indexBulk(IndexType.Javascript.edgeIndexName, documents.map(i => Json.toJson(i)))
+      }.runWith(Sink.ignore)
+      _ <- staticAnalysisService.stopLanguageServer(AnalysisType.ESPrimaTypescript, indexId)
+      _ <- socketService.linkingProgress(orgId, repo, repoId, indexId, 100)
+    } yield {
+      ()
+    }
+  }
+
+  /**
+   * Indexing
+   */
+  def runIndex(item: IndexerQueueItem)(implicit context: SpanContext) = {
+    val orgId = item.orgId
+    val repo = item.repo
+    val repoId = item.repoId
+    val sha = item.sha
+    val indexId = item.indexId
+    for {
+      index <- repoIndexDataService.getIndexId(indexId).map(_.getOrElse(throw new Exception("invalid index")))
+      _ <- socketService.indexingProgress(orgId, repo, repoId, indexId, 0)      
+      rootIndex <- withDefined(index.rootIndexId) { rootIndexId =>
+        repoIndexDataService.getIndexId(rootIndexId)
+      }
+      /**
+       * Start up servers
+       */
+      fileTree = item.paths
+      collectionsDirectory = index.collectionsDirectory
+      /**
+       * Generate Symbol tables
+       */
+      javascriptSymbolIndex = IndexType.Javascript.symbolIndexName(indexId)
+      javascriptLookupIndex = IndexType.Javascript.lookupIndexName(indexId)
+      _ <- elasticSearchService.dropIndex(javascriptSymbolIndex)
+      _ <- elasticSearchService.dropIndex(javascriptLookupIndex)
+      _ <- elasticSearchService.ensureIndex(javascriptSymbolIndex, GraphSymbol.mappings)
+      _ <- elasticSearchService.ensureIndex(javascriptLookupIndex, GraphLookup.mappings)
       // TODO: fix hardcode
       analysisDirectoryBase = index.analysisDirectory
       _ = context.event("Starting indexing.")
@@ -84,7 +195,11 @@ class IndexerWorker @Inject() (
        * Index pipeline
        */
       _ <- Source(fileTree)
-        .via(reportProgress(orgId, repo, repoId, indexId, fileTree.length)) // report earlier for better accuracy
+        .via {
+          indexerService.reportProgress(fileTree.length) { progress =>
+            socketService.indexingProgress(orgId, repo, repoId, indexId, progress)
+          }
+        } // report earlier for better accuracy
         .via(readFiles(collectionsDirectory, indexId, concurrency = 1)(context))
         .via(runAnalysis(analysisDirectoryBase, concurrency = 4)(analysisSpan)) // limited by primadonna
         // .via(writeAnalysisFiles(analysisDirectoryBase, concurrency = 1)(analysisRecord))
@@ -97,7 +212,7 @@ class IndexerWorker @Inject() (
           }
         }
         .via(getGraph(concurrency = 4)(materializeSpan)) // cpu bound
-        .via(fanoutIndexing(orgId, repo, repoId, sha)(materializeSpan))
+        .via(fanoutIndexing(orgId, repo, repoId, sha, indexId)(materializeSpan))
         .via(indexerService.writeElasticSearch(concurrency = (IndexType.all.length * 2))(writeSpan))
         .runWith(Sink.ignore)
       //
@@ -113,7 +228,6 @@ class IndexerWorker @Inject() (
        * Finish up
        */
       // TODO: fix hardcode
-      _ <- staticAnalysisService.stopLanguageServer(AnalysisType.ESPrimaTypescript, indexId)
       _ <- socketService.indexingFinished(orgId, repo, repoId, sha, indexId)
     } yield {
       ()
@@ -123,11 +237,11 @@ class IndexerWorker @Inject() (
   /**
    * Sub-tasks
    */
-  private def reportProgress[T](orgId: Int, repo: String, repoId: Int, indexId: Int, fileTotal: Int) = {
-    indexerService.reportProgress[T](fileTotal) { progress =>
-      socketService.indexingProgress(orgId, repo, repoId, indexId, progress)
-    }
-  }
+  // private def reportProgress[T](fileTotal: Int)(f: ) = {
+  //   indexerService.reportProgress[T](fileTotal) { progress =>
+  //     socketService.indexingProgress(orgId, repo, repoId, indexId, progress)
+  //   }
+  // }
 
   private def readFiles(collectionsDirectory: String, indexId: Int, concurrency: Int)(context: SpanContext) = {
     Flow[String].mapAsyncUnordered(concurrency) { path =>
@@ -200,14 +314,10 @@ class IndexerWorker @Inject() (
     }.mapConcat(identity)
   }
 
-  private def fanoutIndexing(orgId: Int, repo: String, repoId: Int, sha: String)(context: SpanContext) = {
+  private def fanoutIndexing(orgId: Int, repo: String, repoId: Int, sha: String, indexId: Int)(context: SpanContext) = {
     indexerService.fanoutIndexing(
-      materializeNodes(orgId, repo, repoId, sha)(context),
+      materializeNodes(orgId, repo, repoId, sha, indexId)(context),
       materializeEdges(orgId, repo, repoId, sha)(context),
-
-      // setup links
-      // buildSymbolTable,
-      // filter
     )
   }
 
@@ -233,15 +343,61 @@ class IndexerWorker @Inject() (
     }
   }
 
-  private def materializeNodes(orgId: Int, repo: String, repoId: Int, sha: String)(context: SpanContext) = {
+  private def materializeNodes(orgId: Int, repo: String, repoId: Int, sha: String, indexId: Int)(context: SpanContext) = {
     Flow[(IndexType, AnalysisTree, GraphResult)].map {
       case (indexType, tree, graphResult) => {
-        val nodes = graphResult.nodes.map { node =>
-          None -> Json.toJson(node.build(orgId, repo, repoId, sha, tree.indexId, tree.file)).as[JsObject]
+        val raw = graphResult.nodes.map { nb =>
+          val graphNode = nb.build(orgId, repo, repoId, sha, tree.indexId, tree.file)
+          (nb, graphNode)
         }
-        context.event(s"Indexing nodes for ${tree.file}/${indexType.identifier}. Total: ${nodes.length}.")
-        (indexType.nodeIndexName, nodes)
+
+        val symbols = raw.flatMap {
+          case (nb, nn) => {
+            withFlag(nb.generateSymbol) {
+              val symbol = GraphSymbol.fromNode(nn)
+              Option {
+                Some(symbol.key) -> Json.toJson(symbol).as[JsObject]
+              }
+            }
+          }
+        }
+
+        val graphNodes = raw.map {
+          case (nb, nn) => {
+            None -> Json.toJson(nn).as[JsObject]
+          }
+        }
+
+        val lookups = raw.flatMap {
+          case (nb, nn) => {
+            // define link type
+            withDefined(nb.lookupIndex) { lookupIndex =>
+              withFlag(nb.definitionLink.isDefined || nb.typeDefinitionLink.isDefined) {
+                val lookup = GraphLookup.fromNode(nn, lookupIndex, nb.definitionLink, nb.typeDefinitionLink)
+                Option {
+                  None -> Json.toJson(lookup).as[JsObject]
+                }
+              }
+            }
+          }
+        }
+
+        ifNonEmpty(graphNodes) {
+          context.event(s"Indexing nodes for ${tree.file}/${indexType.identifier}. Total: ${graphNodes.length}.")
+        }
+        ifNonEmpty(symbols) {
+          context.event(s"Indexing symbols for ${tree.file}/${indexType.identifier}. Total: ${symbols.length}.")
+        }
+        ifNonEmpty(lookups) {
+          context.event(s"Indexing lookups for ${tree.file}/${indexType.identifier}. Total: ${lookups.length}.")
+        }
+
+        List(
+          (indexType.nodeIndexName, graphNodes),
+          (indexType.symbolIndexName(indexId), symbols),
+          (indexType.lookupIndexName(indexId), lookups)
+        )
       }
-    }
+    }.mapConcat(identity)
   }
 }

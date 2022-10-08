@@ -54,11 +54,6 @@ class IndexController @Inject() (
           index <- repoIndexDataService.getIndexId(indexId).map {
             _.getOrElse(throw models.Errors.notFound("index.dne", "Index not found"))
           }
-          // analysisPath = AnalysisType.ScalaSemanticDB.path(
-          //   index.analysisDirectory,
-          //   file)
-          // analysisBytes <- FileIO.fromPath(Paths.get(analysisPath + ".semanticdb")).runWith(Sinks.ByteAccum)
-          // analysisFile = scala.io.Source.fromFile(path).getLines().mkString("\n")
         } yield {
           Json.obj("file" -> "")
         }
@@ -131,7 +126,7 @@ class IndexController @Inject() (
             allNodes = collectedNodes.map(_._1)
             // get links
             symbolTable = collectedNodes.flatMap {
-              case (nn, nb) if nb.symbolLookup => {
+              case (nn, nb) if nb.generateSymbol => {
                 Option(s"/${nn.path}:${nn.start_index}:${nn.end_index}" -> nn)
               }
               case _ => None
@@ -151,12 +146,38 @@ class IndexController @Inject() (
                     } yield {
                       // create edges
                       val defEdges = defResult.flatMap { d =>
-                        nb.definitionLink(orgId, RepoName, RepoId, IndexId, n.path)(d)
+                        withDefined(nb.definitionLink) { definitionLink =>
+                          Option {
+                            GraphEdge(
+                              n.key,
+                              n.path,
+                              definitionLink,
+                              n.id,
+                              d.id,
+                              Hashing.uuid(),
+                              None,
+                              None,
+                              None)
+                          }
+                        }
                       }
 
                       val typeEdges = typeResult.flatMap { dt =>
                         // n.typeLink
-                        nb.typeDefinitionLink(orgId, RepoName, RepoId, IndexId, n.path)(dt)
+                        withDefined(nb.typeDefinitionLink) { typeDefinitionLink =>
+                          Option {
+                            GraphEdge(
+                              n.key,
+                              n.path,
+                              typeDefinitionLink,
+                              n.id,
+                              dt.id,
+                              Hashing.uuid(),
+                              None,
+                              None,
+                              None)
+                          }
+                        }
                       }
 
                       val edges = defEdges ++ typeEdges

@@ -185,8 +185,12 @@ class RepoIndexingService @Inject() (
         clonerService.runCloneForItem(cloneItem)
       }
       _ = indexerItems.foreach(println)
+      // TODO: yikes this is bad because of language server start/stop
       _ <- Source(indexerItems).mapAsync(1) { item =>
-        indexerWorker.runIndex(item, Map.empty[String, String])
+        indexerWorker.runIndex(item)
+      }.runWith(Sink.ignore)
+      _ <- Source(indexerItems).mapAsync(1) { item =>
+        indexerWorker.runLinker(item, Map.empty[String, String])
       }.runWith(Sink.ignore)
     } yield {
       println("COMPLETE")

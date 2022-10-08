@@ -21,9 +21,10 @@ sealed abstract class RubyNodeBuilder(
 
   // TODO: linking stubbed out right now
   def lookupIndex: Option[Int] = None
-  def symbolLookup: Boolean = false
-  def definitionLink(orgId: Int, repo: String, repoId: Int, indexId: Int, path: String)(other: GraphNode) = None
-  def typeDefinitionLink(orgId: Int, repo: String, repoId: Int, indexId: Int, path: String)(other: GraphNode) = None
+  def definitionLink: Option[String] = None
+  def typeDefinitionLink: Option[String] = None
+
+  def generateSymbol: Boolean = false
 
   val names = graphName.toList ++ additionalNames
 

@@ -37,6 +37,7 @@ export default class RunIndex extends Command {
 
     const bar1 = bar.create(100, 0, {filename: 'Cloning'});
     const bar2 = bar.create(100, 0, {filename: 'Indexing'});
+    const bar3 = bar.create(100, 0, {filename: 'Linking'});
     
     const running = client.mutate({
       mutation: gql`mutation RunIndexRepo {
@@ -72,11 +73,26 @@ export default class RunIndex extends Command {
       bar2.update(v.data.indexProgress.progress)
     })
 
+    const linkStream = client.subscribe({
+      query: gql`
+        subscription LinkingProgress {
+          linkProgress {
+            indexId
+            repoId
+            progress
+          }
+        }
+      `
+    }).subscribe((v) => {
+      bar3.update(v.data.linkProgress.progress)
+    })    
+
     await running
     bar.stop();
 
     console.warn('DONE')
     cloneStream.unsubscribe();
     indexStream.unsubscribe();
+    linkStream.unsubscribe();
   }
 }

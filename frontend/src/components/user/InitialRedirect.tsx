@@ -10,30 +10,32 @@ function InitialRedirectComponentBase() {
   const [completed, setCompleted] = useState<boolean | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // to be replaced by graphql
-  useEffect(() => {
-    axios({
-      method: 'GET',
-      url: '/api/orgs/-1/nux'
-    }).then((resp) => {
-      setLoading(false);
-      setCompleted(resp.data.completed);
-    }).catch((e) => {
-      setLoading(false);
-      setError(e.message);
-      return Promise.reject(e);
-    });
-  }, []);
+  return <Navigate to="/srclog-console" />  
 
-  if(loading) {
-    return <Loading loading={true} />
-  } else if (completed) {
-    return <Navigate to="/console" />
-  } else if (completed === false) {
-    return <Navigate to="/onboarding" />
-  } else {
-    return <div>{error}</div>
-  }
+  // to be replaced by graphql
+  // useEffect(() => {
+  //   axios({
+  //     method: 'GET',
+  //     url: '/api/orgs/-1/nux'
+  //   }).then((resp) => {
+  //     setLoading(false);
+  //     setCompleted(resp.data.completed);
+  //   }).catch((e) => {
+  //     setLoading(false);
+  //     setError(e.message);
+  //     return Promise.reject(e);
+  //   });
+  // }, []);
+
+  // if(loading) {
+  //   return <Loading loading={true} />
+  // } else if (completed) {
+
+  // } else if (completed === false) {
+  //   return <Navigate to="/onboarding" />
+  // } else {
+  //   return <div>{error}</div>
+  // }
 }
 
 // const InitialRedirectComponent = connect(

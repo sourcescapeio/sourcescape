@@ -56,6 +56,7 @@ object SocketEventType extends Plenumeration[SocketEventType] {
   case object CloningFinished extends SocketEventType("cloning-finished")
   case object IndexingStarted extends SocketEventType("indexing-started")
   case object IndexingFinished extends SocketEventType("indexing-finished")
+  case object LinkingProgress extends SocketEventType("linking-progress")
   case object CachingUpdate extends SocketEventType("caching-update")
   case object CachingFinished extends SocketEventType("caching-finished")
 
@@ -230,6 +231,17 @@ class SocketService @Inject() (
         indexId.toString,
         true,
         Json.obj("repo" -> repo, "indexId" -> indexId, "repoId" -> repoId, "sha" -> sha, "progress" -> 100)))
+  }
+
+  def linkingProgress(orgId: Int, repo: String, repoId: Int, indexId: Int, progress: Int) = {
+    publish(
+      EventMessage(
+        orgId,
+        Nil,
+        SocketEventType.LinkingProgress,
+        indexId.toString,
+        true,
+        Json.obj("repo" -> repo, "repoId" -> repoId, "indexId" -> indexId, "progress" -> progress)))
   }
 
   def cachingAvailable(orgId: Int, workId: String, available: Int) = {

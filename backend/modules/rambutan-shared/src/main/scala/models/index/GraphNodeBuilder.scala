@@ -7,11 +7,13 @@ trait GraphNodeBuilder {
 
   def build(orgId: Int, repo: String, repoId: Int, sha: String, indexId: Int, path: String): GraphNode
 
-  // used for linking
+  // used for looking up symbols and linking
   def lookupIndex: Option[Int]
-  def symbolLookup: Boolean
-  def definitionLink(orgId: Int, repo: String, repoId: Int, indexId: Int, path: String)(other: GraphNode): Option[GraphEdge]
-  def typeDefinitionLink(orgId: Int, repo: String, repoId: Int, indexId: Int, path: String)(other: GraphNode): Option[GraphEdge]
+  def definitionLink: Option[String]
+  def typeDefinitionLink: Option[String]
+
+  // will generate a symbol entry
+  def generateSymbol: Boolean
 }
 
 trait GraphNodeData[NT <: Identifiable] {

@@ -105,10 +105,13 @@ object JavascriptGraphEdgeType extends Plenumeration[JavascriptGraphEdgeType] {
   case object IfContains extends JavascriptGraphEdgeType("if_contains", ESPrimaEdgeType.IfContains, AccessDirection.From)
   case object BasicExpression extends JavascriptGraphEdgeType("basic_expression", ESPrimaEdgeType.BasicExpression, AccessDirection.To)
 
-  // Export links
+  // Export links (TODO: delete?)
   case object ExportKeyLink extends JavascriptGraphEdgeType("export_key_link", ESPrimaEdgeType.ExportKey, AccessDirection.From)
   case object ExportedTo extends JavascriptGraphEdgeType("exported_to", ESPrimaEdgeType.Export, AccessDirection.From)
   // case object LinkedTo extends JavascriptGraphEdgeType("linked_to", ESPrimaEdgeType.Link, AccessDirection.To)
+
+  // Links
+  case object CallLink extends JavascriptGraphEdgeType("call_link", ESPrimaEdgeType.CallLink, AccessDirection.From)
 }
 
 sealed class GenericGraphEdgeType(category: String, edgeTypeIn: GenericEdgeType, direction: AccessDirection)

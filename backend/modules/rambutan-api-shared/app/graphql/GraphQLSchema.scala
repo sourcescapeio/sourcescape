@@ -280,13 +280,34 @@ object SchemaDefinition {
     repoId:   Int,
     progress: Int) extends Event
 
+  case class LinkProgress(
+    id:       String, // indexId
+    version:  Long,
+    indexId:  Int,
+    repoId:   Int,
+    progress: Int) extends Event    
+
   val ScanProgressType = deriveObjectType[RambutanContext, ScanProgress](Interfaces(EventType))
   val CloneProgressType = deriveObjectType[RambutanContext, CloneProgress](Interfaces(EventType))
   val IndexProgressType = deriveObjectType[RambutanContext, IndexProgress](Interfaces(EventType))
+  val LinkProgressType = deriveObjectType[RambutanContext, LinkProgress](Interfaces(EventType))
 
   val SubscriptionType = ObjectType(
     "Subscription",
     fields[RambutanContext, Any](
+      Field("linkProgress", OptionType(LinkProgressType), resolve = (c: Context[RambutanContext, Any]) => {
+        val msg = c.value.asInstanceOf[EventMessage]
+        msg.eventType match {
+          case SocketEventType.LinkingProgress => Option(
+            LinkProgress(
+              msg.id,
+              0L,
+              (msg.data \ "indexId").as[Int],
+              (msg.data \ "repoId").as[Int],
+              (msg.data \ "progress").as[Int]))
+          case _ => None
+        }
+      }),
       Field("indexProgress", OptionType(IndexProgressType), resolve = (c: Context[RambutanContext, Any]) => {
         val msg = c.value.asInstanceOf[EventMessage]
         msg.eventType match {

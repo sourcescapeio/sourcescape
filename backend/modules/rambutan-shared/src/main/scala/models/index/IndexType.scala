@@ -26,6 +26,9 @@ sealed abstract class IndexType(
 
   val nodeIndexName = s"${identifier}_node"
   val edgeIndexName = s"${identifier}_edge"
+
+  def symbolIndexName(indexId: Int) = s"${identifier}_symbol_${indexId}"
+  def lookupIndexName(indexId: Int) = s"${identifier}_lookup_${indexId}"
 }
 
 object IndexType extends Plenumeration[IndexType] {

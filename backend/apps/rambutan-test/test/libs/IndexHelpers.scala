@@ -43,8 +43,18 @@ trait IndexHelpers {
         index.sha,
         index.id,
         data.map(_._1).toList)
-      _ <- indexerWorker.runIndex(queueItem, data.toMap)(NoopSpanContext)
+      indexId = queueItem.indexId
+      _ <- indexerWorker.runIndex(queueItem)(NoopSpanContext)
+      javascriptSymbolIndex = IndexType.Javascript.symbolIndexName(indexId)
+      javascriptLookupIndex = IndexType.Javascript.lookupIndexName(indexId)
+      _ <- elasticSearchService.refresh(javascriptSymbolIndex)
+      _ <- elasticSearchService.refresh(javascriptLookupIndex)
+      _ = println("FINISHED INDEXING")
+
+      _ <- indexerWorker.runLinker(queueItem, data.toMap)(NoopSpanContext)
       // force refresh to get data to propagate
+      _ <- elasticSearchService.dropIndex(javascriptSymbolIndex)
+      _ <- elasticSearchService.dropIndex(javascriptLookupIndex)
       _ <- elasticSearchService.refresh(indexType.nodeIndexName)
       _ <- elasticSearchService.refresh(indexType.edgeIndexName)
     } yield {

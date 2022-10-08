@@ -34,31 +34,6 @@ export class CompositeFileSystem implements FileSystemHost {
     }
   }
 
-  private doForDirectory<T>(path: string, f: (_: string, __: FileSystemHost) => T) {
-
-
-    console.warn('DIR', path);
-    let result: T
-    for (const fileSystem of this.fileSystems) {
-      const mappedPath = `${fileSystem.root}/${path}`;
-      console.warn('DIRCHECK', mappedPath)
-      if(fileSystem.fileSystem.directoryExistsSync(mappedPath)) {
-        console.warn('DIREXISTS', mappedPath)
-        result = f(mappedPath, fileSystem.fileSystem)
-        break;
-      }
-    }
-
-    const standardizedPath = FileUtils.getStandardizedAbsolutePath(this, path);
-
-    if (!result) {
-      throw new errors.FileNotFoundError(standardizedPath)
-    } else {
-      return result;
-    }
-  }
-
-
   isCaseSensitive(): boolean {
     return this.fileSystems[0].fileSystem.isCaseSensitive();
   }
@@ -79,8 +54,9 @@ export class CompositeFileSystem implements FileSystemHost {
   readDirSync(dirPath: string): RuntimeDirEntry[] {
     // need to do a remap + need to read entire directory
     const trueDirs = this.fileSystems.map(({root, fileSystem}) => {
-      if(fileSystem.directoryExistsSync(dirPath)) {
-        return fileSystem.readDirSync(dirPath).map((entry) => ({
+      const mappedPath = `${root}/${dirPath}`;
+      if(fileSystem.directoryExistsSync(mappedPath)) {
+        return fileSystem.readDirSync(mappedPath).map((entry) => ({
           ...entry,
           name: entry.name.replace(root, '/')
         }));
@@ -95,12 +71,14 @@ export class CompositeFileSystem implements FileSystemHost {
   /** Asynchronously reads a file at the specified path. */
   readFile(filePath: string, encoding?: string): Promise<string> {
     return this.doForFile(filePath, async (mappedPath, fileSystem) => {
+      console.warn(filePath, mappedPath)
       return fileSystem.readFile(mappedPath, encoding);
     });
   }
   /** Synchronously reads a file at the specified path. */
   readFileSync(filePath: string, encoding?: string): string {
     return this.doForFile(filePath, (mappedPath, fileSystem) => {
+      console.warn('SYNC', filePath, mappedPath)
       return fileSystem.readFileSync(mappedPath, encoding);
     });
   }
@@ -149,17 +127,19 @@ export class CompositeFileSystem implements FileSystemHost {
    * @remarks Implementers should throw an `errors.FileNotFoundError` when it does not exist.
    */
   fileExists(filePath: string): Promise<boolean> {
-    return this.doForFile(filePath, async (mappedPath, fileSystem) => {
-      return true;
-    });
+    return Promise.resolve(this.fileSystems.some(({root, fileSystem}) => {
+      const mappedPath = `${root}/${filePath}`;
+      return fileSystem.fileExistsSync(mappedPath);
+    }));
   }
 
   /** Synchronously checks if a file exists.
    * @remarks Implementers should throw an `errors.FileNotFoundError` when it does not exist.
    */
   fileExistsSync(filePath: string): boolean {
-    return this.doForFile(filePath, (mappedPath, fileSystem) => {
-      return true;
+    return this.fileSystems.some(({root, fileSystem}) => {
+      const mappedPath = `${root}/${filePath}`;
+      return fileSystem.fileExistsSync(mappedPath);
     });
   }
 
