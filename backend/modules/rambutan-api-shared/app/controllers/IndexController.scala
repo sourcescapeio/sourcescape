@@ -150,7 +150,6 @@ class IndexController @Inject() (
                           Option {
                             GraphEdge(
                               n.key,
-                              n.path,
                               definitionLink,
                               n.id,
                               d.id,
@@ -168,7 +167,6 @@ class IndexController @Inject() (
                           Option {
                             GraphEdge(
                               n.key,
-                              n.path,
                               typeDefinitionLink,
                               n.id,
                               dt.id,

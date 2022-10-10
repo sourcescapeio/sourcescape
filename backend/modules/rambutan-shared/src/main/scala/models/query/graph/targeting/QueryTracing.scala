@@ -42,6 +42,13 @@ case class MapTracing[T, TU](inner: QueryTracing[T, TU], fromKey: String, toKey:
       toKey -> inner.pushExternalKey(fromTrace))
   }
 
+  def replaceHeadNode(trace: Map[String, T], id: String, unit: TU): Map[String, T] = {
+    // do nothing. this doesn't apply to generic graph
+    operateOnTo(trace) { toTrace =>
+      inner.replaceHeadNode(toTrace, id, unit)
+    }
+  }
+
   def traceHop(trace: Map[String, T], edgeType: GraphEdgeType, edgeJs: JsObject, initial: Boolean): Map[String, T] = {
     operateOnTo(trace) { toTrace =>
       inner.traceHop(toTrace, edgeType, edgeJs, initial)
@@ -114,6 +121,8 @@ trait QueryTracing[T, TU] extends QueryTracingBasic[TU] {
 
   def newTrace(unit: TU): T
 
+  def replaceHeadNode(trace: T, id: String, unit: TU): T
+
   /**
    * Sorting stuff
    */
@@ -172,6 +181,11 @@ object QueryTracing {
 
     def dropHead(trace: GraphTrace[GenericGraphUnit]): GraphTrace[GenericGraphUnit] = {
       trace.dropHead
+    }
+
+    def replaceHeadNode(trace: GraphTrace[GenericGraphUnit], id: String, unit: GenericGraphUnit): GraphTrace[GenericGraphUnit] = {
+      // do nothing. this doesn't apply to generic graph
+      trace
     }
 
     def pushExternalKey(trace: GraphTrace[GenericGraphUnit]) = trace.copy(
@@ -265,6 +279,13 @@ object QueryTracing {
 
     def newTrace(unit: TraceUnit) = {
       GraphTrace(Nil, Nil, SubTrace(Nil, unit))
+    }
+
+    def replaceHeadNode(trace: GraphTrace[TraceUnit], id: String, unit: TraceUnit): GraphTrace[TraceUnit] = {
+      // do nothing. this doesn't apply to generic graph
+      trace.copy(
+        terminus = trace.terminus.copy(
+          terminus = unit))
     }
 
     def pushExternalKey(trace: GraphTrace[TraceUnit]) = trace.copy(

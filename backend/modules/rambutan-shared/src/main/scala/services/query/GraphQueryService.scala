@@ -705,13 +705,28 @@ class GraphQueryService @Inject() (
           }
         // assume ids are unique so that's all we need to check
         sourceMap = collectedSources.map { item =>
-          (item \ "_source" \ "id").as[String] -> (item \ "_source").as[JsObject]
+          (item \ "_source" \ "id").as[String] -> item
         }.toMap
       } yield {
         traces.map { item =>
           val id = tracing.getId(tracing.getTerminus(item))
           val graphNode = sourceMap.get(id)
-          ((item, graphNode), graphNode.isDefined)
+          // do a dropHead and injectNew
+          // tracing.replaceHead
+
+          val newItem = graphNode match {
+            case Some(gn) => {
+              val newGraphNode = tracing.unitFromJs(gn)
+
+              tracing.replaceHeadNode(item, id, newGraphNode)
+            }
+            case _ => item
+          }
+
+          // We can do a replace on item
+          (
+            (newItem, (graphNode.map(gn => (gn \ "_source").as[JsObject]))),
+            graphNode.isDefined)
         }
       }
     }.mapConcat {

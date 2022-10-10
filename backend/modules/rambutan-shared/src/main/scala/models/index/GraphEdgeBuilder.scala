@@ -19,11 +19,10 @@ case class StandardEdgeBuilder[+ET <: Identifiable, +NT <: Identifiable](
 
     GraphEdge(
       key,
-      path,
       edgeType.identifier,
       from,
       to,
-      Hashing.uuid,
+      Hashing.uuid(),
       toType.map(_.identifier),
       name = name.map(_.take(GraphNode.NameLimit)),
       index = index)

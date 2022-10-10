@@ -4,7 +4,6 @@ import play.api.libs.json._
 
 case class GraphEdge(
   key:    String,
-  path:   String,
   `type`: String, // should be restricted
   from:   String,
   to:     String,
@@ -19,8 +18,6 @@ object GraphEdge {
     "dynamic" -> false,
     "properties" -> Json.obj(
       "key" -> Json.obj(
-        "type" -> "keyword"),
-      "path" -> Json.obj(
         "type" -> "keyword"),
       "type" -> Json.obj(
         "type" -> "keyword"),

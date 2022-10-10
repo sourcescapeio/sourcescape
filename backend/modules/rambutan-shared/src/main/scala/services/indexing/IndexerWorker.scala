@@ -108,7 +108,6 @@ class IndexerWorker @Inject() (
                   val toSymbol = (l \ "_source").as[GraphSymbol]                  
                   GraphEdge(
                     key,
-                    fromLookup.path,
                     definitionLink,
                     fromLookup.node_id,
                     toSymbol.node_id,
@@ -129,7 +128,6 @@ class IndexerWorker @Inject() (
                   val toSymbol = (l \ "_source").as[GraphSymbol]                   
                   GraphEdge(
                     key,
-                    fromLookup.path,
                     typeDefinitionLink,
                     fromLookup.node_id,
                     toSymbol.node_id,
@@ -237,12 +235,6 @@ class IndexerWorker @Inject() (
   /**
    * Sub-tasks
    */
-  // private def reportProgress[T](fileTotal: Int)(f: ) = {
-  //   indexerService.reportProgress[T](fileTotal) { progress =>
-  //     socketService.indexingProgress(orgId, repo, repoId, indexId, progress)
-  //   }
-  // }
-
   private def readFiles(collectionsDirectory: String, indexId: Int, concurrency: Int)(context: SpanContext) = {
     Flow[String].mapAsyncUnordered(concurrency) { path =>
       val sourceFile = s"${collectionsDirectory}/${path}"
@@ -297,8 +289,6 @@ class IndexerWorker @Inject() (
       }
     }.mapConcat(i => i)
   }
-
-  // private def writeAnalysis
 
   private def getGraph(concurrency: Int)(context: SpanContext) = {
     Flow[(IndexType, (AnalysisTree, ByteString, ByteString))].mapAsyncUnordered(concurrency) {
