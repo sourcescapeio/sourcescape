@@ -88,9 +88,6 @@ case class MapTracing[T, TU](inner: QueryTracing[T, TU], fromKey: String, toKey:
     }
   }
 
-  def calculateUnwindSequence(traverse: StatefulTraverse, trace: Map[String, T]): List[EdgeTypeTarget] = {
-    inner.calculateUnwindSequence(traverse, getToTrace(trace))
-  }
 }
 
 trait QueryTracingBasic[TU] {
@@ -134,10 +131,6 @@ trait QueryTracing[T, TU] extends QueryTracingBasic[TU] {
 
   def ordering: Ordering[T]
 
-  /**
-   * Unwind
-   */
-  def calculateUnwindSequence(traverse: StatefulTraverse, trace: T): List[EdgeTypeTarget]
 }
 
 object QueryTracing {
@@ -223,11 +216,6 @@ object QueryTracing {
       Ordering.by { a: GraphTrace[GenericGraphUnit] =>
         sortKey(a).mkString("|")
       }
-    }
-
-    def calculateUnwindSequence(traverse: StatefulTraverse, trace: GraphTrace[GenericGraphUnit]) = {
-      // Not supported
-      List.empty[EdgeTypeTarget]
     }
   }
 
@@ -316,30 +304,6 @@ object QueryTracing {
     def ordering = {
       Ordering.by { a: GraphTrace[TraceUnit] =>
         sortKey(a).mkString("|")
-      }
-    }
-
-    def calculateUnwindSequence(traverse: StatefulTraverse, trace: GraphTrace[TraceUnit]): List[EdgeTypeTarget] = {
-      (trace.terminus.tracesInternal ++ List(trace.terminusId)).flatMap { e =>
-        // Option[T]
-        for {
-          edgeType <- e.edgeType
-          targets <- traverse.mapping.get(edgeType)
-          edgeTypeTarget <- ifNonEmpty(targets) {
-            Option {
-              EdgeTypeTarget(targets.map { t =>
-                val filter = (e.name, e.index) match {
-                  case (Some(n), _) => Some(EdgeNameFilter(n))
-                  case (_, Some(i)) => Some(EdgeIndexFilter(i))
-                  case _            => None
-                }
-                EdgeTypeTraverse(t, filter)
-              })
-            }
-          }
-        } yield {
-          edgeTypeTarget
-        }
       }
     }
   }

@@ -92,18 +92,6 @@ case class BasicStatefulTeleport(
   }
 }
 
-case class StatefulTraverse(
-  from:     NodeType,
-  to:       NodeType,
-  teleport: StatefulTeleport,
-  // unwinds
-  mapping: Map[GraphEdgeType, List[GraphEdgeType]],
-  follow:  List[GraphEdgeType],
-  target:  List[GraphEdgeType]) extends Traverse {
-
-  override val isColumn: Boolean = true
-}
-
 case class FilterTraverse(traverses: List[Traverse]) extends Traverse {
 
   override val isColumn: Boolean = false

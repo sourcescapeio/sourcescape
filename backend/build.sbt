@@ -61,14 +61,6 @@ lazy val rambutanInitializer = (project in file("apps/rambutan-initializer")).
     mainClass := Some("scripts.Initializer")
   )
 
-lazy val rambutanGrammarWriter = (project in file("apps/rambutan-grammar-writer")).
-  enablePlugins(JavaAppPackaging).
-  dependsOn(rambutanShared).
-  settings(APIBuild.rambutanSettings: _*).
-  settings(
-    mainClass := Some("scripts.GrammarWriter")
-  )
-
 /**
  * End to end tests
  */

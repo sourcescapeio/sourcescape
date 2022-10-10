@@ -1,7 +1,6 @@
 package controllers
 
 import models._
-import models.query.grammar._
 import models.query._
 import javax.inject._
 import silvousplay.api._
@@ -31,46 +30,10 @@ class QueryController @Inject() (
   graphQueryServiceExperimental:      services.GraphQueryService, // not really changing this
   relationalQueryServiceExperimental: services.q10.RelationalQueryService)(implicit ec: ExecutionContext, as: ActorSystem) extends API with StreamResults {
 
-  /**
-   * Get grammars
-   */
   def getGrammars() = {
     api { implicit request =>
-      authService.authenticated {
-        Future.successful {
-          Grammar.generateGrammarPayload()
-        }
-      }
-    }
-  }
-
-  def getGrammar(indexType: IndexType, parserType: String) = {
-    api { implicit request =>
-      authService.authenticated {
-
-        val res = for {
-          grammar <- Grammar.GrammarMap.get(indexType)
-          parserType <- grammar.withName(parserType)
-        } yield {
-          Ok(parserType.start.pegJs)
-        }
-
-        Future.successful(res)
-      }
-    }
-  }
-
-  def getIncomplete(indexType: IndexType, parserType: String) = {
-    api { implicit request =>
-      authService.authenticated {
-        val res = for {
-          grammar <- Grammar.GrammarMap.get(indexType)
-          parserType <- grammar.withName(parserType)
-        } yield {
-          Ok(parserType.incompleteStart.pegJs)
-        }
-
-        Future.successful(res)
+      IndexType.all.map { it =>
+        it.identifier -> it.edgeIndexName
       }
     }
   }
@@ -78,16 +41,6 @@ class QueryController @Inject() (
   /**
    * Parsing
    */
-  def parseQuery(orgId: Int) = {
-    api(parse.tolerantJson) { implicit request =>
-      authService.authenticatedForOrg(orgId, OrgRole.ReadOnly) {
-        withJson { form: ParseForm =>
-          form.toModel.applyOperation(form.operation).dto
-        }
-      }
-    }
-  }
-
   def parseSrcLog(orgId: Int, indexType: IndexType) = {
     api { implicit request =>
       authService.authenticatedForOrg(orgId, OrgRole.Admin) {

@@ -358,7 +358,7 @@ object JavascriptEdgePredicate extends Plenumeration[JavascriptEdgePredicate] {
         target = EdgeTypeTarget(
           EdgeTypeTraverse.basic(
             JavascriptGraphEdgeType.MethodDecorator) :: Nil)) :: Nil
-    }    
+    }
   }
 
   case object MethodContains extends JavascriptEdgePredicate("method_contains") {
@@ -670,23 +670,22 @@ sealed abstract class GenericEdgePredicate(val identifierIn: String) extends Edg
 
 sealed class BasicGenericEdgePredicate(from: GenericGraphNodePredicate, to: GenericGraphNodePredicate, edgeType: GenericGraphEdgeType)
   extends GenericEdgePredicate(edgeType.identifier) {
-    override val fromImplicit = Some(from)
-    override val toImplicit = Some(to)
+  override val fromImplicit = Some(from)
+  override val toImplicit = Some(to)
 
-    override def queryTraverse(name: Option[String], index: Option[Int], props: List[GenericGraphProperty], follow: List[GraphEdgeType]) = {
-      EdgeTraverse(
-        follow = EdgeTypeFollow.empty,
-        target = EdgeTypeTarget(
-          EdgeTypeTraverse(
-            edgeType,
-            ifNonEmpty(props) {
-              Option {
-                EdgePropsFilter(props)
-              }
+  override def queryTraverse(name: Option[String], index: Option[Int], props: List[GenericGraphProperty], follow: List[GraphEdgeType]) = {
+    EdgeTraverse(
+      follow = EdgeTypeFollow.empty,
+      target = EdgeTypeTarget(
+        EdgeTypeTraverse(
+          edgeType,
+          ifNonEmpty(props) {
+            Option {
+              EdgePropsFilter(props)
             }
-          ) :: Nil)) :: Nil
-    }
+          }) :: Nil)) :: Nil
   }
+}
 
 object GenericGraphEdgePredicate extends Plenumeration[GenericEdgePredicate] {
   case object TableRow extends GenericEdgePredicate("table_row") {
@@ -702,177 +701,61 @@ object GenericGraphEdgePredicate extends Plenumeration[GenericEdgePredicate] {
   }
 
   /**
-    * Snapshots
-    */
+   * Snapshots
+   */
   case object SnapshotRow extends BasicGenericEdgePredicate(
     from = GenericGraphNodePredicate.Snapshot,
     to = GenericGraphNodePredicate.SnapshotRow,
-    edgeType = GenericGraphEdgeType.SnapshotRow
-  )
+    edgeType = GenericGraphEdgeType.SnapshotRow)
 
   case object SnapshotRowCell extends BasicGenericEdgePredicate(
     from = GenericGraphNodePredicate.SnapshotRow,
     to = GenericGraphNodePredicate.SnapshotCell,
-    edgeType = GenericGraphEdgeType.SnapshotRowCell
-  )
+    edgeType = GenericGraphEdgeType.SnapshotRowCell)
 
   case object SnapshotCellData extends BasicGenericEdgePredicate(
     from = GenericGraphNodePredicate.SnapshotCell,
     to = GenericGraphNodePredicate.SnapshotCellData,
-    edgeType = GenericGraphEdgeType.SnapshotCellData
-  )  
+    edgeType = GenericGraphEdgeType.SnapshotCellData)
 
   case object SnapshotColumnCell extends BasicGenericEdgePredicate(
     from = GenericGraphNodePredicate.SchemaColumn,
     to = GenericGraphNodePredicate.SnapshotCell,
-    edgeType = GenericGraphEdgeType.SnapshotColumnCell
-  )
+    edgeType = GenericGraphEdgeType.SnapshotColumnCell)
 
   case object SchemaColumn extends BasicGenericEdgePredicate(
     from = GenericGraphNodePredicate.Schema,
     to = GenericGraphNodePredicate.SchemaColumn,
-    edgeType = GenericGraphEdgeType.SchemaColumn
-  )
+    edgeType = GenericGraphEdgeType.SchemaColumn)
 
   case object SchemaSnapshot extends BasicGenericEdgePredicate(
     from = GenericGraphNodePredicate.Schema,
     to = GenericGraphNodePredicate.Snapshot,
-    edgeType = GenericGraphEdgeType.SchemaSnapshot
-  )
+    edgeType = GenericGraphEdgeType.SchemaSnapshot)
 
   case object SnapshotRowAnnotation extends BasicGenericEdgePredicate(
     from = GenericGraphNodePredicate.SnapshotRow,
     to = GenericGraphNodePredicate.Annotation,
-    edgeType = GenericGraphEdgeType.SnapshotRowAnnotation
-  )
-
-  // fancy
-  // case object SnapshotRowAnnotation extends GenericEdgePredicate("snapshot-row-annotation") {
-  //   override val fromImplicit = Some(GenericGraphNodePredicate.SnapshotRow)
-  //   override val toImplicit = Some(GenericGraphNodePredicate.Annotation)
-
-  //   override def queryTraverse(name: Option[String], index: Option[Int], props: List[GenericGraphProperty], follow: List[GraphEdgeType]) = {
-  //     StatefulTraverse(
-  //       from = GenericGraphNodeType.SnapshotRow,
-  //       to = GenericGraphNodeType.Annotation,
-  //       teleport = BasicStatefulTeleport(
-  //         teleportNames = { node =>
-  //           val rowKey = (node \ "props").as[List[GenericGraphProperty]].filter(_.key =?= "row_key").map(_.encode)
-  //           rowKey
-  //         },
-  //         teleportKey = "props"
-  //       ),
-  //       // no unwinds
-  //       mapping = Map.empty[GraphEdgeType, List[GraphEdgeType]],
-  //       follow = Nil,
-  //       target = Nil) :: Nil
-  //   }
-
-  //   override def reverseTraverse(name: Option[String], index: Option[Int], props: List[GenericGraphProperty], follow: List[GraphEdgeType]) = {
-  //     StatefulTraverse(
-  //       from = GenericGraphNodeType.Annotation,
-  //       to = GenericGraphNodeType.SnapshotRow,
-  //       teleport = BasicStatefulTeleport(
-  //         teleportNames = { node =>
-  //           val rowKey = (node \ "props").as[List[GenericGraphProperty]].filter(_.key =?= "row_key").map(_.encode)
-  //           rowKey
-  //         },
-  //         teleportKey = "props"
-  //       ),
-  //       // no unwinds
-  //       mapping = Map.empty[GraphEdgeType, List[GraphEdgeType]],
-  //       follow = Nil,
-  //       target = Nil) :: Nil
-  //   }
-  // }
-
-  case object SnapshotRowJoin extends GenericEdgePredicate("snapshot-row-join") {
-    override val fromImplicit = Some(GenericGraphNodePredicate.SnapshotRow)
-    override val toImplicit = Some(GenericGraphNodePredicate.SnapshotRow)
-
-    override def queryTraverse(name: Option[String], index: Option[Int], props: List[GenericGraphProperty], follow: List[GraphEdgeType]) = {
-      StatefulTraverse(
-        from = GenericGraphNodeType.SnapshotRow,
-        to = GenericGraphNodeType.SnapshotRow,
-        teleport = BasicStatefulTeleport(
-          teleportNames = { node =>
-            (node \ "props").as[List[GenericGraphProperty]].filter(_.key =?= "row_key").map(_.encode)
-          },
-          teleportKey = "props"
-        ),
-        // no unwinds
-        mapping = Map.empty[GraphEdgeType, List[GraphEdgeType]],
-        follow = Nil,
-        target = Nil) :: Nil
-    }
-
-    override def reverseTraverse(name: Option[String], index: Option[Int], props: List[GenericGraphProperty], follow: List[GraphEdgeType]) = {
-      queryTraverse(name, index, props, follow)
-    }
-  }
-
-  case object SnapshotRowDiff extends GenericEdgePredicate("snapshot-row-diff") {
-    override val fromImplicit = Some(GenericGraphNodePredicate.SnapshotRow)
-    override val toImplicit = Some(GenericGraphNodePredicate.SnapshotRow)
-
-    override val forceForwardDirection = true
-
-    override def queryTraverse(name: Option[String], index: Option[Int], props: List[GenericGraphProperty], follow: List[GraphEdgeType]) = {
-      StatefulTraverse(
-        from = GenericGraphNodeType.SnapshotRow,
-        to = GenericGraphNodeType.SnapshotRow,
-        teleport = new BasicStatefulTeleport(
-          teleportNames = { node =>
-            (node \ "props").as[List[GenericGraphProperty]].filter(_.key =?= "row_key").map(_.encode)
-          },
-          teleportKey = "props"
-        ) {
-          override def nameQuery(names: List[String]) = {
-            val maybeIndexId = props.find(_.key =?= "index_id")
-            ESQuery.termsSearch(teleportKey, names.toList) :: withDefined(maybeIndexId) { indexId =>
-              ESQuery.termSearch(teleportKey, indexId.encode) :: Nil
-            }
-          }
-
-          override def doJoin(node: JsObject, names: List[String], collectedMap: Map[String, List[JsObject]]) = {
-            names.flatMap(collectedMap.get) match {
-              case Nil => Json.obj("_source" -> node) :: Nil
-              case _ => Nil
-            }
-          }
-        },
-        // no unwinds
-        mapping = Map.empty[GraphEdgeType, List[GraphEdgeType]],
-        follow = Nil,
-        target = Nil) :: Nil
-    }
-
-    override def reverseTraverse(name: Option[String], index: Option[Int], props: List[GenericGraphProperty], follow: List[GraphEdgeType]) = {
-      throw new Exception("invalid reversal! this edge should be force forward")
-    }
-  }
+    edgeType = GenericGraphEdgeType.SnapshotRowAnnotation)
 
   case object SnapshotCodeIndex extends BasicGenericEdgePredicate(
     from = GenericGraphNodePredicate.Snapshot,
     to = GenericGraphNodePredicate.CodeIndex,
-    edgeType = GenericGraphEdgeType.SnapshotCodeIndex
-  )
+    edgeType = GenericGraphEdgeType.SnapshotCodeIndex)
 
   /**
-    * Gits
-    */
+   * Gits
+   */
   case object GitHeadCommit extends BasicGenericEdgePredicate(
     from = GenericGraphNodePredicate.GitHead,
     to = GenericGraphNodePredicate.GitCommit,
-    edgeType = GenericGraphEdgeType.GitHeadCommit
-  )
+    edgeType = GenericGraphEdgeType.GitHeadCommit)
 
   case object GitCommitIndex extends BasicGenericEdgePredicate(
     from = GenericGraphNodePredicate.GitCommit,
     to = GenericGraphNodePredicate.CodeIndex,
-    edgeType = GenericGraphEdgeType.GitCommitIndex
-  )
-  
+    edgeType = GenericGraphEdgeType.GitCommitIndex)
+
   // fancy
   case object GitCommitParent extends GenericEdgePredicate("git-commit-parent") {
     // we don't want to attach a node clause because we're emitting multiple
@@ -880,7 +763,7 @@ object GenericGraphEdgePredicate extends Plenumeration[GenericEdgePredicate] {
     // override val fromImplicit = Some(GenericGraphNodePredicate.GitCommit)
     // override val toImplicit = Some(GenericGraphNodePredicate.GitCommit)
 
-    override val forceForwardDirection = true    
+    override val forceForwardDirection = true
 
     override def queryTraverse(name: Option[String], index: Option[Int], props: List[GenericGraphProperty], follow: List[GraphEdgeType]) = {
       val maybeCommit = props.find(_.key =?= "commit").map(_.value)
@@ -888,14 +771,12 @@ object GenericGraphEdgePredicate extends Plenumeration[GenericEdgePredicate] {
 
       RepeatedEdgeTraverse[GraphTrace[GenericGraphUnit], GenericGraphUnit](
         EdgeTypeFollow(
-          EdgeTypeTraverse(GenericGraphEdgeType.GitCommitParent, filter = None) :: Nil
-        ),
-        { trace => 
+          EdgeTypeTraverse(GenericGraphEdgeType.GitCommitParent, filter = None) :: Nil),
+        { trace =>
           val limitTerminate = maybeLimit.map((trace.tracesInternal.length + 1) >= _).getOrElse(false)
           val commitTerminate = maybeCommit.map(trace.terminusId.id =?= _).getOrElse(false)
           limitTerminate || commitTerminate
-        }
-      ) :: Nil
+        }) :: Nil
     }
   }
 
@@ -905,7 +786,7 @@ object GenericGraphEdgePredicate extends Plenumeration[GenericEdgePredicate] {
     // override val fromImplicit = Some(GenericGraphNodePredicate.GitCommit)
     // override val toImplicit = Some(GenericGraphNodePredicate.GitCommit)
 
-    override val forceForwardDirection = true    
+    override val forceForwardDirection = true
 
     override def queryTraverse(name: Option[String], index: Option[Int], props: List[GenericGraphProperty], follow: List[GraphEdgeType]) = {
       val maybeCommit = props.find(_.key =?= "commit").map(_.value)
@@ -913,72 +794,12 @@ object GenericGraphEdgePredicate extends Plenumeration[GenericEdgePredicate] {
 
       RepeatedEdgeTraverse[GraphTrace[GenericGraphUnit], GenericGraphUnit](
         EdgeTypeFollow(
-          EdgeTypeTraverse(GenericGraphEdgeType.GitCommitParent.opposite, filter = None) :: Nil
-        ),
-        { trace => 
+          EdgeTypeTraverse(GenericGraphEdgeType.GitCommitParent.opposite, filter = None) :: Nil),
+        { trace =>
           val limitTerminate = maybeLimit.map((trace.tracesInternal.length + 1) >= _).getOrElse(false)
           val commitTerminate = maybeCommit.map(trace.terminusId.id =?= _).getOrElse(false)
           limitTerminate || commitTerminate
-        }
-      ) :: Nil
-    }
-  }
-}
-
-object UniversalEdgePredicate extends Plenumeration[EdgePredicate] {
-
-  // Special Edges
-  case object RequireDependency extends EdgePredicate("require_dependency") {
-    // override val egressReferences: Boolean = true
-
-    override val fromImplicit = Some(UniversalNodePredicate.Dep)
-
-    private def injectFollows(follow: List[GraphEdgeType], mapping: Map[GraphEdgeType, List[GraphEdgeType]]) = {
-      follow.map(_ -> Nil).toMap ++ mapping
-    }
-
-    override def queryTraverse(name: Option[String], index: Option[Int], props: List[GenericGraphProperty], follow: List[GraphEdgeType]) = {
-      StatefulTraverse(
-        from = ESPrimaNodeType.Require,
-        to = ESPrimaNodeType.Export,
-        teleport = BasicStatefulTeleport(
-          teleportNames = { node =>
-            (node \ "search_name").as[List[String]]
-          },
-          teleportKey = "search_name",
-        ),
-        // this is all for unwinds
-        mapping = injectFollows(
-          follow,
-          Map(
-            JavascriptGraphEdgeType.MemberOf.opposite -> List(
-              JavascriptGraphEdgeType.MemberOf.opposite,
-              JavascriptGraphEdgeType.ExportKeyLink.opposite),
-            JavascriptGraphEdgeType.ReferenceOf.opposite -> Nil,
-            JavascriptGraphEdgeType.DeclaredAs.opposite -> Nil)),
-        follow = List(JavascriptGraphEdgeType.ReferenceOf.opposite, JavascriptGraphEdgeType.DeclaredAs.opposite),
-        target = List(JavascriptGraphEdgeType.ExportedTo.opposite)) :: Nil
-    }
-
-    override def reverseTraverse(name: Option[String], index: Option[Int], props: List[GenericGraphProperty], follow: List[GraphEdgeType]) = {
-      StatefulTraverse(
-        from = ESPrimaNodeType.Export,
-        to = ESPrimaNodeType.Require,
-        teleport = BasicStatefulTeleport(
-          teleportNames = { node =>
-            (node \ "search_name").as[List[String]]
-          },
-          teleportKey = "search_name",
-        ),
-        mapping = injectFollows(
-          follow,
-          Map(
-            JavascriptGraphEdgeType.ExportKeyLink -> List(JavascriptGraphEdgeType.MemberOf),
-            JavascriptGraphEdgeType.MemberOf -> List(JavascriptGraphEdgeType.MemberOf),
-            JavascriptGraphEdgeType.DeclaredAs -> Nil,
-            JavascriptGraphEdgeType.ExportedTo -> Nil)),
-        follow = List(JavascriptGraphEdgeType.ReferenceOf),
-        target = List(JavascriptGraphEdgeType.DeclaredAs)) :: Nil
+        }) :: Nil
     }
   }
 }
@@ -986,6 +807,6 @@ object UniversalEdgePredicate extends Plenumeration[EdgePredicate] {
 // we only use reads here
 object EdgePredicate extends Plenumeration[EdgePredicate] {
   override val all = {
-    UniversalEdgePredicate.all ++ GenericGraphEdgePredicate.all ++ IndexType.all.flatMap(_.edgePredicate.all)
+    GenericGraphEdgePredicate.all ++ IndexType.all.flatMap(_.edgePredicate.all)
   }
 }

@@ -30,7 +30,6 @@ class IndexerWorker @Inject() (
   staticAnalysisService: StaticAnalysisService,
   socketService:         SocketService,
   indexerQueueService:   IndexerQueueService,
-  savedQueryService:     SavedQueryService,
   elasticSearchService: ElasticSearchService
   )(implicit ec: ExecutionContext, mat: akka.stream.Materializer) {
 

@@ -126,10 +126,7 @@ object SrcLogQuery {
   private def edgeClause[_: P](edgePredicate: Plenumeration[_ <: EdgePredicate]) = {
     P(Lexical.keywordChars ~ "(" ~ maybeVar ~ "," ~ maybeVar ~ ")" ~ (conditionsBlock | propConditionsBlock).? ~ booleanModifier.? ~ ".") map {
       case (pred, from, to, cond, mod) => {
-        val ep = UniversalEdgePredicate.withName(pred).getOrElse {
-          edgePredicate.withNameUnsafe(pred)
-        }
-        EdgeClause(ep, from, to, cond, mod)
+        EdgeClause(edgePredicate.withNameUnsafe(pred), from, to, cond, mod)
       }
     }
   }

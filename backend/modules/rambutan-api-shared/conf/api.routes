@@ -33,7 +33,7 @@ GET     /orgs/:o/repos/:r/shas                      controllers.RepoController.g
 # INDEXES #
 ###########
 
-# Should just do this
+# TODO: deprecate in favor of graphql
 GET     /orgs/:o/indexes/:i/tree                      controllers.IndexController.getTreeForIndex(o: Int, i: Int)
 GET     /orgs/:o/indexes/:i/file                      controllers.IndexController.getFile(o: Int, i: Int, file: String)
 GET     /orgs/:o/indexes/:i/analysis                  controllers.IndexController.getAnalysis(o: Int, i: Int, file: String)
@@ -47,13 +47,6 @@ POST    /orgs/:o/test-index/:it                       controllers.IndexControlle
 ############
 
 GET     /grammars                                   controllers.QueryController.getGrammars()
-GET     /grammars/:it/:t/grammar                    controllers.QueryController.getGrammar(it: models.IndexType, t: String)
-GET     /grammars/:it/:t/incomplete                 controllers.QueryController.getIncomplete(it: models.IndexType, t: String)
-
-POST    /orgs/:o/parse                              controllers.QueryController.parseQuery(o: Int)
-
-POST    /orgs/:o/query/builder                      controllers.QueryController.builderQuery(o: Int)
-POST    /orgs/:o/query/grouped                      controllers.QueryController.groupedBuilderQuery(o: Int)
 
 POST    /orgs/:o/parse/srclog/:it                   controllers.QueryController.parseSrcLog(o: Int, it: models.IndexType)
 POST    /orgs/:o/query/graph/:it                    controllers.QueryController.graphQuery(o: Int, it: models.IndexType)
@@ -63,23 +56,3 @@ POST    /orgs/:o/query/relational/xp/:it            controllers.QueryController.
 POST    /orgs/:o/query/relational/time/:it          controllers.QueryController.relationalQueryTime(o: Int, it: models.IndexType)
 
 POST    /orgs/:o/query/srclog/xp/:it                controllers.QueryController.srcLogQueryExperimental(o: Int, it: models.IndexType)
-
-#################
-# SAVED QUERIES #
-#################
-
-POST    /orgs/:orgId/saved-queries                  controllers.SavedQueryController.createSavedQuery(orgId: Int)
-GET     /orgs/:orgId/saved-queries                  controllers.SavedQueryController.listSavedQueries(orgId: Int)
-DELETE  /orgs/:orgId/saved-queries/:id              controllers.SavedQueryController.deleteSavedQuery(orgId: Int, id: Int)
-
-# Don't think we really use this anymore
-GET     /orgs/:orgId/saved-queries/:id              controllers.SavedQueryController.getSavedQuery(orgId: Int, id: Int)
-
-
-###################
-# SAVED TARGETING #
-###################
-
-POST    /orgs/:orgId/saved-targeting                controllers.SavedTargetingController.createSavedTargeting(orgId: Int)
-GET     /orgs/:orgId/saved-targeting                controllers.SavedTargetingController.listSavedTargeting(orgId: Int)
-# DELETE

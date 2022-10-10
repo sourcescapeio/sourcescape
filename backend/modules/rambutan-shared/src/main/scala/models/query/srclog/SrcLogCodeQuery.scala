@@ -39,27 +39,6 @@ case class SrcLogCodeQuery(
     this.copy(selected = ids)
   }
 
-  // parent, toStart, toEnd
-  def remapContainsEdges(remapEdges: List[(String, String, String)]) = {
-    val remapSet = remapEdges.map { r =>
-      (r._1, r._2)
-    }.toSet
-    val remapMap = remapEdges.map { r =>
-      (r._2, r._3)
-    }.toMap
-    val remapped = this.edges.map {
-      case e @ EdgeClause(p, from, to, cond, mod) if BuilderEdgeType.fromPredicate(p).isContains => {
-        val shouldRemap = remapSet.contains((from, to))
-        remapMap.get(to) match {
-          case Some(remappedTo) if shouldRemap => EdgeClause(p, from, remappedTo, cond, mod)
-          case _                               => e
-        }
-      }
-      case o => o
-    }
-    this.copy(edges = remapped)
-  }
-
   def setCondition(id: String, parentId: Option[String], conditionType: ConditionType, condition: Option[Condition]) = {
     // node will blindly copy condition
     val resetNodes = nodes.map {
