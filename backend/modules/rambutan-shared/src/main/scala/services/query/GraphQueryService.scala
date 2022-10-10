@@ -347,18 +347,16 @@ class GraphQueryService @Inject() (
     edgeHop(
       follow,
       nodeHint = None,
-      recursion = true // fix
+      initial = true // fix?
     ).mapConcat {
       case EdgeHop(trace, directedEdge, item) => {
-        val nextTrace = tracing.traceHop(trace, directedEdge, item, initial = true)
-
-        val isTerminal = traverse.shouldTerminate(nextTrace)
+        val isTerminal = traverse.shouldTerminate(trace)
         if (isTerminal) {
-          (nextTrace, true) :: Nil
+          (trace, true) :: Nil
         } else {
           List(
-            (nextTrace, true),
-            (nextTrace, false))
+            (trace, true),
+            (trace, false))
         }
       }
     }.via {
@@ -384,11 +382,10 @@ class GraphQueryService @Inject() (
     edgeHop(
       allTraverses,
       nodeHint = typeHint,
-      recursion = !initial).map {
+      initial = initial).map {
       case EdgeHop(trace, directedEdge, item) => {
-        val nextTrace = tracing.traceHop(trace, directedEdge, item, initial)
         val isTerminal = targetSet.contains(directedEdge)
-        (nextTrace, isTerminal)
+        (trace, isTerminal)
       }
     }.via {
       maybeRecurse { _ =>
@@ -404,9 +401,9 @@ class GraphQueryService @Inject() (
     edgeHop(
       follow,
       nodeHint = None,
-      recursion = !initial) map {
+      initial = initial) map {
       case EdgeHop(trace, directedEdge, item) => {
-        tracing.traceHop(trace, directedEdge, item, initial)
+        trace
       }
     }
   }
@@ -547,9 +544,6 @@ class GraphQueryService @Inject() (
         traces.map { item =>
           val id = tracing.getId(tracing.getTerminus(item))
           val graphNode = sourceMap.get(id)
-          // do a dropHead and injectNew
-          // tracing.replaceHead
-
           val newItem = graphNode match {
             case Some(gn) => {
               val newGraphNode = tracing.unitFromJs(gn)
@@ -570,10 +564,13 @@ class GraphQueryService @Inject() (
     }
   }
 
+  // NOTE: the .trace outputted here is already hopped
   private def edgeHop[T, TU](
     edgeTraverses: List[EdgeTypeTraverse],
     nodeHint:      Option[NodeType],
-    recursion:     Boolean)(implicit targeting: QueryTargeting[TU], context: SpanContext, tracing: QueryTracing[T, TU]): Flow[T, EdgeHop[T], Any] = {
+    initial:       Boolean)(implicit targeting: QueryTargeting[TU], context: SpanContext, tracing: QueryTracing[T, TU]): Flow[T, EdgeHop[T], Any] = {
+
+    val recursion = !initial
 
     val edgeHopOrdering = Ordering.by { a: EdgeHop[T] =>
       tracing.sortKey(a.obj).mkString("|")
@@ -591,8 +588,44 @@ class GraphQueryService @Inject() (
           traces.toList,
           nodeHint)
         allResults <- source.runWith(models.Sinks.ListAccum[EdgeHop[T]])
+        (cross, notCross) = allResults.partition(_.directedEdge.crossFile)
+        // TODO: this is ugly
+        crossIds = cross.map { i =>
+          i.directedEdge.direction.extractOpposite(i.edgeObj)
+        }
+        nodeSrc <- ifNonEmpty(crossIds) {
+          elasticSearchService.source(
+            targeting.nodeIndexName,
+            ESQuery.termsSearch(
+              "id",
+              crossIds),
+            List("id" -> "asc"),
+            cross.length).map(_._2)
+        }
+        collectedNodes <- context.withSpan(
+          "query.graph.elasticsearch.edgehop.node",
+          "size" -> traces.size.toString()) { _ =>
+            nodeSrc.runWith(Sinks.ListAccum)
+          }
+        // assume ids are unique so that's all we need to check
+        nodeMap = collectedNodes.map { item =>
+          (item \ "_source" \ "id").as[String] -> item
+        }.toMap
       } yield {
-        allResults.sorted(edgeHopOrdering)
+        allResults.sorted(edgeHopOrdering).map {
+          case EdgeHop(trace, directedEdge, edgeObj) => {
+            val baseTrace = tracing.traceHop(trace, directedEdge, edgeObj, initial)
+            val id = directedEdge.direction.extractOpposite(edgeObj)
+            val nextTrace = nodeMap.get(id) match {
+              case Some(replaceNode) => {
+                tracing.replaceHeadNode(baseTrace, id, tracing.unitFromJs(replaceNode))
+              }
+              case _ => baseTrace
+            }
+
+            EdgeHop(nextTrace, directedEdge, edgeObj)
+          }
+        }
       }
     }.mapConcat(s => s)
   }
