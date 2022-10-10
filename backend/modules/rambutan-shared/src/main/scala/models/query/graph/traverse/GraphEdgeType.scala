@@ -11,7 +11,8 @@ import play.api.libs.json._
 sealed class GraphEdgeType(
   val identifier: String,
   val edgeType:   EdgeType,
-  val direction:  AccessDirection) extends Identifiable {
+  val direction:  AccessDirection,
+  val crossFile:  Boolean) extends Identifiable {
 
   override def toString() = s"${identifier}"
 
@@ -19,11 +20,11 @@ sealed class GraphEdgeType(
     edgeType.isContains && direction =?= AccessDirection.From
   }
 
-  def opposite: GraphEdgeType = new GraphEdgeType(identifier + ".reverse", edgeType, direction.reverse)
+  def opposite: GraphEdgeType = new GraphEdgeType(identifier + ".reverse", edgeType, direction.reverse, crossFile)
 }
 
 sealed class RubyGraphEdgeType(edgeTypeIn: RubyEdgeType, direction: AccessDirection)
-  extends GraphEdgeType(s"${IndexType.Ruby.identifier}::${edgeTypeIn.identifier}", edgeTypeIn, direction)
+  extends GraphEdgeType(s"${IndexType.Ruby.identifier}::${edgeTypeIn.identifier}", edgeTypeIn, direction, crossFile = false)
 
 object RubyGraphEdgeType extends Plenumeration[RubyGraphEdgeType] {
   val follows = List(
@@ -44,8 +45,8 @@ object RubyGraphEdgeType extends Plenumeration[RubyGraphEdgeType] {
   case object Reference extends RubyGraphEdgeType(RubyEdgeType.Reference, AccessDirection.To)
 }
 
-sealed class JavascriptGraphEdgeType(identifierIn: String, edgeTypeIn: ESPrimaEdgeType, direction: AccessDirection)
-  extends GraphEdgeType(s"${IndexType.Javascript.identifier}::${identifierIn}", edgeTypeIn, direction)
+sealed class JavascriptGraphEdgeType(identifierIn: String, edgeTypeIn: ESPrimaEdgeType, direction: AccessDirection, crossFile: Boolean = false)
+  extends GraphEdgeType(s"${IndexType.Javascript.identifier}::${identifierIn}", edgeTypeIn, direction, crossFile)
 
 object JavascriptGraphEdgeType extends Plenumeration[JavascriptGraphEdgeType] {
 
@@ -106,16 +107,16 @@ object JavascriptGraphEdgeType extends Plenumeration[JavascriptGraphEdgeType] {
   case object BasicExpression extends JavascriptGraphEdgeType("basic_expression", ESPrimaEdgeType.BasicExpression, AccessDirection.To)
 
   // Export links (TODO: delete?)
-  case object ExportKeyLink extends JavascriptGraphEdgeType("export_key_link", ESPrimaEdgeType.ExportKey, AccessDirection.From)
-  case object ExportedTo extends JavascriptGraphEdgeType("exported_to", ESPrimaEdgeType.Export, AccessDirection.From)
+  // case object ExportKeyLink extends JavascriptGraphEdgeType("export_key_link", ESPrimaEdgeType.ExportKey, AccessDirection.From)
+  // case object ExportedTo extends JavascriptGraphEdgeType("exported_to", ESPrimaEdgeType.Export, AccessDirection.From)
   // case object LinkedTo extends JavascriptGraphEdgeType("linked_to", ESPrimaEdgeType.Link, AccessDirection.To)
 
   // Links
-  case object CallLink extends JavascriptGraphEdgeType("call_link", ESPrimaEdgeType.CallLink, AccessDirection.From)
+  case object CallLink extends JavascriptGraphEdgeType("call_link", ESPrimaEdgeType.CallLink, AccessDirection.From, crossFile = true)
 }
 
 sealed class GenericGraphEdgeType(category: String, edgeTypeIn: GenericEdgeType, direction: AccessDirection)
-  extends GraphEdgeType(edgeTypeIn.identifier, edgeTypeIn, direction)
+  extends GraphEdgeType(edgeTypeIn.identifier, edgeTypeIn, direction, crossFile = false)
 
 private object GenericEdgeCategories {
   val SnapshotCategory = "snapshot"
@@ -155,12 +156,4 @@ object GraphEdgeType {
 
   val follows = JavascriptGraphEdgeType.follows ++ RubyGraphEdgeType.follows
   // This is only used for
-}
-
-// these are only for exports (no actual indexed edge, just a teleport)
-object GraphEdgeTypeTeleport {
-  def teleportTo(other: NodeType) = new GraphEdgeType(
-    s"teleport.${other.identifier}",
-    EdgeType.Link,
-    AccessDirection.From)
 }
