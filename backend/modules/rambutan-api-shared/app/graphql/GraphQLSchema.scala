@@ -22,6 +22,8 @@ import models.RepoSHAIndex
 import silvousplay.imports._
 import models.RepoCollectionIntent
 import models.RepoSettings
+import akka.stream.scaladsl.Source
+import akka.stream.scaladsl.Sink
 
 // Question: how to define GraphQL context
 object SchemaDefinition {
@@ -190,6 +192,12 @@ object SchemaDefinition {
       Field("scans", ListType(Scan),
         arguments = Nil,
         resolve = ctx => ctx.ctx.localScanService.listScans()),
+      Field("repo", OptionType(Repo),
+        arguments = RepoID :: Nil,
+        resolve = ctx => {
+          import ctx.ctx.ec
+          ctx.ctx.localRepoDataService.getRepo(ctx.arg(RepoID))
+        }),
       Field("repos", ListType(Repo),
         arguments = Nil,
         resolve = ctx => {
@@ -204,13 +212,42 @@ object SchemaDefinition {
       "Mutation", fields[RambutanContext, Any](
         Field("createScan", Scan,
           arguments = PathArg :: Nil,
-          resolve = ctx => ctx.ctx.localScanService.createScan(-1, ctx.arg(PathArg), shouldScan = true)),
+          resolve = ctx => {
+            implicit val ec = ctx.ctx.ec
+            ctx.ctx.telemetryService.withTelemetry { implicit context => 
+              ctx.ctx.localScanService.createScan(-1, ctx.arg(PathArg), shouldScan = true)
+            }
+          }),
         Field("deleteScan", OptionType(Scan),
           arguments = ScanID :: Nil,
           resolve = ctx => ctx.ctx.localScanService.deleteScan(-1, ctx.arg(ScanID))),
-        Field("selectRepo", IntType,
+        Field("deleteIndexesForRepo", IntType,
           arguments = RepoID :: Nil,
-          resolve = ctx => ctx.ctx.localRepoSyncService.setRepoIntent(-1, ctx.arg(RepoID), RepoCollectionIntent.Collect, queue = true))))
+          resolve = ctx => {
+            implicit val mat = ctx.ctx.mat
+            implicit val ec = ctx.ctx.ec
+            for {
+              indexes <- ctx.ctx.repoIndexDataService.getIndexesForRepo(ctx.arg(RepoID))
+              _ = println(indexes)
+              _ <- Source(indexes).mapAsync(4) { idx =>
+                ctx.ctx.repoService.doDelete(idx)
+              }.runWith(Sink.ignore)
+            } yield {
+              0
+            }
+          },
+        ),
+        Field("indexRepo", IntType,
+          arguments = RepoID :: Nil,
+          resolve = { ctx =>
+            println("INDEX REPO")
+            // do refresh directly
+            implicit val ec = ctx.ctx.ec
+            ctx.ctx.repoIndexingService.indexRepo(-1, ctx.arg(RepoID)) map (_._1)
+          }
+        )
+      )
+    )
   }
 
   /**
@@ -243,13 +280,34 @@ object SchemaDefinition {
     repoId:   Int,
     progress: Int) extends Event
 
+  case class LinkProgress(
+    id:       String, // indexId
+    version:  Long,
+    indexId:  Int,
+    repoId:   Int,
+    progress: Int) extends Event    
+
   val ScanProgressType = deriveObjectType[RambutanContext, ScanProgress](Interfaces(EventType))
   val CloneProgressType = deriveObjectType[RambutanContext, CloneProgress](Interfaces(EventType))
   val IndexProgressType = deriveObjectType[RambutanContext, IndexProgress](Interfaces(EventType))
+  val LinkProgressType = deriveObjectType[RambutanContext, LinkProgress](Interfaces(EventType))
 
   val SubscriptionType = ObjectType(
     "Subscription",
     fields[RambutanContext, Any](
+      Field("linkProgress", OptionType(LinkProgressType), resolve = (c: Context[RambutanContext, Any]) => {
+        val msg = c.value.asInstanceOf[EventMessage]
+        msg.eventType match {
+          case SocketEventType.LinkingProgress => Option(
+            LinkProgress(
+              msg.id,
+              0L,
+              (msg.data \ "indexId").as[Int],
+              (msg.data \ "repoId").as[Int],
+              (msg.data \ "progress").as[Int]))
+          case _ => None
+        }
+      }),
       Field("indexProgress", OptionType(IndexProgressType), resolve = (c: Context[RambutanContext, Any]) => {
         val msg = c.value.asInstanceOf[EventMessage]
         msg.eventType match {

@@ -6,6 +6,14 @@ import silvousplay.imports._
 trait GraphNodeBuilder {
 
   def build(orgId: Int, repo: String, repoId: Int, sha: String, indexId: Int, path: String): GraphNode
+
+  // used for looking up symbols and linking
+  def lookupIndex: Option[Int]
+  def definitionLink: Option[String]
+  def typeDefinitionLink: Option[String]
+
+  // will generate a symbol entry
+  def generateSymbol: Boolean
 }
 
 trait GraphNodeData[NT <: Identifiable] {

@@ -19,6 +19,7 @@ import { SrcLogConsoleContainer } from 'components/console/SrcLogConsole';
 
 import { GrammarProvider } from 'contexts/GrammarContext';
 import { QueryBuilderContainer } from 'components/builder/QueryBuilder';
+import { TestIndexingContainer } from 'components/debug/TestIndexing';
 
 function LocalAppBase() {
   return <GrammarProvider>
@@ -36,6 +37,10 @@ function LocalAppBase() {
           <Route path="/srclog-compiler" element={<SrcLogCompilerContainer />} />
           <Route path="/relational-console" element={<RelationalConsoleContainer />} />
           <Route path="/graph-console" element={<GraphConsoleContainer />} />
+          {
+            // debug
+          }
+          <Route path="/test-indexing" element={<TestIndexingContainer />} />
         </Route>
       </Routes>
     </Router>

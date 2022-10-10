@@ -39,27 +39,6 @@ case class SrcLogCodeQuery(
     this.copy(selected = ids)
   }
 
-  // parent, toStart, toEnd
-  def remapContainsEdges(remapEdges: List[(String, String, String)]) = {
-    val remapSet = remapEdges.map { r =>
-      (r._1, r._2)
-    }.toSet
-    val remapMap = remapEdges.map { r =>
-      (r._2, r._3)
-    }.toMap
-    val remapped = this.edges.map {
-      case e @ EdgeClause(p, from, to, cond, mod) if BuilderEdgeType.fromPredicate(p).isContains => {
-        val shouldRemap = remapSet.contains((from, to))
-        remapMap.get(to) match {
-          case Some(remappedTo) if shouldRemap => EdgeClause(p, from, remappedTo, cond, mod)
-          case _                               => e
-        }
-      }
-      case o => o
-    }
-    this.copy(edges = remapped)
-  }
-
   def setCondition(id: String, parentId: Option[String], conditionType: ConditionType, condition: Option[Condition]) = {
     // node will blindly copy condition
     val resetNodes = nodes.map {
@@ -212,13 +191,16 @@ object SrcLogCodeQuery {
   }
   private def aliasDirective[_: P] = P("%alias(" ~ SrcLogQuery.varChars ~ "=" ~ Lexical.keywordChars ~ ")" ~ ".")
   private def rootDirective[_: P] = P("%root(" ~ SrcLogQuery.varChars ~ ")" ~ ".")
+  private def selectDirective[_: P] = P("%select(" ~ SrcLogQuery.varChars ~ ("," ~ SrcLogQuery.varChars).rep(0) ~ ")" ~ ".") map {
+    case (a, bs) => a :: bs.toList
+  }
 
   private def query[_: P](indexType: IndexType) = {
     for {
       clauses <- P(Start ~ SrcLogQuery.clause(indexType.nodePredicate, indexType.edgePredicate).rep(1))
-      finalDirectives <- P(aliasDirective.rep(0) ~ rootDirective.? ~ End)
+      finalDirectives <- P(aliasDirective.rep(0) ~ rootDirective.? ~ selectDirective.? ~ End)
     } yield {
-      val (aliasDirectives, rootDirective) = finalDirectives
+      val (aliasDirectives, rootDirective, selectDirective) = finalDirectives
 
       val nodes = clauses.flatMap {
         case n @ NodeClause(_, _, _) => Some(n)
@@ -232,7 +214,7 @@ object SrcLogCodeQuery {
 
       val aliases = aliasDirectives.toMap
 
-      SrcLogCodeQuery(indexType, nodes.toList, edges.toList, aliases, rootDirective, Nil)
+      SrcLogCodeQuery(indexType, nodes.toList, edges.toList, aliases, rootDirective, selectDirective.getOrElse(Nil))
     }
   }
 

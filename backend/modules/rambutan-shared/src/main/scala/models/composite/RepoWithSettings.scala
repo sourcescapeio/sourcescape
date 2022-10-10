@@ -38,7 +38,6 @@ case class RepoWithSettings(
   def unified(
     indexes:       Map[Int, List[RepoSHAIndex]],
     latestIndexes: Map[Int, Option[RepoSHAIndex]],
-    logs:          Map[String, WorkRecord],
     latestSHAs:    Map[Int, RepoSHA]) = {
 
     UnifiedRepoSummary(
@@ -50,8 +49,7 @@ case class RepoWithSettings(
       latestBranches = latestSHAs.get(repo.repoId).map(_.branches).getOrElse(Nil),
       indexes = indexes.getOrElse(repo.repoId, Nil).map { ii =>
         UnifiedIndexItem(
-          ii.id,
-          logs.get(ii.workId).map(_.status))
+          ii.id)
       },
       intent = defaultedIntent,
       meta = repo.meta)

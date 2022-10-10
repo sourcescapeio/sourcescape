@@ -57,7 +57,14 @@ export function GraphConsoleContainer() {
         setData([]);
       })
       return Promise.reject(e);
-    }).then((resp: any) => {
+    }).then(async (resp: any) => {
+      if (!resp.ok) {
+        setError(await resp.json());
+        setLoading(false);  
+        setData([]);
+        return;
+      }
+
       const columnHeader = resp.headers.get('Rambutan-Result') || "{}";
       const columns = JSON.parse(columnHeader).columns;
 

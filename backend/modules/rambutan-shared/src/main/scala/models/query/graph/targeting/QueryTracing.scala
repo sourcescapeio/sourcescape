@@ -42,6 +42,13 @@ case class MapTracing[T, TU](inner: QueryTracing[T, TU], fromKey: String, toKey:
       toKey -> inner.pushExternalKey(fromTrace))
   }
 
+  def replaceHeadNode(trace: Map[String, T], id: String, unit: TU): Map[String, T] = {
+    // do nothing. this doesn't apply to generic graph
+    operateOnTo(trace) { toTrace =>
+      inner.replaceHeadNode(toTrace, id, unit)
+    }
+  }
+
   def traceHop(trace: Map[String, T], edgeType: GraphEdgeType, edgeJs: JsObject, initial: Boolean): Map[String, T] = {
     operateOnTo(trace) { toTrace =>
       inner.traceHop(toTrace, edgeType, edgeJs, initial)
@@ -81,9 +88,6 @@ case class MapTracing[T, TU](inner: QueryTracing[T, TU], fromKey: String, toKey:
     }
   }
 
-  def calculateUnwindSequence(traverse: StatefulTraverse, trace: Map[String, T]): List[EdgeTypeTarget] = {
-    inner.calculateUnwindSequence(traverse, getToTrace(trace))
-  }
 }
 
 trait QueryTracingBasic[TU] {
@@ -114,6 +118,8 @@ trait QueryTracing[T, TU] extends QueryTracingBasic[TU] {
 
   def newTrace(unit: TU): T
 
+  def replaceHeadNode(trace: T, id: String, unit: TU): T
+
   /**
    * Sorting stuff
    */
@@ -125,10 +131,6 @@ trait QueryTracing[T, TU] extends QueryTracingBasic[TU] {
 
   def ordering: Ordering[T]
 
-  /**
-   * Unwind
-   */
-  def calculateUnwindSequence(traverse: StatefulTraverse, trace: T): List[EdgeTypeTarget]
 }
 
 object QueryTracing {
@@ -174,6 +176,11 @@ object QueryTracing {
       trace.dropHead
     }
 
+    def replaceHeadNode(trace: GraphTrace[GenericGraphUnit], id: String, unit: GenericGraphUnit): GraphTrace[GenericGraphUnit] = {
+      // do nothing. this doesn't apply to generic graph
+      trace
+    }
+
     def pushExternalKey(trace: GraphTrace[GenericGraphUnit]) = trace.copy(
       externalKeys = trace.externalKeys :+ getKey(trace.root),
       tracesInternal = Nil,
@@ -209,11 +216,6 @@ object QueryTracing {
       Ordering.by { a: GraphTrace[GenericGraphUnit] =>
         sortKey(a).mkString("|")
       }
-    }
-
-    def calculateUnwindSequence(traverse: StatefulTraverse, trace: GraphTrace[GenericGraphUnit]) = {
-      // Not supported
-      List.empty[EdgeTypeTarget]
     }
   }
 
@@ -267,6 +269,13 @@ object QueryTracing {
       GraphTrace(Nil, Nil, SubTrace(Nil, unit))
     }
 
+    def replaceHeadNode(trace: GraphTrace[TraceUnit], id: String, unit: TraceUnit): GraphTrace[TraceUnit] = {
+      // do nothing. this doesn't apply to generic graph
+      trace.copy(
+        terminus = trace.terminus.copy(
+          terminus = unit))
+    }
+
     def pushExternalKey(trace: GraphTrace[TraceUnit]) = trace.copy(
       externalKeys = trace.externalKeys :+ getKey(trace.root),
       tracesInternal = Nil,
@@ -295,30 +304,6 @@ object QueryTracing {
     def ordering = {
       Ordering.by { a: GraphTrace[TraceUnit] =>
         sortKey(a).mkString("|")
-      }
-    }
-
-    def calculateUnwindSequence(traverse: StatefulTraverse, trace: GraphTrace[TraceUnit]): List[EdgeTypeTarget] = {
-      (trace.terminus.tracesInternal ++ List(trace.terminusId)).flatMap { e =>
-        // Option[T]
-        for {
-          edgeType <- e.edgeType
-          targets <- traverse.mapping.get(edgeType)
-          edgeTypeTarget <- ifNonEmpty(targets) {
-            Option {
-              EdgeTypeTarget(targets.map { t =>
-                val filter = (e.name, e.index) match {
-                  case (Some(n), _) => Some(EdgeNameFilter(n))
-                  case (_, Some(i)) => Some(EdgeIndexFilter(i))
-                  case _            => None
-                }
-                EdgeTypeTraverse(t, filter)
-              })
-            }
-          }
-        } yield {
-          edgeTypeTarget
-        }
       }
     }
   }

@@ -1,19 +1,19 @@
 package models.query
 
 import models.index.esprima.ESPrimaEdgeType
-import models.index.scalameta.ScalaMetaEdgeType
 import models.index.ruby.RubyEdgeType
 import models.index.{ EdgeType, NodeType }
 import models.IndexType
 import models.graph._
 import silvousplay.imports._
 import play.api.libs.json._
-import models.IndexType.Scala
 
 sealed class GraphEdgeType(
   val identifier: String,
   val edgeType:   EdgeType,
   val direction:  AccessDirection) extends Identifiable {
+
+  val crossFile: Boolean = false
 
   override def toString() = s"${identifier}"
 
@@ -21,14 +21,10 @@ sealed class GraphEdgeType(
     edgeType.isContains && direction =?= AccessDirection.From
   }
 
-  def opposite: GraphEdgeType = new GraphEdgeType(identifier + ".reverse", edgeType, direction.reverse)
-}
-
-sealed class ScalaGraphEdgeType(edgeTypeIn: ScalaMetaEdgeType, direction: AccessDirection)
-  extends GraphEdgeType(s"${IndexType.Javascript.identifier}::${edgeTypeIn.identifier}", edgeTypeIn, direction)
-
-object ScalaGraphEdgeType extends Plenumeration[ScalaGraphEdgeType] {
-  val follows = List.empty[ScalaGraphEdgeType]
+  // TODO: ewwww
+  def opposite: GraphEdgeType = new GraphEdgeType(identifier + ".reverse", edgeType, direction.reverse) {
+    override val crossFile: Boolean = crossFile
+  }
 }
 
 sealed class RubyGraphEdgeType(edgeTypeIn: RubyEdgeType, direction: AccessDirection)
@@ -77,12 +73,15 @@ object JavascriptGraphEdgeType extends Plenumeration[JavascriptGraphEdgeType] {
   case object ArrayMember extends JavascriptGraphEdgeType("array_member", ESPrimaEdgeType.ArrayMember, AccessDirection.From)
   case object ValueInObject extends JavascriptGraphEdgeType("value_in_object", ESPrimaEdgeType.ObjectValue, AccessDirection.From)
 
+  case object ClassConstructor extends JavascriptGraphEdgeType("constructor", ESPrimaEdgeType.Constructor, AccessDirection.From)
   case object ClassExtends extends JavascriptGraphEdgeType("class_extends", ESPrimaEdgeType.SuperClass, AccessDirection.From)
+  case object ClassDecorator extends JavascriptGraphEdgeType("class_decorator", ESPrimaEdgeType.ClassDecorator, AccessDirection.From)
   case object ClassMethod extends JavascriptGraphEdgeType("class_method", ESPrimaEdgeType.Method, AccessDirection.From)
   case object ClassProperty extends JavascriptGraphEdgeType("class_property", ESPrimaEdgeType.ClassProperty, AccessDirection.From)
   case object ClassPropertyValue extends JavascriptGraphEdgeType("class_property_value", ESPrimaEdgeType.ClassPropertyValue, AccessDirection.From)
 
   case object MethodFunction extends JavascriptGraphEdgeType("method_function", ESPrimaEdgeType.MethodFunction, AccessDirection.From)
+  case object MethodDecorator extends JavascriptGraphEdgeType("method_decorator", ESPrimaEdgeType.MethodDecorator, AccessDirection.From)
   case object FunctionArgument extends JavascriptGraphEdgeType("function_argument", ESPrimaEdgeType.FunctionArgument, AccessDirection.From)
 
   case object FunctionContains extends JavascriptGraphEdgeType("function_contains", ESPrimaEdgeType.FunctionContains, AccessDirection.From)
@@ -111,10 +110,15 @@ object JavascriptGraphEdgeType extends Plenumeration[JavascriptGraphEdgeType] {
   case object IfContains extends JavascriptGraphEdgeType("if_contains", ESPrimaEdgeType.IfContains, AccessDirection.From)
   case object BasicExpression extends JavascriptGraphEdgeType("basic_expression", ESPrimaEdgeType.BasicExpression, AccessDirection.To)
 
-  // Export links
-  case object ExportKeyLink extends JavascriptGraphEdgeType("export_key_link", ESPrimaEdgeType.ExportKey, AccessDirection.From)
-  case object ExportedTo extends JavascriptGraphEdgeType("exported_to", ESPrimaEdgeType.Export, AccessDirection.From)
+  // Export links (TODO: delete?)
+  // case object ExportKeyLink extends JavascriptGraphEdgeType("export_key_link", ESPrimaEdgeType.ExportKey, AccessDirection.From)
+  // case object ExportedTo extends JavascriptGraphEdgeType("exported_to", ESPrimaEdgeType.Export, AccessDirection.From)
   // case object LinkedTo extends JavascriptGraphEdgeType("linked_to", ESPrimaEdgeType.Link, AccessDirection.To)
+
+  // Links
+  case object CallLink extends JavascriptGraphEdgeType("call_link", ESPrimaEdgeType.CallLink, AccessDirection.From) {
+    override val crossFile = true
+  }
 }
 
 sealed class GenericGraphEdgeType(category: String, edgeTypeIn: GenericEdgeType, direction: AccessDirection)
@@ -154,16 +158,8 @@ object GenericGraphEdgeType extends Plenumeration[GenericGraphEdgeType] {
 // extends Plenumeration[GraphEdgeType]
 object GraphEdgeType {
 
-  val all = JavascriptGraphEdgeType.all ++ ScalaGraphEdgeType.all ++ RubyGraphEdgeType.all
+  val all = JavascriptGraphEdgeType.all ++ RubyGraphEdgeType.all
 
-  val follows = JavascriptGraphEdgeType.follows ++ ScalaGraphEdgeType.follows ++ RubyGraphEdgeType.follows
+  val follows = JavascriptGraphEdgeType.follows ++ RubyGraphEdgeType.follows
   // This is only used for
-}
-
-// these are only for exports (no actual indexed edge, just a teleport)
-object GraphEdgeTypeTeleport {
-  def teleportTo(other: NodeType) = new GraphEdgeType(
-    s"teleport.${other.identifier}",
-    EdgeType.Link,
-    AccessDirection.From)
 }

@@ -19,23 +19,7 @@ class SharedDataAccessLayer @Inject() (
   with AnalysisTreeTableComponent
   // to fix
   with SHAIndexTreeTableComponent
-  with RepoSHACompilationTableComponent
-  // Saved
-  with SavedQueryTableComponent
-  with SavedTargetingTableComponent
-  // Schema
-  with SchemaTableComponent
-  with SnapshotTableComponent
-  with AnnotationColumnTableComponent
-  with AnnotationTableComponent
-  with DocumentationTableComponent
-  with DocumentationBlockTableComponent
-  // Cache
-  with QueryCacheTableComponent
-  with QueryCacheKeyTableComponent
-  with QueryCacheCursorTableComponent
-  // Logging
-  with WorkRecordTableComponent {
+  with RepoSHACompilationTableComponent {
 
   lazy val allTables = Enums.extract[data.CanInitializeTable]
 }

@@ -9,31 +9,14 @@ import workers._
 class ApplicationStart @Inject() (
   configuration:          play.api.Configuration,
   queueManagementService: QueueManagementService,
-  // idempotent queues
-  clonerService:          ClonerService,
-  compilerService:        CompilerService,
-  cachingService:         CachingService,
-  webhookConsumerService: WebhookConsumerService,
-  //
-  indexerWorker:     IndexerWorker,
-  snapshotterWorker: SnapshotterWorker,
   // sweepers
-  indexSweeperService: IndexSweeperService,
-  cacheSweeperService: CacheSweeperService)(implicit ec: ExecutionContext) {
+  indexSweeperService: IndexSweeperService)(implicit ec: ExecutionContext) {
 
   for {
     _ <- queueManagementService.wipeQueues()
-    _ <- webhookConsumerService.startWebhookConsumer()
-    _ <- clonerService.startCloner()
-    _ <- indexerWorker.startRepoIndexing()
-    _ <- compilerService.startRepoCompilation()
-    _ <- cachingService.startCaching()
-    _ <- snapshotterWorker.startSnapshotter()
     // cron-based sweepers
     _ <- indexSweeperService.startSweeper()
     _ <- indexSweeperService.startDeletion()
-    _ <- cacheSweeperService.startSweeper()
-    _ <- cacheSweeperService.startDeletion()
   } yield {
     println("QUEUE INITIALIZATION COMPLETE")
   }

@@ -11,13 +11,13 @@ import play.api.libs.ws._
 import play.api.libs.json._
 import java.util.Base64
 import akka.stream.scaladsl.{ Source, Sink }
+import silvousplay.api.SpanContext
 
 @Singleton
 class LocalScanService @Inject() (
   configuration:          play.api.Configuration,
   socketService:          SocketService,
   repoDataService:        LocalRepoDataService,
-  repoSyncService:        RepoSyncService,
   gitTreeIndexingService: GitTreeIndexingService,
   gitService:             LocalGitService,
   sharedDao:              dal.SharedDataAccessLayer,
@@ -30,17 +30,17 @@ class LocalScanService @Inject() (
 
   // def getScanByIds(ids: List[Long]) =
   def listScans(): Future[List[LocalScanDirectory]] = {
-    localDao.LocalScanDirectoryTable.all
+    localDao.LocalScanDirectoryTable.all()
   }
 
-  def createScan(orgId: Int, path: String, shouldScan: Boolean): Future[LocalScanDirectory] = {
+  def createScan(orgId: Int, path: String, shouldScan: Boolean)(implicit context: SpanContext): Future[LocalScanDirectory] = {
     val obj = LocalScanDirectory(-1, 0, path)
     for {
       obj <- localDao.LocalScanDirectoryTable.insert(obj).map { id =>
         obj.copy(id = id)
       }
       // TODO: better way of doing async
-      _ = withFlag(shouldScan) {
+      _ <- withFlag(shouldScan) {
         println("INITIAL SCAN", path)
         initialScan(orgId, obj.id, path)
       }
@@ -65,7 +65,7 @@ class LocalScanService @Inject() (
     }
   }
 
-  def initialScan(orgId: Int, scanId: Int, directory: String): Future[Unit] = {
+  def initialScan(orgId: Int, scanId: Int, directory: String)(implicit context: SpanContext): Future[Unit] = {
     def progressCalc(idx: Long): Int = {
       val base = if (idx < 20) {
         (idx / 20.0) * 0.7

@@ -15,7 +15,8 @@ object Variables {
     case (context, codeRange, ((computed, obj), prop)) => {
       val maybeName = Property.computeName(prop.node)
 
-      val memberNode = MemberNode(Hashing.uuid, codeRange, maybeName)
+      // Use code range of property
+      val memberNode = MemberNode(Hashing.uuid(), prop.codeRange, maybeName)
 
       val maybeExp = Property.computeExpression(prop)
 

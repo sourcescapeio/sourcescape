@@ -13,6 +13,7 @@ export default class Scan extends Command {
   static flags = {
     port: flags.integer({char: 'p', description: 'Expose this port', default: 5001}),
     debug: flags.boolean({char: 'd', description: 'use debug mode', default: false}),
+    debugDirectory: flags.boolean({char: 'v', description: 'dont append docker volume prefix', default: false}),
   }
 
   static args = [{
@@ -24,7 +25,7 @@ export default class Scan extends Command {
   async run() {  
     const {args, flags} = this.parse(Scan);
 
-    const fullPath = flags.debug ? resolve(args.directory) : `/external/${resolve(args.directory)}`;
+    const fullPath = flags.debugDirectory ? resolve(args.directory) : `/external/${resolve(args.directory)}`;
     console.warn(fullPath);
 
     const response = await runGraphQL(flags.port, flags.debug, {

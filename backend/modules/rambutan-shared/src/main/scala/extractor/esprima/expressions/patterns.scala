@@ -163,7 +163,7 @@ object Patterns {
         val expression = left.apply(idx, root)
         // let's ignore defaults for now
         // val defaults = left.apply(idx, right.node) // how do we link defaults?
-        context.logQueue.offer((codeRange, "Ignoring defaults for assignment\n" + left + "\n" + right))
+        context.context.event(s"Ignoring defaults for assignment\n${left}\n${right} ${codeRange}")
 
         right :: Nil
       }
@@ -179,7 +179,7 @@ object Patterns {
       // like a slice
       // left, but inject default
       PatternWrapper(codeRange, Nil, argument :: Nil) { (idx: Int, root: ESPrimaNodeBuilder) =>
-        context.logQueue.offer((codeRange, "Ignoring RestElement"))
+        context.context.event(s"Ignoring RestElement ${codeRange.displayString}")
 
         Nil
       }

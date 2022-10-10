@@ -56,7 +56,7 @@ object Functions {
             context.requireNode(codeRange, module.as[String]))
         }
         case _ => {
-          val call = CallNode(Hashing.uuid, codeRange)
+          val call = CallNode(Hashing.uuid, codeRange, callee.node.range)
           val edge = CreateEdge(
             call,
             AnyNode(callee.node),

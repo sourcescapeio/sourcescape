@@ -14,16 +14,15 @@ import akka.stream.scaladsl.{ Source, Sink, Keep }
 import akka.stream.OverflowStrategy
 import play.api.libs.json._
 import akka.util.ByteString
+import models.index.{ GraphNode, GraphEdge, GraphNodeBuilder }
 
 @Singleton
 class IndexController @Inject() (
   configuration:         play.api.Configuration,
   telemetryService:      TelemetryService,
-  consumerService:       services.ConsumerService,
   repoService:           services.RepoService,
   repoDataService:       services.RepoDataService,
   repoIndexDataService:  services.RepoIndexDataService,
-  logService:            services.LogService,
   indexService:          services.IndexService,
   indexerQueueService:   services.IndexerQueueService,
   socketService:         services.SocketService,
@@ -55,136 +54,167 @@ class IndexController @Inject() (
           index <- repoIndexDataService.getIndexId(indexId).map {
             _.getOrElse(throw models.Errors.notFound("index.dne", "Index not found"))
           }
-          analysisPath = AnalysisType.ScalaSemanticDB.path(
-            index.analysisDirectory,
-            file)
-          analysisBytes <- FileIO.fromPath(Paths.get(analysisPath + ".semanticdb")).runWith(Sinks.ByteAccum)
-          // analysisFile = scala.io.Source.fromFile(path).getLines().mkString("\n")
         } yield {
-          Json.obj("file" -> IndexType.Scala.prettyPrintAnalysis(analysisBytes))
+          Json.obj("file" -> "")
         }
       }
     }
   }
 
-  def deleteAllIndexes(orgId: Int) = {
-    api { implicit request =>
-      authService.authenticatedForOrg(orgId, OrgRole.Admin) {
-        for {
-          indexes <- repoIndexDataService.getIndexesForOrg(orgId)
-          _ <- Source(indexes).mapAsync(4) { idx =>
-            repoService.deleteSHAIndex(orgId, idx.repoId, idx.id)
-          }.runWith(Sink.ignore)
-        } yield {
-          ()
-        }
-      }
-    }
-  }
-
-  def runIndexForSHA(orgId: Int, repoId: Int, sha: String, forceRoot: Boolean) = {
-    api { implicit request =>
-      authService.authenticatedForOrg(orgId, OrgRole.Admin) {
-        telemetryService.withTelemetry { implicit c =>
-          for {
-            repo <- repoDataService.getRepo(repoId).map {
-              _.getOrElse(throw models.Errors.notFound("repo.dne", "Repo not found"))
-            }
-            _ <- consumerService.runCleanIndexForSHA(orgId, repo.repoName, repoId, sha, forceRoot)
-          } yield {
-            ()
-          }
-        }
-      }
-    }
-  }
-
-  def deleteIndexForSHA(orgId: Int, repoId: Int, sha: String, indexId: Int) = {
-    api { implicit request =>
-      authService.authenticatedForOrg(orgId, OrgRole.Admin) {
-        repoService.deleteSHAIndex(orgId, repoId, indexId)
-      }
-    }
-  }
-
-  import services.IndexerQueueItem
-  def reindex(orgId: Int, repoId: Int, sha: String, indexId: Int) = {
-    api { implicit request =>
-      authService.authenticatedForOrg(orgId, OrgRole.Admin) {
-        // We only use this to debug so only going to do clean ones
-        for {
-          index <- repoIndexDataService.getIndexId(indexId).map {
-            _.getOrElse(throw models.Errors.notFound("index.dne", "Index not found"))
-          }
-          // create records
-          parentRecord <- logService.createParent(orgId, Json.obj("repoId" -> repoId, "sha" -> sha))
-          indexRecord <- logService.createChild(parentRecord, Json.obj("task" -> "indexing"))
-          // get trees
-          paths <- repoIndexDataService.getSHAIndexTreeBatch(List(indexId)).map(_.getOrElse(indexId, Nil))
-          // delete
-          // no need to delete trees as will be wiped by indexer
-          _ <- indexService.deleteKey(index)
-          // index
-          item = IndexerQueueItem(
-            index.orgId,
-            index.repoName,
-            index.repoId,
-            index.sha,
-            index.id,
-            paths,
-            parentRecord.id,
-            indexRecord.id)
-          _ <- indexerQueueService.ack(item)
-          _ <- indexerQueueService.enqueue(item)
-        } yield {
-          ()
-        }
-      }
-    }
-  }
-
-  def testIndex(orgId: Int, indexType: IndexType) = {
+  def testIndex(orgId: Int, indexType: IndexType, languageServer: Boolean) = {
     api(parse.tolerantJson) { implicit request =>
-      authService.authenticatedForOrg(orgId, OrgRole.Admin) {
-        withJson { form: TestIndexForm =>
+      telemetryService.withTelemetry { implicit context =>
+        withJson { forms: List[TestIndexForm] =>
+          val IndexId = 0
+          val RepoId = 0
+          val RepoName = "repo"
+          val Sha = "null-sha"
+
           val analysisType = indexType.analysisTypes.head
-          val fakeTree = AnalysisTree(0, "", analysisType)
 
-          val content = ByteString(form.text)
+          val contentMap = forms.map { f =>
+            f.file -> f.content
+          }.toMap
+
           for {
-            resp <- staticAnalysisService.runAnalysis(
-              "",
-              fakeTree,
-              content).map(_.getOrElse(ByteString.empty))
-            (nodes, edges) <- Future {
-              val logQueue = Source.queue[(CodeRange, String)](10, OverflowStrategy.dropBuffer)
-                .map { item =>
-                  println(item)
-                }
-                .toMat(Sink.ignore)(Keep.left)
-                .run()
-              val graph = indexType.indexer("null", content, resp, logQueue)
-              logQueue.complete()
-              val renderedNodes = graph.nodes.map(_.build(orgId, "null-repo", 0, "null-sha", 0, "null-path")).map(i => Json.toJson(i))
-              val renderedEdges = graph.edges.map(_.build(orgId, "null-repo", 0, 0, "null-path")).map(i => Json.toJson(i))
-              (renderedNodes, renderedEdges)
-            }.recover {
-              case err => {
-                val traceLines = err.getStackTrace().map { i =>
-                  s"${i.getFileName()}:${i.getLineNumber()}"
-                }
-
-                println(s"Uncaught Exception: ${err.getMessage()}")
-                traceLines.foreach(println)
-                (Nil, Nil)
-              }
+            _ <- withFlag(languageServer) {
+              staticAnalysisService.startInMemoryLanguageServer(analysisType, IndexId, contentMap)
             }
+            items <- Source(forms).mapAsync(4) { form =>
+
+              val fakeTree = AnalysisTree(0, "", analysisType)
+
+              val content = ByteString(form.content)
+              for {
+                resp <- staticAnalysisService.runAnalysis(
+                  "",
+                  fakeTree,
+                  content).map(_.getOrElse(ByteString.empty))
+                (nodes, edges) <- Future {
+                  val graph = indexType.indexer(form.file, content, resp, context)
+                  val renderedNodes = graph.nodes.map { node =>
+                    (
+                      node.build(orgId, RepoName, RepoId, Sha, IndexId, form.file),
+                      node)
+                  }
+                  val renderedEdges = graph.edges.map(_.build(orgId, RepoName, RepoId, IndexId, form.file))
+
+                  // Select nodes to emit
+
+                  (renderedNodes, renderedEdges)
+                }.recover {
+                  case err => {
+                    val traceLines = err.getStackTrace().map { i =>
+                      s"${i.getFileName()}:${i.getLineNumber()}"
+                    }
+
+                    println(s"Uncaught Exception: ${err.getMessage()}")
+                    traceLines.foreach(println)
+                    (Nil, Nil)
+                  }
+                }
+              } yield {
+                (
+                  form.file,
+                  indexType.prettyPrint(content, resp),
+                  nodes,
+                  edges)
+              }
+            }.runWith(Sinks.ListAccum[(String, String, List[(GraphNode, GraphNodeBuilder)], List[GraphEdge])])
+            // send a few nodes
+            collectedNodes = items.foldLeft(List.empty[(GraphNode, GraphNodeBuilder)])(_ ++ _._3)
+            allNodes = collectedNodes.map(_._1)
+            // get links
+            symbolTable = collectedNodes.flatMap {
+              case (nn, nb) if nb.generateSymbol => {
+                Option(s"/${nn.path}:${nn.start_index}:${nn.end_index}" -> nn)
+              }
+              case _ => None
+            }.toMap
+            allLinks <- withFlag(languageServer) {
+              Source(collectedNodes).mapAsync(4) {
+                case (n, nb) => {
+                  withDefined(nb.lookupIndex) { lookupIndex =>
+                    for {
+                      (defs, typeDefs, resp) <- staticAnalysisService.languageServerRequest(analysisType, IndexId, n.path, lookupIndex)
+                      defResult = defs.flatMap { d =>
+                        symbolTable.get(d.key)
+                      }
+                      typeResult = typeDefs.flatMap { d =>
+                        symbolTable.get(d.key)
+                      }
+                    } yield {
+                      // create edges
+                      val defEdges = defResult.flatMap { d =>
+                        withDefined(nb.definitionLink) { definitionLink =>
+                          Option {
+                            GraphEdge(
+                              n.key,
+                              definitionLink,
+                              n.id,
+                              d.id,
+                              Hashing.uuid(),
+                              None,
+                              None,
+                              None)
+                          }
+                        }
+                      }
+
+                      val typeEdges = typeResult.flatMap { dt =>
+                        // n.typeLink
+                        withDefined(nb.typeDefinitionLink) { typeDefinitionLink =>
+                          Option {
+                            GraphEdge(
+                              n.key,
+                              typeDefinitionLink,
+                              n.id,
+                              dt.id,
+                              Hashing.uuid(),
+                              None,
+                              None,
+                              None)
+                          }
+                        }
+                      }
+
+                      val edges = defEdges ++ typeEdges
+
+                      Option(edges -> Json.obj(
+                        "original" -> n,
+                        "edges" -> edges,
+                        "resp" -> resp,
+                        // "defLookup" -> defs,
+                        // "typeLookup" -> typeDefs,
+                        "def" -> defResult,
+                        "types" -> typeResult))
+                    }
+                  }
+                }
+                case _ => {
+                  Future.successful(None)
+                }
+              }.mapConcat(identity).runWith(Sinks.ListAccum[(List[GraphEdge], JsValue)])
+            }
+            // stop
+            _ <- withFlag(languageServer) {
+              staticAnalysisService.stopLanguageServer(analysisType, IndexId)
+            }
+            linkedEdges = allLinks.flatMap(_._1)
+            linkDebugInfo = allLinks.map(_._2)
+            allEdges = items.foldLeft(List.empty[GraphEdge])(_ ++ _._4) ++ linkedEdges
           } yield {
             Json.obj(
-              "analysis" -> indexType.prettyPrint(content, resp),
-              "nodes" -> nodes,
-              "edges" -> edges)
-            // Json.obj("analysis" -> Json.parse(resp))
+              "analysis" -> items.map(i => {
+                Json.obj(
+                  "file" -> i._1,
+                  "analysis" -> i._2)
+              }),
+              "links" -> Json.obj(
+                "symbols" -> symbolTable,
+                "links" -> linkDebugInfo),
+              "nodes" -> allNodes.map(i => Json.toJson(i)),
+              "edges" -> allEdges.map(i => Json.toJson(i)))
           }
         }
       }

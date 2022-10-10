@@ -17,10 +17,11 @@ import silvousplay.api.SpanContext
 class RepoService @Inject() (
   configuration:        play.api.Configuration,
   indexService:         IndexService,
-  logService:           LogService,
   repoDataService:      RepoDataService,
   repoIndexDataService: RepoIndexDataService,
-  queryCacheService:    QueryCacheService)(implicit ec: ExecutionContext, mat: akka.stream.Materializer) {
+  dao:                  dal.SharedDataAccessLayer,
+  socketService:        SocketService,
+  fileService:          FileService)(implicit ec: ExecutionContext, mat: akka.stream.Materializer) {
 
   def getIndexTree(indexId: Int): Future[List[SHAIndexTreeListing]] = {
     for {
@@ -116,32 +117,34 @@ class RepoService @Inject() (
       shaMap <- repoIndexDataService.getSHAsBatch(shas).map {
         _.values.flatten.map(i => i.repoId -> i).toMap
       }
-      logs <- logService.getRecords(flattened.map(_.workId)).map {
-        _.map(i => i.id -> i).toMap
-      }
     } yield {
       repos.map { repo =>
-        repo.unified(indexMap, latestIndexes, logs, shaMap)
+        repo.unified(indexMap, latestIndexes, shaMap)
       }.sortBy(_.repo)
-    }
-  }
-
-  def cleanWork(orgId: Int): Future[Unit] = {
-    for {
-      works <- logService.listWorkRecords(orgId)
-      indexes <- repoIndexDataService.getIndexesForOrg(orgId)
-      // get indexes
-      validWork = indexes.map(_.workId).toSet
-      toDelete = works.filterNot(validWork contains _.self.id).map(_.self.id)
-      _ <- Source(toDelete).mapAsync(4) { workId =>
-        logService.deleteWork(orgId, workId)
-      }.runWith(Sink.ignore)
-    } yield {
-      ()
     }
   }
 
   def deleteSHAIndex(orgId: Int, repoId: Int, indexId: Int): Future[Unit] = {
     repoIndexDataService.markIndexDeleted(indexId) map (_ => ())
+  }
+
+  def doDelete(index: RepoSHAIndex): Future[Unit] = {
+    val orgId = index.orgId
+    val repoId = index.repoId
+    val indexId = index.id
+    println("Deleting", indexId)
+    for {
+      _ <- repoIndexDataService.deleteAnalysisTrees(indexId)
+      _ <- dao.SHAIndexTreeTable.byIndex.delete(indexId)
+      _ <- dao.RepoSHAIndexTable.byId.delete(indexId)
+      _ <- indexService.deleteKey(index)
+      // _ <- queryCacheService.deleteAllCachesForKey(orgId, key)
+      _ <- fileService.deleteRecursively(index.collectionsDirectory)
+      _ <- fileService.deleteRecursively(index.analysisDirectory)
+      // no need to delete compile directory as it's deleted after compile
+      _ <- socketService.indexDeleted(orgId, repoId, indexId)
+    } yield {
+      ()
+    }
   }
 }

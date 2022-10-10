@@ -134,6 +134,7 @@ class NodeHydrationService @Inject() (
       base.groupedWithin(NodeHydrationBatchSize, NodeHydrationLatency).mapAsync(1) { traces =>
 
         val allTraces = flattener.flatten(traces.toList)
+        // traces.foreach(println)
         for {
           (total, source) <- cc.withSpan(
             "query.rehydrate.nodes.query",

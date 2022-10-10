@@ -56,6 +56,7 @@ object SocketEventType extends Plenumeration[SocketEventType] {
   case object CloningFinished extends SocketEventType("cloning-finished")
   case object IndexingStarted extends SocketEventType("indexing-started")
   case object IndexingFinished extends SocketEventType("indexing-finished")
+  case object LinkingProgress extends SocketEventType("linking-progress")
   case object CachingUpdate extends SocketEventType("caching-update")
   case object CachingFinished extends SocketEventType("caching-finished")
 
@@ -195,7 +196,7 @@ class SocketService @Inject() (
   }
 
   // indexing records
-  def cloningProgress(orgId: Int, additionalOrgIds: List[Int], workId: String, repo: String, repoId: Int, indexId: Int, progress: Int) = {
+  def cloningProgress(orgId: Int, repo: String, repoId: Int, indexId: Int, progress: Int) = {
     publish(
       EventMessage(
         orgId,
@@ -206,30 +207,41 @@ class SocketService @Inject() (
         Json.obj("repo" -> repo, "repoId" -> repoId, "indexId" -> indexId, "progress" -> progress, "cloningProgress" -> progress)))
   }
 
-  def cloningFinished(orgId: Int, additionalOrgIds: List[Int], workId: String, repo: String, repoId: Int, indexId: Int) = {
+  def cloningFinished(orgId: Int, repo: String, repoId: Int, indexId: Int) = {
     publish(EventMessage(orgId, Nil, SocketEventType.CloningStarted, indexId.toString, true, Json.obj("repoId" -> repoId, "indexId" -> indexId, "repo" -> repo, "progress" -> 100)))
   }
 
-  def indexingProgress(orgId: Int, additionalOrgIds: List[Int], workId: String, repo: String, repoId: Int, indexId: Int, progress: Int) = {
+  def indexingProgress(orgId: Int, repo: String, repoId: Int, indexId: Int, progress: Int) = {
     publish(
       EventMessage(
         orgId,
-        additionalOrgIds,
+        Nil,
         SocketEventType.IndexingStarted,
         indexId.toString,
         true,
         Json.obj("repo" -> repo, "repoId" -> repoId, "indexId" -> indexId, "progress" -> progress)))
   }
 
-  def indexingFinished(orgId: Int, additionalOrgIds: List[Int], workId: String, repo: String, repoId: Int, sha: String, indexId: Int, parentId: String) = {
+  def indexingFinished(orgId: Int, repo: String, repoId: Int, sha: String, indexId: Int) = {
     publish(
       EventMessage(
         orgId,
-        additionalOrgIds,
+        Nil,
         SocketEventType.IndexingStarted,
         indexId.toString,
         true,
-        Json.obj("repo" -> repo, "parentId" -> parentId, "indexId" -> indexId, "repoId" -> repoId, "sha" -> sha, "progress" -> 100)))
+        Json.obj("repo" -> repo, "indexId" -> indexId, "repoId" -> repoId, "sha" -> sha, "progress" -> 100)))
+  }
+
+  def linkingProgress(orgId: Int, repo: String, repoId: Int, indexId: Int, progress: Int) = {
+    publish(
+      EventMessage(
+        orgId,
+        Nil,
+        SocketEventType.LinkingProgress,
+        indexId.toString,
+        true,
+        Json.obj("repo" -> repo, "repoId" -> repoId, "indexId" -> indexId, "progress" -> progress)))
   }
 
   def cachingAvailable(orgId: Int, workId: String, available: Int) = {

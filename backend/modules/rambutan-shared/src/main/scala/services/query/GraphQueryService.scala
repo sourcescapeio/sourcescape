@@ -22,14 +22,6 @@ import scalaz.Alpha
 
 private case class EdgeHop[T](obj: T, directedEdge: GraphEdgeType, edgeObj: JsObject)
 
-private case class StatefulTraverseUnwind[T, TU](
-  node:  JsObject,
-  trace: T,
-  // teleport
-  names: List[String],
-  // unwind sequence
-  unwindSequence: List[EdgeTypeTarget])
-
 @Singleton
 class GraphQueryService @Inject() (
   configuration:        play.api.Configuration,
@@ -183,9 +175,7 @@ class GraphQueryService @Inject() (
   private def sortBySecondary[T, TU](implicit targeting: QueryTargeting[TU], tracing: QueryTracing[T, TU]) = {
     sortBySecondaryGeneric[T, T, TU](i => i)
   }
-  private def sortBySecondaryStateful[T, TU](implicit targeting: QueryTargeting[TU], tracing: QueryTracing[T, TU]) = {
-    sortBySecondaryGeneric[StatefulTraverseUnwind[T, TU], T, TU](_.trace)
-  }
+
   private def sortBySecondaryGeneric[V0, T, TU](f: V0 => T)(implicit targeting: QueryTargeting[TU], tracing: QueryTracing[T, TU]): Flow[V0, V0, _] = {
     // This is important!
     val secondaryOrdering = Ordering.by { a: V0 =>
@@ -294,11 +284,6 @@ class GraphQueryService @Inject() (
           reverseTraverse(r)(targeting, cc, tracing)
         }
       }
-      case s: StatefulTraverse => {
-        context.withSpanF("query.graph.trace.stateful") { cc =>
-          statefulTraverse(s)(targeting, cc, tracing)
-        }
-      }
       case re: RepeatedEdgeTraverse[T, TU] => {
         // used for git
         context.withSpanF("query.graph.trace.repeated") { cc =>
@@ -362,18 +347,16 @@ class GraphQueryService @Inject() (
     edgeHop(
       follow,
       nodeHint = None,
-      recursion = true // fix
+      initial = true // fix?
     ).mapConcat {
       case EdgeHop(trace, directedEdge, item) => {
-        val nextTrace = tracing.traceHop(trace, directedEdge, item, initial = true)
-
-        val isTerminal = traverse.shouldTerminate(nextTrace)
+        val isTerminal = traverse.shouldTerminate(trace)
         if (isTerminal) {
-          (nextTrace, true) :: Nil
+          (trace, true) :: Nil
         } else {
           List(
-            (nextTrace, true),
-            (nextTrace, false))
+            (trace, true),
+            (trace, false))
         }
       }
     }.via {
@@ -399,11 +382,10 @@ class GraphQueryService @Inject() (
     edgeHop(
       allTraverses,
       nodeHint = typeHint,
-      recursion = !initial).map {
+      initial = initial).map {
       case EdgeHop(trace, directedEdge, item) => {
-        val nextTrace = tracing.traceHop(trace, directedEdge, item, initial)
         val isTerminal = targetSet.contains(directedEdge)
-        (nextTrace, isTerminal)
+        (trace, isTerminal)
       }
     }.via {
       maybeRecurse { _ =>
@@ -419,9 +401,9 @@ class GraphQueryService @Inject() (
     edgeHop(
       follow,
       nodeHint = None,
-      recursion = !initial) map {
+      initial = initial) map {
       case EdgeHop(trace, directedEdge, item) => {
-        tracing.traceHop(trace, directedEdge, item, initial)
+        trace
       }
     }
   }
@@ -467,10 +449,6 @@ class GraphQueryService @Inject() (
         }
         (nextFlow, new EdgeTypeFollow(Nil))
       }
-      // Stateful traversals are reversed manually at the EdgePredicate level
-      case ((flow, prevFollow), StatefulTraverse(_, _, _, _, _, _)) => {
-        throw new Exception("invalid reversal: stateful")
-      }
       // We never reverse these
       case ((flow, prevFollow), ReverseTraverse(_, _)) => {
         throw new Exception("invalid reversal: reverse")
@@ -484,151 +462,6 @@ class GraphQueryService @Inject() (
     // lastFlow.via {
     //   nodeTraverse(indexType, indexId, subQuery.root.filters.toList, lastFollow)
     // }
-  }
-
-  private def statefulTraverse[T, TU](traverse: StatefulTraverse)(implicit targeting: QueryTargeting[TU], context: SpanContext, tracing: QueryTracing[T, TU]): Flow[T, T, _] = {
-    Flow[T]
-      .map(tracing.pushCopy)
-      .via(performWind(traverse))
-      .via(calculateUnwind(traverse))
-      .via(performTeleport(traverse))
-      .via(performUnwind(traverse.follow, traverse.target))
-  }
-
-  private def performWind[T, TU](traverse: StatefulTraverse)(implicit targeting: QueryTargeting[TU], context: SpanContext, tracing: QueryTracing[T, TU]) = {
-    val windTarget = NodeTypeFilter(traverse.from) :: Nil
-    val windFollow = traverse.mapping.keySet.toList.map(EdgeTypeTraverse.basic)
-
-    nodeTraverseInner[T, TU](
-      follow = windFollow,
-      filters = windTarget)
-  }
-
-  private def calculateUnwind[T, TU](traverse: StatefulTraverse)(implicit targeting: QueryTargeting[TU], tracing: QueryTracing[T, TU]) = {
-    Flow[(T, Option[JsObject])].mapConcat {
-      case (trace, Some(node)) => {
-        // assert(node.nodeType =?= traverse.from)
-
-        // calculate unwind mappings
-        val unwinds = tracing.calculateUnwindSequence(traverse, trace)
-
-        val names = traverse.teleport.getNames(node)
-
-        println("NAMES", names)
-
-        StatefulTraverseUnwind[T, TU](
-          node,
-          trace,
-          names,
-          unwinds) :: Nil
-      }
-      case _ => Nil
-    }
-  }
-
-  private def performTeleport[T, TU](traverse: StatefulTraverse)(implicit targeting: QueryTargeting[TU], tracing: QueryTracing[T, TU]): Flow[StatefulTraverseUnwind[T, TU], StatefulTraverseUnwind[T, TU], _] = {
-    Flow[StatefulTraverseUnwind[T, TU]].groupedWithin(StatefulBatchSize, 100.milliseconds).mapAsync(1) { statefulTeleports =>
-      val nodeIndex = targeting.nodeIndexName
-
-      val typeQuery = ESQuery.termSearch("type", traverse.to.identifier) // TODO: assumes everything has type
-      val allNames = statefulTeleports.flatMap(_.names).distinct
-      val nameQuery = traverse.teleport.nameQuery(allNames.toList)
-
-      println(typeQuery :: nameQuery)
-
-      for {
-        (total, source) <- elasticSearchService.source(
-          nodeIndex,
-          ESQuery.bool(
-            filter = ESQuery.bool(
-              must = typeQuery :: nameQuery) :: Nil),
-          sort = targeting.nodeSort,
-          scrollSize = NodeHopSize)
-        collectedSources <- source.runWith(Sinks.ListAccum)
-        collectedMap = {
-          collectedSources.flatMap { node =>
-            traverse.teleport.getNames((node \ "_source").as[JsObject]).map(_ -> node)
-          }.groupBy(_._1).map {
-            case (k, vs) => k -> vs.map(_._2)
-          }
-        }
-      } yield {
-        // List[T]
-        for {
-          s <- statefulTeleports.toList
-          node <- traverse.teleport.doJoin(s.node, s.names, collectedMap)
-        } yield {
-          // TODO: Janky
-          val unit: TU = tracing.unitFromJs(
-            node,
-            edgeOverride = Some(GraphEdgeTypeTeleport.teleportTo(traverse.to)))
-          val res: StatefulTraverseUnwind[T, TU] = s.copy(
-            trace = tracing.injectNew(s.trace, unit))
-          res
-        }
-      }
-    }.mapConcat(i => i).via(sortBySecondaryStateful)
-  }
-
-  // Key assumption is that these are generally quite small
-  private def performUnwind[T, TU](follows: List[GraphEdgeType], targets: List[GraphEdgeType])(implicit targeting: QueryTargeting[TU], context: SpanContext, tracing: QueryTracing[T, TU]) = {
-    Flow[StatefulTraverseUnwind[T, TU]].groupedWithin(StatefulBatchSize, 100.milliseconds).flatMapConcat { statefulTeleports =>
-
-      // group into distinct unwinds
-      val grouped = statefulTeleports.groupBy { ss =>
-        ss.unwindSequence.map(_.traverses.map(_.edgeType).toSet)
-      }
-
-      // we do need to resort everything
-      val allTraverseGroups = grouped.map {
-        case (Nil, v) => {
-          // special case empty
-          Source(v.map(_.trace))
-        }
-        case (k, v) => {
-          val allFilters = {
-            v.map(_.unwindSequence.map(_.traverses.toVector.flatMap(_.filter).distinct.headOption))
-          }
-
-          val size = allFilters.map(_.length).max
-          assert(allFilters.forall(_.length =?= size))
-          assert(size =?= k.length)
-
-          val traverseSequence = (0 to (size - 1)).map { i =>
-
-            val filters = allFilters.flatMap(f => f(i))
-            val names = filters.toList.flatMap {
-              case EdgeNameFilter(name) => Some(name)
-              case _                    => None
-            }
-            val indexes = filters.toList.flatMap {
-              case EdgeIndexFilter(idx) => Some(idx)
-              case _                    => None
-            }
-            val edgeTypeTraverses = k(i).toList.map { kk =>
-              EdgeTypeTraverse(kk, Some(MultiEdgeFilter(names, indexes)))
-            }
-
-            EdgeTraverse(
-              follow = EdgeTypeFollow(follows.map(EdgeTypeTraverse.basic)),
-              target = EdgeTypeTarget(edgeTypeTraverses))
-          } ++ List(
-            EdgeTraverse(
-              follow = EdgeTypeFollow(follows.map(EdgeTypeTraverse.basic)),
-              target = EdgeTypeTarget(targets.map(EdgeTypeTraverse.basic))))
-
-          traverseSequence.foldLeft(Source(v.map(_.trace))) {
-            case (acc, next) => acc.via(applyTraverse(next))
-          }
-        }
-      }
-
-      allTraverseGroups.foldLeft(Source.empty[T]) {
-        case (acc, next) => {
-          acc.mergeSorted(next)(tracing.ordering)
-        }
-      }
-    } // do we need to sort?
   }
 
   // Assumes traverses are all same direction
@@ -705,13 +538,25 @@ class GraphQueryService @Inject() (
           }
         // assume ids are unique so that's all we need to check
         sourceMap = collectedSources.map { item =>
-          (item \ "_source" \ "id").as[String] -> (item \ "_source").as[JsObject]
+          (item \ "_source" \ "id").as[String] -> item
         }.toMap
       } yield {
         traces.map { item =>
           val id = tracing.getId(tracing.getTerminus(item))
           val graphNode = sourceMap.get(id)
-          ((item, graphNode), graphNode.isDefined)
+          val newItem = graphNode match {
+            case Some(gn) => {
+              val newGraphNode = tracing.unitFromJs(gn)
+
+              tracing.replaceHeadNode(item, id, newGraphNode)
+            }
+            case _ => item
+          }
+
+          // We can do a replace on item
+          (
+            (newItem, (graphNode.map(gn => (gn \ "_source").as[JsObject]))),
+            graphNode.isDefined)
         }
       }
     }.mapConcat {
@@ -719,10 +564,13 @@ class GraphQueryService @Inject() (
     }
   }
 
+  // NOTE: the .trace outputted here is already hopped
   private def edgeHop[T, TU](
     edgeTraverses: List[EdgeTypeTraverse],
     nodeHint:      Option[NodeType],
-    recursion:     Boolean)(implicit targeting: QueryTargeting[TU], context: SpanContext, tracing: QueryTracing[T, TU]): Flow[T, EdgeHop[T], Any] = {
+    initial:       Boolean)(implicit targeting: QueryTargeting[TU], context: SpanContext, tracing: QueryTracing[T, TU]): Flow[T, EdgeHop[T], Any] = {
+
+    val recursion = !initial
 
     val edgeHopOrdering = Ordering.by { a: EdgeHop[T] =>
       tracing.sortKey(a.obj).mkString("|")
@@ -740,8 +588,44 @@ class GraphQueryService @Inject() (
           traces.toList,
           nodeHint)
         allResults <- source.runWith(models.Sinks.ListAccum[EdgeHop[T]])
+        (cross, notCross) = allResults.partition(_.directedEdge.crossFile)
+        // TODO: this is ugly
+        crossIds = cross.map { i =>
+          i.directedEdge.direction.extractOpposite(i.edgeObj)
+        }
+        nodeSrc <- ifNonEmpty(crossIds) {
+          elasticSearchService.source(
+            targeting.nodeIndexName,
+            ESQuery.termsSearch(
+              "id",
+              crossIds),
+            List("id" -> "asc"),
+            cross.length).map(_._2)
+        }
+        collectedNodes <- context.withSpan(
+          "query.graph.elasticsearch.edgehop.node",
+          "size" -> traces.size.toString()) { _ =>
+            nodeSrc.runWith(Sinks.ListAccum)
+          }
+        // assume ids are unique so that's all we need to check
+        nodeMap = collectedNodes.map { item =>
+          (item \ "_source" \ "id").as[String] -> item
+        }.toMap
       } yield {
-        allResults.sorted(edgeHopOrdering)
+        allResults.sorted(edgeHopOrdering).map {
+          case EdgeHop(trace, directedEdge, edgeObj) => {
+            val baseTrace = tracing.traceHop(trace, directedEdge, edgeObj, initial)
+            val id = directedEdge.direction.extractOpposite(edgeObj)
+            val nextTrace = nodeMap.get(id) match {
+              case Some(replaceNode) => {
+                tracing.replaceHeadNode(baseTrace, id, tracing.unitFromJs(replaceNode))
+              }
+              case _ => baseTrace
+            }
+
+            EdgeHop(nextTrace, directedEdge, edgeObj)
+          }
+        }
       }
     }.mapConcat(s => s)
   }

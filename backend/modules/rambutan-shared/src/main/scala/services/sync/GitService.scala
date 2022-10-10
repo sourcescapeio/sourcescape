@@ -31,7 +31,7 @@ case class RepoCommit(sha: String, parents: List[String], message: String, branc
 
 protected case class RepoScan(branches: List[String], shas: List[RepoSHA])
 
-protected case class GitScanResult(localDir: String, valid: Boolean, remotes: Set[String])
+case class GitScanResult(localDir: String, valid: Boolean, remotes: Set[String])
 
 trait GitServiceRepo {
   def getRepoInfo: Future[RepoInfo]

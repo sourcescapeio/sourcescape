@@ -27,20 +27,20 @@ services:
       - "6380:6379"
     networks:
       - sourcescape
-  sourcescape_primadonna_test:
-    container_name: sourcescape_primadonna_test
-    image: gcr.io/lychee-ai/sourcescape-cli-primadonna:0.2
-    ports:
-      - "3001:3001"
-    networks:
-      - sourcescape
-  sourcescape_dorothy_test:
-    container_name: sourcescape_dorothy_test
-    image: gcr.io/lychee-ai/sourcescape-cli-dorothy:0.2
-    ports:
-      - "3004:3004"
-    networks:
-      - sourcescape  
+  # sourcescape_primadonna_test:
+  #   container_name: sourcescape_primadonna_test
+  #   image: gcr.io/lychee-ai/sourcescape-cli-primadonna:0.2
+  #   ports:
+  #     - "3002:3001"
+  #   networks:
+  #     - sourcescape
+  # sourcescape_dorothy_test:
+  #   container_name: sourcescape_dorothy_test
+  #   image: gcr.io/lychee-ai/sourcescape-cli-dorothy:0.2
+  #   ports:
+  #     - "3004:3004"
+  #   networks:
+  #     - sourcescape  
 networks:
   sourcescape:
     name: sourcescape

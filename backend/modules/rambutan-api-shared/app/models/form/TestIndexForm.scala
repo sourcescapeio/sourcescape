@@ -5,7 +5,8 @@ import play.api.libs.json._
 import silvousplay.imports._
 
 case class TestIndexForm(
-  text: String)
+  file:    String,
+  content: String)
 
 object TestIndexForm {
   implicit val reads = Json.reads[TestIndexForm]

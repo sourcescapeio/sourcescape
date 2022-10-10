@@ -23,7 +23,6 @@ object GraphQuery {
       case Array(v) => GenericGraphEdgeType.withNameUnsafe(trimmed)
       case Array(idx, v) => IndexType.withNameUnsafe(idx) match {
         case IndexType.Javascript => JavascriptGraphEdgeType.withNameUnsafe(trimmed)
-        case IndexType.Scala      => ScalaGraphEdgeType.withNameUnsafe(trimmed)
         case IndexType.Ruby       => RubyGraphEdgeType.withNameUnsafe(trimmed)
       }
     }

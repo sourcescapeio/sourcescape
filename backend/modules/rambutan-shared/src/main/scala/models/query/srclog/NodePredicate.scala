@@ -3,7 +3,6 @@ package models.query
 import models.IndexType
 import models.index.NodeType
 import models.index.esprima.ESPrimaNodeType
-import models.index.scalameta.ScalaMetaNodeType
 import models.index.ruby.RubyNodeType
 import models.graph._
 import silvousplay.imports._
@@ -48,17 +47,6 @@ object RubyNodePredicate extends Plenumeration[RubyNodePredicate] {
   case object Array extends RubyNodePredicate("array", RubyNodeType.Array)
   case object Hash extends RubyNodePredicate("hash", RubyNodeType.Hash)
   case object HashPair extends RubyNodePredicate("hash_pair", RubyNodeType.Pair)
-}
-
-/**
- * Scala
- */
-sealed abstract class ScalaNodePredicate(identifierIn: String, nodeTypeIn: ScalaMetaNodeType)
-  extends SimpleNodePredicate(identifierIn, nodeTypeIn, "scala")
-
-object ScalaNodePredicate extends Plenumeration[ScalaNodePredicate] {
-  case object Trait extends ScalaNodePredicate("trait", ScalaMetaNodeType.Trait) {
-  }
 }
 
 /**
@@ -127,6 +115,11 @@ object JavascriptNodePredicate extends Plenumeration[JavascriptNodePredicate] {
   // fallback for references
   case object NotIdentifierRef extends JavascriptNodePredicate("not-identifier-ref", ESPrimaNodeType.IdentifierRef) {
     override protected def typeFilter = NodeNotTypesFilter(nodeType :: Nil)
+  }
+
+  //
+  case object AnyNode extends JavascriptNodePredicate("any", ESPrimaNodeType.IdentifierRef) {
+    override protected def typeFilter = NodeNotTypesFilter(Nil)
   }
 }
 

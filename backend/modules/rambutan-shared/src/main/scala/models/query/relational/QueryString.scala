@@ -156,19 +156,6 @@ object QueryString {
         val guts = traverses.map(i => indent(stringifyTraverse(i), 4)).mkString(".\n")
         "filter{\n" + guts + "\n}"
       }
-      case StatefulTraverse(from, to, _, mapping, follow, target) => {
-        val teleportFrom = s"teleport_from=${from.identifier}," :: Nil
-        val teleportTo = s"teleport_to=${to.identifier}," :: Nil
-        val mappingInternal = mapping.toList.map {
-          case (k, v) => indent(s"${k.identifier} -> [ ${v.map(_.identifier).mkString(", ")} ]", 2)
-        }.mkString(",\n")
-        val mappingCombined = List("mapping={\n", mappingInternal, "},")
-        val followCombined = s"follow=[ ${follow.map(_.identifier).mkString(", ")} ]," :: Nil
-        val targetCombined = s"target=[ ${target.map(_.identifier).mkString(", ")} ]" :: Nil
-
-        val guts = (teleportFrom ++ teleportTo ++ mappingCombined ++ followCombined ++ targetCombined).map(i => indent(i, 2)).mkString("\n")
-        "stateful_traverse[\n" + guts + "\n]"
-      }
       case NodeTraverse(follow, targets) => {
         val followGuts = follow.traverses.map { t =>
           stringifyEdgeTypeTraverse(t)

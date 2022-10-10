@@ -18,6 +18,11 @@ sealed abstract class ESPrimaNodeBuilder(
   additionalNames: List[String]    = Nil,
   graphIndex:      Option[Int]     = None) extends ESPrimaNode with StandardNodeBuilder[ESPrimaNodeType, ESPrimaTag] {
 
+  def lookupIndex: Option[Int] = None
+  def definitionLink: Option[String] = None
+  def typeDefinitionLink: Option[String] = None
+
+  def generateSymbol = false
   val names = graphName.toList ++ additionalNames
 
   val index = graphIndex
@@ -28,20 +33,33 @@ sealed abstract class ESPrimaNodeBuilder(
 /**
  * Impl
  */
-case class RequireNode(id: String, range: CodeRange, module: String, searches: List[String]) extends ESPrimaNodeBuilder(ESPrimaNodeType.Require, graphName = Some(module), additionalNames = searches)
+case class RequireNode(id: String, range: CodeRange, module: String, searches: List[String]) extends ESPrimaNodeBuilder(ESPrimaNodeType.Require, graphName = Some(module), additionalNames = searches) {
+  override def generateSymbol = true
+}
 
 // can be discarded if identifier already exists
 case class IdentifierNode(id: String, range: CodeRange, name: String) extends ESPrimaNodeBuilder(ESPrimaNodeType.Identifier, graphName = Some(name))
 
 case class IdentifierReferenceNode(id: String, range: CodeRange, name: String) extends ESPrimaNodeBuilder(ESPrimaNodeType.IdentifierRef, graphName = Some(name)) {
   def toIdentifier = IdentifierNode(id, range, name)
+  // override def lookupRange = Some(range)
 }
 
-case class InstantiationNode(id: String, range: CodeRange) extends ESPrimaNodeBuilder(ESPrimaNodeType.Instance)
+case class InstantiationNode(id: String, range: CodeRange, lookupRangeIn: CodeRange) extends ESPrimaNodeBuilder(ESPrimaNodeType.Instance) {
+  // Chill for now
+  // override def lookupRange = Some(lookupRangeIn)
+}
 
-case class MemberNode(id: String, range: CodeRange, name: Option[String]) extends ESPrimaNodeBuilder(ESPrimaNodeType.Member, graphName = name)
+case class MemberNode(id: String, range: CodeRange, name: Option[String]) extends ESPrimaNodeBuilder(ESPrimaNodeType.Member, graphName = name) {
+  // Don't look up Member
+  // override def lookupRange = Some(range)
+}
 
-case class CallNode(id: String, range: CodeRange) extends ESPrimaNodeBuilder(ESPrimaNodeType.Call)
+case class CallNode(id: String, range: CodeRange, lookupRangeIn: CodeRange) extends ESPrimaNodeBuilder(ESPrimaNodeType.Call) {
+  override def lookupIndex = Some(lookupRangeIn.endIndex)
+
+  override def definitionLink: Option[String] = Some(ESPrimaEdgeType.CallLink.identifier)
+}
 
 case class LiteralNode(id: String, range: CodeRange, raw: String, value: JsValue) extends ESPrimaNodeBuilder(ESPrimaNodeType.Literal, graphName = Some(Json.stringify(value)))
 
@@ -91,11 +109,20 @@ case class FinallyNode(id: String, range: CodeRange) extends ESPrimaNodeBuilder(
 case class ThrowNode(id: String, range: CodeRange) extends ESPrimaNodeBuilder(ESPrimaNodeType.Throw)
 
 // Ex: class
-case class ClassNode(id: String, range: CodeRange, name: Option[String]) extends ESPrimaNodeBuilder(ESPrimaNodeType.Class, graphName = name)
-case class MethodNode(id: String, range: CodeRange, computed: Boolean, static: Boolean, constructor: Boolean, name: Option[String]) extends ESPrimaNodeBuilder(ESPrimaNodeType.Method, graphName = name)
-case class ClassPropertyNode(id: String, range: CodeRange, computed: Boolean, static: Boolean, name: Option[String]) extends ESPrimaNodeBuilder(ESPrimaNodeType.ClassProperty, graphName = name)
+case class ClassNode(id: String, range: CodeRange, name: Option[String]) extends ESPrimaNodeBuilder(ESPrimaNodeType.Class, graphName = name) {
+  override def generateSymbol = true
+}
+case class MethodNode(id: String, range: CodeRange, computed: Boolean, static: Boolean, constructor: Boolean, name: Option[String]) extends ESPrimaNodeBuilder(ESPrimaNodeType.Method, graphName = name) {
+  override def generateSymbol = true
+}
+case class ClassPropertyNode(id: String, range: CodeRange, computed: Boolean, static: Boolean, name: Option[String]) extends ESPrimaNodeBuilder(ESPrimaNodeType.ClassProperty, graphName = name) {
+  override def generateSymbol = true
+}
 case class SuperNode(id: String, range: CodeRange) extends ESPrimaNodeBuilder(ESPrimaNodeType.Super)
-case class ThisNode(id: String, range: CodeRange) extends ESPrimaNodeBuilder(ESPrimaNodeType.This)
+case class ThisNode(id: String, range: CodeRange) extends ESPrimaNodeBuilder(ESPrimaNodeType.This) {
+  override def lookupIndex = Some(range.startIndex)
+}
+case class DecoratorNode(id: String, range: CodeRange) extends ESPrimaNodeBuilder(ESPrimaNodeType.Decorator)
 
 // Ex: { a: 1, b: 2}
 case class ObjectNode(id: String, range: CodeRange) extends ESPrimaNodeBuilder(ESPrimaNodeType.Object)
@@ -107,11 +134,15 @@ case class ObjectPropertyNode(id: String, range: CodeRange, key: String) extends
  * Function shit
  */
 // Ex: function() { }
-case class FunctionNode(id: String, range: CodeRange, async: Boolean, name: Option[String]) extends ESPrimaNodeBuilder(ESPrimaNodeType.Function, graphName = name)
+case class FunctionNode(id: String, range: CodeRange, async: Boolean, name: Option[String]) extends ESPrimaNodeBuilder(ESPrimaNodeType.Function, graphName = name) {
+  override def generateSymbol = true
+}
 case class SpreadNode(id: String, range: CodeRange) extends ESPrimaNodeBuilder(ESPrimaNodeType.Spread)
 
 // HMMM on index
-case class FunctionArgNode(id: String, range: CodeRange, indexIn: Int) extends ESPrimaNodeBuilder(ESPrimaNodeType.FunctionArg, graphIndex = Some(indexIn))
+case class FunctionArgNode(id: String, range: CodeRange, indexIn: Int) extends ESPrimaNodeBuilder(ESPrimaNodeType.FunctionArg, graphIndex = Some(indexIn)) {
+  override def lookupIndex = Some(range.startIndex)
+}
 
 case class YieldNode(id: String, range: CodeRange) extends ESPrimaNodeBuilder(ESPrimaNodeType.Yield)
 

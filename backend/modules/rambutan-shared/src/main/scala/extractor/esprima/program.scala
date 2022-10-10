@@ -8,6 +8,7 @@ import akka.stream.scaladsl.SourceQueue
 import play.api.libs.json._
 import play.api.libs.functional.syntax._
 import java.nio.file.Paths
+import silvousplay.api.SpanContext
 
 package object esprima {
 
@@ -87,7 +88,7 @@ package object esprima {
     // labels
     labelStack:  List[String],
     labelLookup: Map[String, LabelNode],
-    logQueue:    SourceQueue[(CodeRange, String)],
+    context:     SpanContext,
     // exports
     currentExport: Option[ExportNode],
     // paths
@@ -258,14 +259,14 @@ package object esprima {
   }
 
   object ESPrimaContext {
-    def empty(path: String, logQueue: SourceQueue[(CodeRange, String)]) = ESPrimaContext(
+    def empty(path: String, context: SpanContext) = ESPrimaContext(
       path,
       Nil,
       Nil,
       Map(),
       Nil,
       Map(),
-      logQueue,
+      context,
       None,
       Nil)
   }

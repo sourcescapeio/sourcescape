@@ -22,6 +22,11 @@ object HydrationMapper {
       val traceExtractor = implicitly[HasTraceKey[TraceUnit]]
       trace.mapTrace { i =>
         val edgeTypeIdentifer = traceExtractor.edgeTypeIdentifier(i)
+
+        if (!nodeMap.contains(traceExtractor.traceKey(i))) {
+          println(traceExtractor.traceKey(i))
+        }
+
         edgeTypeIdentifer -> nodeMap.getOrElse(
           traceExtractor.traceKey(i),
           throw Errors.streamError("broken jsobject during hydration")).as[GraphNode]

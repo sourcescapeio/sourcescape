@@ -17,9 +17,7 @@ class HealthController @Inject() (
   authService:  services.AuthService,
   sharedDao:    dal.SharedDataAccessLayer,
   localDao:     dal.LocalDataAccessLayer,
-  logService:   services.LogService,
   indexService: services.IndexService)(implicit ec: ExecutionContext, as: ActorSystem) extends APIHealthController(
-  logService,
   indexService,
   authService) {
 

@@ -14,7 +14,6 @@ import play.twirl.api.HtmlFormat
 import silvousplay.data.health.{ CreateTable, DatabaseDiff }
 
 abstract class APIHealthController @Inject() (
-  logService:   services.LogService,
   indexService: services.IndexService,
   authService:  services.AuthService)(implicit ec: ExecutionContext) extends API {
 
@@ -80,13 +79,7 @@ abstract class APIHealthController @Inject() (
 
   def health() = {
     api { implicit request =>
-      for {
-        // resp1 <- indexService.getNodesIndex()
-        // resp2 <- indexService.getEdgesIndex()
-        resp3 <- logService.getLogIndex()
-      } yield {
-        "Healthy"
-      }
+      "Healthy"
     }
   }
 }

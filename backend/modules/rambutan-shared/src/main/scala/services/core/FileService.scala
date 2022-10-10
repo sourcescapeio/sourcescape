@@ -14,6 +14,8 @@ trait FileService {
 
   def readFile(path: String): Future[ByteString]
 
+  def realPath(path: String): String
+
   // Used for compile
   def listDirectory(path: String): Source[(String, ByteString), Any]
 

@@ -8,15 +8,7 @@ case class ParseForm(
   context:       SrcLogCodeQueryDTO,
   selected:      Option[String],
   traceSelected: Option[Map[String, Boolean]],
-  trace:         Boolean,
-  operation:     BuilderOperation) {
-
-  def toModel = BuilderState(
-    context.toModel,
-    selected,
-    traceSelected.getOrElse(Map.empty[String, Boolean]),
-    trace,
-    update = false)
+  trace:         Boolean) {
 }
 
 object ParseForm {

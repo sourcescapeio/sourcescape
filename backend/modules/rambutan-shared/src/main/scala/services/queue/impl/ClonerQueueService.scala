@@ -23,7 +23,7 @@ object ClonerQueueDirty {
   implicit val format = Json.format[ClonerQueueDirty]
 }
 
-case class ClonerQueueItem(orgId: Int, repoId: Int, indexId: Int, dirtyFiles: Option[ClonerQueueDirty], workId: String) {
+case class ClonerQueueItem(orgId: Int, repoId: Int, indexId: Int, dirtyFiles: Option[ClonerQueueDirty]) {
   val dirty = dirtyFiles.isDefined
 }
 

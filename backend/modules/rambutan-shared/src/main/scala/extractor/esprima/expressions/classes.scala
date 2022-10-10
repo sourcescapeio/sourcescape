@@ -6,6 +6,12 @@ import models.extractor._
 
 object Classes {
 
+  // https://github.com/typescript-eslint/typescript-eslint/blob/a8227a6/packages/types/src/ts-estree.ts#L902
+  private def Decorator = {
+    node("Decorator") ~
+      tup("expression" -> Expressions.expression) // LeftHandSideExpression
+  }
+
   val ThisExpression = {
     node("ThisExpression") mapExtraction {
       case (_, codeRange, _) => ExpressionWrapper.single(ThisNode(Hashing.uuid, codeRange))
@@ -26,15 +32,19 @@ object Classes {
       tup("value" -> Functions.FunctionExpression) ~
       tup("kind" -> Extractor.enum("method", "constructor", "get", "set")) ~
       tup("computed" -> Extractor.bool) ~
-      tup("static" -> Extractor.bool)
+      tup("static" -> Extractor.bool) ~
+      tup("decorators" -> list(Decorator), optional = true)
   } mapExtraction {
-    case (context, codeRange, ((((key, value), kind), computed), static)) => {
+    case (context, codeRange, (((((key, value), kind), computed), static), decorators)) => {
       val maybeName = Property.computeName(key.node)
       val maybeExp = Property.computeExpression(key)
 
       val isConstructor = kind =?= "constructor"
       val methodNode = MethodNode(Hashing.uuid, codeRange, computed, static, isConstructor, maybeName)
       val methodFunction = CreateEdge(methodNode, value.node, ESPrimaEdgeType.MethodFunction).edge
+      val decoratorEdges = decorators.map { decorator =>
+        CreateEdge(methodNode, AnyNode(decorator.node), ESPrimaEdgeType.MethodDecorator).edge
+      }
 
       val methodKey = withDefined(maybeExp) { ex =>
         List(CreateEdge(methodNode, AnyNode(ex.node), ESPrimaEdgeType.MethodKey).edge)
@@ -45,9 +55,9 @@ object Classes {
       ExpressionWrapper(
         methodNode,
         codeRange,
-        value :: maybeExp.toList,
+        value :: (decorators ++ maybeExp.toList),
         Nil,
-        methodFunction :: methodKey)
+        methodFunction :: (methodKey ++ decoratorEdges))
     }
   }
 
@@ -133,9 +143,10 @@ object Classes {
     in ~
       tup("id" -> opt(Terminal.Identifier)) ~
       tup("superClass" -> opt(Terminal.Identifier | Variables.MemberExpression | Functions.CallExpression)) ~
-      tup("body" -> ClassBody)
+      tup("body" -> ClassBody) ~
+      tup("decorators" -> list(Decorator), optional = true)
   } mapBoth {
-    case (context, codeRange, ((id, superClass), body)) => {
+    case (context, codeRange, (((id, superClass), body), decorators)) => {
       val maybeIdent = withDefined(id) { i =>
         Option(i.node.toIdentifier)
       }
@@ -144,6 +155,10 @@ object Classes {
 
       val superClassEdge = superClass map { s =>
         CreateEdge(classNode, AnyNode(s.node), ESPrimaEdgeType.SuperClass).edge
+      }
+
+      val decoratorEdges = decorators.map { decoratorExp =>
+        CreateEdge(classNode, AnyNode(decoratorExp.node), ESPrimaEdgeType.ClassDecorator).edge
       }
 
       val maybeIdentEdge = withDefined(maybeIdent) { ident =>
@@ -175,9 +190,9 @@ object Classes {
         ExpressionWrapper(
           classNode,
           codeRange,
-          superClass.toList ++ onlyMethodBody ++ onlyPropertiesBody,
+          superClass.toList ++ onlyMethodBody ++ onlyPropertiesBody ++ decorators,
           maybeIdent.toList,
-          superClassEdge.toList ++ methodEdges ++ propertyEdges ++ maybeIdentEdge))
+          superClassEdge.toList ++ methodEdges ++ propertyEdges ++ decoratorEdges ++ maybeIdentEdge))
     }
   }
 
@@ -191,7 +206,7 @@ object Classes {
       tup("arguments" -> list(Functions.ArgumentListElement))
   } mapExtraction {
     case (context, codeRange, (callee, arguments)) => {
-      val instanceNode = InstantiationNode(Hashing.uuid, codeRange)
+      val instanceNode = InstantiationNode(Hashing.uuid, codeRange, callee.node.range)
       val instanceEdge = CreateEdge(instanceNode, AnyNode(callee.node), ESPrimaEdgeType.Class).edge
 
       val argumentEdges = arguments.zipWithIndex.map {

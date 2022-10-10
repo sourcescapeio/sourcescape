@@ -16,12 +16,12 @@ import akka.stream.OverflowStrategy
 import akka.util.ByteString
 import org.joda.time._
 import models.graph._
+import silvousplay.api.SpanContext
 
 @Singleton
 class IndexerService @Inject() (
   configuration:        play.api.Configuration,
-  elasticSearchService: ElasticSearchService,
-  logService:           LogService)(implicit ec: ExecutionContext, mat: akka.stream.Materializer) {
+  elasticSearchService: ElasticSearchService)(implicit ec: ExecutionContext, mat: akka.stream.Materializer) {
 
   def reportProgress[T](total: Int)(report: Int => Any) = {
     Flow[T].statefulMapConcat { () =>
@@ -63,7 +63,7 @@ class IndexerService @Inject() (
     })
   }
 
-  def writeElasticSearch(concurrency: Int, waitFor: Boolean = false)(record: WorkRecord) = {
+  def writeElasticSearch(concurrency: Int, waitFor: Boolean = false)(context: SpanContext) = {
     Flow[(String, List[(Option[String], JsValue)])].mapConcat {
       case (idx, documents) => documents.map(doc => idx -> doc)
     }.groupBy(concurrency, _._1).groupedWithin(2000, 1.second).map { items =>
@@ -71,16 +71,14 @@ class IndexerService @Inject() (
       (idx, items.map(_._2))
     }.mergeSubstreamsWithParallelism(concurrency).mapAsyncUnordered(concurrency) {
       case (esIndex, documents) => {
-        logService.withRecord(record) { implicit record =>
-          for {
-            _ <- elasticSearchService.indexBulkWithId(esIndex, documents, waitFor)
-            _ <- logService.event(s"Indexed ${documents.length} documents to ${esIndex}")
-          } yield {
-            ()
-          }
+        for {
+          _ <- elasticSearchService.indexBulkWithId(esIndex, documents, waitFor)
+          _ = context.event(s"Indexed ${documents.length} documents to ${esIndex}")
+        } yield {
+          ()
         }
       }
-    }.mapConcat(_.toList)
+    }
   }
 
   /**
@@ -93,7 +91,7 @@ class IndexerService @Inject() (
       .map(index -> _.toList)
   }
 
-  def wrapperFlow(orgId: Int, record: WorkRecord) = {
+  def wrapperFlow(orgId: Int, context: SpanContext) = {
     Flow[ExpressionWrapper[GenericNodeBuilder]]
       .via(fanoutIndexing(
         graphFlow(GenericGraphNode.globalIndex) {
@@ -102,12 +100,12 @@ class IndexerService @Inject() (
         graphFlow(GenericGraphEdge.globalIndex) {
           _.allEdges.map(e => e.json(orgId))
         }))
-      .via(writeElasticSearch(concurrency = 2, waitFor = true)(record))
+      .via(writeElasticSearch(concurrency = 2, waitFor = true)(context))
   }
 
-  def writeWrapper(orgId: Int, wrapper: ExpressionWrapper[GenericNodeBuilder])(record: WorkRecord): Future[Unit] = {
+  def writeWrapper(orgId: Int, wrapper: ExpressionWrapper[GenericNodeBuilder])(implicit context: SpanContext): Future[Unit] = {
     Source(wrapper :: Nil)
-      .via(wrapperFlow(orgId, record))
+      .via(wrapperFlow(orgId, context))
       .runWith(Sink.ignore)
       .map(_ => ())
   }
