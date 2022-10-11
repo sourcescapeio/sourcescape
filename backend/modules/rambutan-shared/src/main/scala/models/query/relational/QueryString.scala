@@ -36,7 +36,7 @@ object QueryString {
     val from = "FROM " + stringifyGraphQuery(item.root.query) + " AS " + item.root.key
 
     val traces = item.traces.map { t =>
-      "TRACE\n" + stringifyTraceQuery(t.query) + " AS " + t.key
+      "TRACE " + stringifyTraceQuery(t.query) + " AS " + t.key
     }.mkString("\n")
 
     val having = item.having.map { h =>
@@ -67,11 +67,11 @@ object QueryString {
   }
 
   def stringifyGraphQuery(query: GraphQuery): String = {
-    (stringifyGraphRoot(query.root) :: query.traverses.map(stringifyTraverse)).mkString("\n.")
+    (stringifyGraphRoot(query.root) :: query.traverses.map(t => stringifyTraverse(t, 1))).mkString("\n.")
   }
 
   private def stringifyTraceQuery(query: TraceQuery) = {
-    (stringifyFromRoot(query.from) :: query.traverses.map(stringifyTraverse)).mkString("\n.")
+    (stringifyFromRoot(query.from) :: query.traverses.map(t => stringifyTraverse(t, 1))).mkString("\n.")
   }
 
   private def stringifyFromRoot(item: FromRoot) = {
@@ -84,6 +84,7 @@ object QueryString {
   private def stringifyNodeFilter(item: NodeFilter) = {
     item match {
       case NodeTypeFilter(typ)       => "  type=" + typ.identifier
+      case NodeTypesFilter(inner)    => "  types=" + inner.map(_.identifier).mkString(",")
       case NodeNotTypesFilter(types) => "  not_types=(" + types.map(_.identifier).mkString(",") + ")"
       case NodeNameFilter(name)      => "  name=\"" + name + "\""
       case NodeIndexFilter(index)    => "  index=\"" + index + "\""
@@ -101,8 +102,8 @@ object QueryString {
     "root[\n" + guts + "\n]"
   }
 
-  private def stringifyEdgeTypeTraverse(t: EdgeTypeTraverse) = {
-    val baseIndent = " " * 6
+  private def stringifyEdgeTypeTraverse(t: EdgeTypeTraverse, tabs: Int) = {
+    val baseIndent = " " * (tabs * 2)
     baseIndent + t.edgeType.identifier + (t.filter match {
       case Some(EdgeNameFilter(n))     => s"[\n${baseIndent}  name=${"\""}${n}${"\""}\n${baseIndent}]"
       case Some(EdgeIndexFilter(i))    => s"[\n${baseIndent}  index=${i}\n${baseIndent}]"
@@ -121,54 +122,59 @@ object QueryString {
     str.split("\n").map(tab + _).mkString("\n")
   }
 
-  private def stringifyTraverse(item: Traverse): String = {
+  private def stringifyTraverse(item: Traverse, tabs: Int): String = {
+    val spaces = " " * (2 * tabs)
     item match {
       case EdgeTraverse(follow, target, typeHint) => {
         val followGuts = follow.traverses.map { t =>
-          stringifyEdgeTypeTraverse(t)
+          stringifyEdgeTypeTraverse(t, tabs + 1)
         }.mkString(",\n")
         val targetGuts = target.traverses.map { t =>
-          stringifyEdgeTypeTraverse(t)
+          stringifyEdgeTypeTraverse(t, tabs + 1)
         }.mkString(",\n")
         val followStanza = ifNonEmpty(follow.traverses) {
-          s"  follow=edge_types:(\n" + followGuts + "\n  )" :: Nil
+          s"${spaces}follow=edge_types:(\n" + followGuts + s"\n${spaces})" :: Nil
         }
-        val targetStanza = s"  target=edge_types:(\n" + targetGuts + "\n  )" :: Nil
+        val targetStanza = s"${spaces}target=edge_types:(\n" + targetGuts + s"\n${spaces})" :: Nil
         val typeHintStanza = withDefined(typeHint) { h =>
-          s"  type_hint=${h.identifier}" :: Nil
+          s"${spaces}type_hint=${h.identifier}" :: Nil
         }
         val guts = (followStanza ++ targetStanza ++ typeHintStanza).mkString(",\n")
-        "traverse[\n" + guts + "\n]"
+        s"${spaces}traverse[\n" + guts + s"\n${spaces}]"
       }
       case ReverseTraverse(follow, traverses) => {
         val followGuts = follow.traverses.map { t =>
-          stringifyEdgeTypeTraverse(t)
+          stringifyEdgeTypeTraverse(t, tabs + 1)
         }.mkString(",\n")
         val followStanza = ifNonEmpty(follow.traverses) {
-          s"  follow=edge_types:(\n" + followGuts + "\n  )" :: Nil
+          s"${spaces}follow=edge_types:(\n" + followGuts + "\n  )" :: Nil
         }
-        val traverseGuts = traverses.map(i => indent(stringifyTraverse(i), 4)).mkString(".\n")
-        val traverseStanza = s"  traverses={\n" + traverseGuts + "\n  }"
+        val traverseGuts = traverses.map(i => stringifyTraverse(i, tabs + 2)).mkString(".\n")
+        val traverseStanza = s"${spaces}traverses={\n${spaces}${spaces}" + traverseGuts + s"\n${spaces}}"
         val guts = (followStanza :+ traverseStanza).mkString(",\n")
-        "reverse[\n" + guts + "\n]"
+        "reverse{\n" + guts + "\n}"
       }
       case FilterTraverse(traverses) => {
-        val guts = traverses.map(i => indent(stringifyTraverse(i), 4)).mkString(".\n")
+        val guts = traverses.map(i => stringifyTraverse(i, tabs + 1)).mkString(".\n")
         "filter{\n" + guts + "\n}"
       }
       case NodeTraverse(follow, targets) => {
         val followGuts = follow.traverses.map { t =>
-          stringifyEdgeTypeTraverse(t)
+          stringifyEdgeTypeTraverse(t, tabs + 1)
         }.mkString(",\n")
         val followStanza = ifNonEmpty(follow.traverses) {
-          s"  follow=edge_types:(\n" + followGuts + "\n  )" :: Nil
+          s"${spaces}follow=edge_types:(\n" + followGuts + "\n  )" :: Nil
         }
         val targetGuts = targets.map(i => indent(stringifyNodeFilter(i), 4)).mkString(",\n")
         val targetStanza = {
-          "  target=(\n" + targetGuts + "\n  )"
+          s"${spaces}target=(\n" + targetGuts + "\n  )"
         }
         val guts = (followStanza :+ targetStanza).mkString(",\n")
         "node_traverse[\n" + guts + "\n]"
+      }
+      case RepeatedEdgeTraverseNew(inner) => {
+        val guts = inner.map(i => stringifyTraverse(i, tabs + 1)).mkString(",\n")
+        "repeated{\n" + guts + "\n}"
       }
       case RepeatedEdgeTraverse(follow, shouldTerminate) => "repeated[not supported]"
       case OneHopTraverse(_)                             => throw new Exception("not supported")

@@ -14,6 +14,10 @@ case class NodeTypeFilter(`type`: Identifiable) extends NodeFilter {
   def query = ESQuery.termSearch("type", `type`.identifier)
 }
 
+case class NodeTypesFilter(types: List[Identifiable]) extends NodeFilter {
+  def query = ESQuery.termsSearch("type", types.map(_.identifier))
+}
+
 case class NodeNotTypesFilter(types: List[NodeType]) extends NodeFilter {
   def query = ESQuery.bool(
     mustNot = ESQuery.termsSearch("type", types.map(_.identifier)) :: Nil)

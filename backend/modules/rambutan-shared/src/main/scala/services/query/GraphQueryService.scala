@@ -284,9 +284,14 @@ class GraphQueryService @Inject() (
           reverseTraverse(r)(targeting, cc, tracing)
         }
       }
+      case ren: RepeatedEdgeTraverseNew => {
+        context.withSpanF("query.graph.trace.repeated") { cc =>
+          repeatedEdgeTraverseNew(ren)(targeting, cc, tracing)
+        }
+      }
       case re: RepeatedEdgeTraverse[T, TU] => {
         // used for git
-        context.withSpanF("query.graph.trace.repeated") { cc =>
+        context.withSpanF("query.graph.trace.repeated.legacy") { cc =>
           repeatedEdgeTraverse(re)(targeting, cc, tracing)
         }
       }
@@ -337,6 +342,28 @@ class GraphQueryService @Inject() (
     }
   }
 
+  private def repeatedEdgeTraverseNew[T, TU](
+    traverse: RepeatedEdgeTraverseNew)(implicit targeting: QueryTargeting[TU], context: SpanContext, tracing: QueryTracing[T, TU]): Flow[T, T, _] = {
+
+    implicit val ordering = tracing.ordering
+
+    traverse.inner.foldLeft(Flow[T]) {
+      case (flow, e) => flow.via {
+        applyTraverse(e) // but also emit
+      }
+    }.mapConcat { trace =>
+      // dangerous because this never terminates
+      List(
+        (trace, true),
+        (trace, false))
+    }.via {
+      maybeRecurse { _ =>
+        repeatedEdgeTraverseNew(traverse)
+      }
+    }
+  }
+
+  @deprecated
   private def repeatedEdgeTraverse[T, TU](
     traverse: RepeatedEdgeTraverse[T, TU])(implicit targeting: QueryTargeting[TU], context: SpanContext, tracing: QueryTracing[T, TU]): Flow[T, T, _] = {
     val follow = traverse.follow.traverses
@@ -450,6 +477,12 @@ class GraphQueryService @Inject() (
         (nextFlow, new EdgeTypeFollow(Nil))
       }
       // We never reverse these
+      case ((flow, prevFollow), RepeatedEdgeTraverseNew(inner)) => {
+        throw new Exception("invalid reversal: repeated")
+      }
+      case ((flow, prevFollow), RepeatedEdgeTraverse(_, _)) => {
+        throw new Exception("invalid reversal: repeated.legacy")
+      }
       case ((flow, prevFollow), ReverseTraverse(_, _)) => {
         throw new Exception("invalid reversal: reverse")
       }
@@ -459,6 +492,7 @@ class GraphQueryService @Inject() (
     }
 
     lastFlow
+    // NOTE: node traverse is applied at SrcLog level
     // lastFlow.via {
     //   nodeTraverse(indexType, indexId, subQuery.root.filters.toList, lastFollow)
     // }
@@ -588,7 +622,10 @@ class GraphQueryService @Inject() (
           traces.toList,
           nodeHint)
         allResults <- source.runWith(models.Sinks.ListAccum[EdgeHop[T]])
-        (cross, notCross) = allResults.partition(_.directedEdge.crossFile)
+        (cross, notCross) = allResults.partition { i =>
+          println(i.directedEdge, i.directedEdge.crossFile)
+          i.directedEdge.crossFile
+        }
         // TODO: this is ugly
         crossIds = cross.map { i =>
           i.directedEdge.direction.extractOpposite(i.edgeObj)

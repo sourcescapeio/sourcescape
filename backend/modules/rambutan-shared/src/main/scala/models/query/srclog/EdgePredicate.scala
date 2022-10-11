@@ -13,8 +13,8 @@ sealed abstract class EdgePredicate(
 
   // Assumption: at least one of these will be non-null
   // There is no ValidEdge from AnyNode to AnyNode except Assignment
-  val fromImplicit: Option[NodePredicate] = None
-  val toImplicit: Option[NodePredicate] = None
+  def fromImplicit: Option[NodePredicate] = None
+  def toImplicit: Option[NodePredicate] = None
 
   // reversal preferences
   val suppressNodeCheck: Boolean = false
@@ -361,6 +361,7 @@ object JavascriptEdgePredicate extends Plenumeration[JavascriptEdgePredicate] {
     }
   }
 
+  @deprecated
   case object MethodContains extends JavascriptEdgePredicate("method_contains") {
     override val fromImplicit = Some(JavascriptNodePredicate.ClassMethod)
 
@@ -661,6 +662,73 @@ object JavascriptEdgePredicate extends Plenumeration[JavascriptEdgePredicate] {
           EdgeTypeTraverse.basic(JavascriptGraphEdgeType.TemplateContains) :: Nil)) :: Nil
     }
   }
+
+  /**
+   * Experimental Repeated Traverses
+   */
+  case object Contains extends JavascriptEdgePredicate("contains") {
+
+    override def fromImplicit = Some(NodePredicate.or(
+      JavascriptNodePredicate.ClassMethod,
+      JavascriptNodePredicate.Function
+    ))
+
+    override val singleDirection = true
+
+    // NOTE: body doesn't have egress because `*-contains` edges link directly to all nodes
+
+    override def queryTraverse(name: Option[String], index: Option[Int], props: List[GenericGraphProperty], follow: List[GraphEdgeType]) = {
+      List(
+        EdgeTraverse(
+          follow = edgeTypeFollow(JavascriptGraphEdgeType.MethodFunction :: follow),
+          target = EdgeTypeTarget(
+            EdgeTypeTraverse.basic(JavascriptGraphEdgeType.FunctionContains) :: Nil)))
+    }
+  }
+
+  case object AllCalled extends JavascriptEdgePredicate("all_called") {
+    override def fromImplicit = Some(NodePredicate.or(
+      JavascriptNodePredicate.ClassMethod,
+      JavascriptNodePredicate.Function
+    ))
+
+    override def toImplicit = Some(NodePredicate.or(
+      JavascriptNodePredicate.ClassMethod,
+      JavascriptNodePredicate.Function
+    ))
+
+    override val preferReverse: Boolean = true
+
+    override def queryTraverse(name: Option[String], index: Option[Int], props: List[GenericGraphProperty], follow: List[GraphEdgeType]) = {
+      RepeatedEdgeTraverseNew(
+        List(
+          EdgeTraverse(
+            follow = edgeTypeFollow(JavascriptGraphEdgeType.MethodFunction :: Nil),
+            target = EdgeTypeTarget(EdgeTypeTraverse.basic(JavascriptGraphEdgeType.FunctionContains) :: Nil)
+          ),
+          EdgeTraverse(
+            follow = edgeTypeFollow(Nil),
+            target = EdgeTypeTarget(EdgeTypeTraverse.basic(JavascriptGraphEdgeType.CallLink) :: Nil)
+          )
+        )        
+      ) :: Nil
+    }
+
+    override def reverseTraverse(name: Option[String], index: Option[Int], props: List[GenericGraphProperty], follow: List[GraphEdgeType]) = {
+      RepeatedEdgeTraverseNew(
+        List(
+          EdgeTraverse(
+            follow = edgeTypeFollow(JavascriptGraphEdgeType.MethodFunction.opposite :: Nil),
+            target = EdgeTypeTarget(EdgeTypeTraverse.basic(JavascriptGraphEdgeType.CallLink).reverse :: Nil)
+          ),
+          EdgeTraverse(
+            follow = edgeTypeFollow(Nil), // JavascriptGraphEdgeType.MethodFunction :: Nil
+            target = EdgeTypeTarget(EdgeTypeTraverse.basic(JavascriptGraphEdgeType.FunctionContains).reverse :: Nil)
+          ),
+        )
+      ) :: Nil
+    }    
+  }  
 
 }
 

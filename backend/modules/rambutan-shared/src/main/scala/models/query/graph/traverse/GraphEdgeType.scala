@@ -11,9 +11,8 @@ import play.api.libs.json._
 sealed class GraphEdgeType(
   val identifier: String,
   val edgeType:   EdgeType,
-  val direction:  AccessDirection) extends Identifiable {
-
-  val crossFile: Boolean = false
+  val direction:  AccessDirection,
+  val crossFile:  Boolean) extends Identifiable {
 
   override def toString() = s"${identifier}"
 
@@ -22,13 +21,11 @@ sealed class GraphEdgeType(
   }
 
   // TODO: ewwww
-  def opposite: GraphEdgeType = new GraphEdgeType(identifier + ".reverse", edgeType, direction.reverse) {
-    override val crossFile: Boolean = crossFile
-  }
+  def opposite: GraphEdgeType = new GraphEdgeType(identifier + ".reverse", edgeType, direction.reverse, crossFile)
 }
 
 sealed class RubyGraphEdgeType(edgeTypeIn: RubyEdgeType, direction: AccessDirection)
-  extends GraphEdgeType(s"${IndexType.Ruby.identifier}::${edgeTypeIn.identifier}", edgeTypeIn, direction)
+  extends GraphEdgeType(s"${IndexType.Ruby.identifier}::${edgeTypeIn.identifier}", edgeTypeIn, direction, false)
 
 object RubyGraphEdgeType extends Plenumeration[RubyGraphEdgeType] {
   val follows = List(
@@ -49,8 +46,8 @@ object RubyGraphEdgeType extends Plenumeration[RubyGraphEdgeType] {
   case object Reference extends RubyGraphEdgeType(RubyEdgeType.Reference, AccessDirection.To)
 }
 
-sealed class JavascriptGraphEdgeType(identifierIn: String, edgeTypeIn: ESPrimaEdgeType, direction: AccessDirection)
-  extends GraphEdgeType(s"${IndexType.Javascript.identifier}::${identifierIn}", edgeTypeIn, direction)
+sealed class JavascriptGraphEdgeType(identifierIn: String, edgeTypeIn: ESPrimaEdgeType, direction: AccessDirection, crossFile: Boolean)
+  extends GraphEdgeType(s"${IndexType.Javascript.identifier}::${identifierIn}", edgeTypeIn, direction, crossFile)
 
 object JavascriptGraphEdgeType extends Plenumeration[JavascriptGraphEdgeType] {
 
@@ -59,56 +56,56 @@ object JavascriptGraphEdgeType extends Plenumeration[JavascriptGraphEdgeType] {
     AssignedAs,
     ReferenceOf)
 
-  case object DeclaredAs extends JavascriptGraphEdgeType("declared_as", ESPrimaEdgeType.Declare, AccessDirection.To)
-  case object AssignedAs extends JavascriptGraphEdgeType("assigned_as", ESPrimaEdgeType.Assignment, AccessDirection.To)
+  case object DeclaredAs extends JavascriptGraphEdgeType("declared_as", ESPrimaEdgeType.Declare, AccessDirection.To, crossFile = false)
+  case object AssignedAs extends JavascriptGraphEdgeType("assigned_as", ESPrimaEdgeType.Assignment, AccessDirection.To, crossFile = false)
 
-  case object ReferenceOf extends JavascriptGraphEdgeType("reference_of", ESPrimaEdgeType.Reference, AccessDirection.To)
-  case object InstanceOf extends JavascriptGraphEdgeType("instance_of", ESPrimaEdgeType.Class, AccessDirection.From)
+  case object ReferenceOf extends JavascriptGraphEdgeType("reference_of", ESPrimaEdgeType.Reference, AccessDirection.To, crossFile = false)
+  case object InstanceOf extends JavascriptGraphEdgeType("instance_of", ESPrimaEdgeType.Class, AccessDirection.From, crossFile = false)
 
-  case object ArgOf extends JavascriptGraphEdgeType("arg_of", ESPrimaEdgeType.Argument, AccessDirection.To)
+  case object ArgOf extends JavascriptGraphEdgeType("arg_of", ESPrimaEdgeType.Argument, AccessDirection.To, crossFile = false)
 
-  case object CallOf extends JavascriptGraphEdgeType("call_of", ESPrimaEdgeType.Call, AccessDirection.To)
-  case object MemberOf extends JavascriptGraphEdgeType("member_of", ESPrimaEdgeType.Member, AccessDirection.To)
+  case object CallOf extends JavascriptGraphEdgeType("call_of", ESPrimaEdgeType.Call, AccessDirection.To, crossFile = false)
+  case object MemberOf extends JavascriptGraphEdgeType("member_of", ESPrimaEdgeType.Member, AccessDirection.To, crossFile = false)
 
-  case object ArrayMember extends JavascriptGraphEdgeType("array_member", ESPrimaEdgeType.ArrayMember, AccessDirection.From)
-  case object ValueInObject extends JavascriptGraphEdgeType("value_in_object", ESPrimaEdgeType.ObjectValue, AccessDirection.From)
+  case object ArrayMember extends JavascriptGraphEdgeType("array_member", ESPrimaEdgeType.ArrayMember, AccessDirection.From, crossFile = false)
+  case object ValueInObject extends JavascriptGraphEdgeType("value_in_object", ESPrimaEdgeType.ObjectValue, AccessDirection.From, crossFile = false)
 
-  case object ClassConstructor extends JavascriptGraphEdgeType("constructor", ESPrimaEdgeType.Constructor, AccessDirection.From)
-  case object ClassExtends extends JavascriptGraphEdgeType("class_extends", ESPrimaEdgeType.SuperClass, AccessDirection.From)
-  case object ClassDecorator extends JavascriptGraphEdgeType("class_decorator", ESPrimaEdgeType.ClassDecorator, AccessDirection.From)
-  case object ClassMethod extends JavascriptGraphEdgeType("class_method", ESPrimaEdgeType.Method, AccessDirection.From)
-  case object ClassProperty extends JavascriptGraphEdgeType("class_property", ESPrimaEdgeType.ClassProperty, AccessDirection.From)
-  case object ClassPropertyValue extends JavascriptGraphEdgeType("class_property_value", ESPrimaEdgeType.ClassPropertyValue, AccessDirection.From)
+  case object ClassConstructor extends JavascriptGraphEdgeType("constructor", ESPrimaEdgeType.Constructor, AccessDirection.From, crossFile = false)
+  case object ClassExtends extends JavascriptGraphEdgeType("class_extends", ESPrimaEdgeType.SuperClass, AccessDirection.From, crossFile = false)
+  case object ClassDecorator extends JavascriptGraphEdgeType("class_decorator", ESPrimaEdgeType.ClassDecorator, AccessDirection.From, crossFile = false)
+  case object ClassMethod extends JavascriptGraphEdgeType("class_method", ESPrimaEdgeType.Method, AccessDirection.From, crossFile = false)
+  case object ClassProperty extends JavascriptGraphEdgeType("class_property", ESPrimaEdgeType.ClassProperty, AccessDirection.From, crossFile = false)
+  case object ClassPropertyValue extends JavascriptGraphEdgeType("class_property_value", ESPrimaEdgeType.ClassPropertyValue, AccessDirection.From, crossFile = false)
 
-  case object MethodFunction extends JavascriptGraphEdgeType("method_function", ESPrimaEdgeType.MethodFunction, AccessDirection.From)
-  case object MethodDecorator extends JavascriptGraphEdgeType("method_decorator", ESPrimaEdgeType.MethodDecorator, AccessDirection.From)
-  case object FunctionArgument extends JavascriptGraphEdgeType("function_argument", ESPrimaEdgeType.FunctionArgument, AccessDirection.From)
+  case object MethodFunction extends JavascriptGraphEdgeType("method_function", ESPrimaEdgeType.MethodFunction, AccessDirection.From, crossFile = false)
+  case object MethodDecorator extends JavascriptGraphEdgeType("method_decorator", ESPrimaEdgeType.MethodDecorator, AccessDirection.From, crossFile = false)
+  case object FunctionArgument extends JavascriptGraphEdgeType("function_argument", ESPrimaEdgeType.FunctionArgument, AccessDirection.From, crossFile = false)
 
-  case object FunctionContains extends JavascriptGraphEdgeType("function_contains", ESPrimaEdgeType.FunctionContains, AccessDirection.From)
-  case object FunctionReturn extends JavascriptGraphEdgeType("function_return", ESPrimaEdgeType.FunctionReturn, AccessDirection.To) //dep?
-  case object ReturnContains extends JavascriptGraphEdgeType("return_contains", ESPrimaEdgeType.ReturnContains, AccessDirection.From)
-  case object Return extends JavascriptGraphEdgeType("return", ESPrimaEdgeType.Return, AccessDirection.From)
-  case object Yield extends JavascriptGraphEdgeType("yield", ESPrimaEdgeType.Yield, AccessDirection.From)
-  case object Await extends JavascriptGraphEdgeType("await", ESPrimaEdgeType.Await, AccessDirection.From)
-  case object Throw extends JavascriptGraphEdgeType("throw", ESPrimaEdgeType.Throw, AccessDirection.From)
+  case object FunctionContains extends JavascriptGraphEdgeType("function_contains", ESPrimaEdgeType.FunctionContains, AccessDirection.From, crossFile = false)
+  case object FunctionReturn extends JavascriptGraphEdgeType("function_return", ESPrimaEdgeType.FunctionReturn, AccessDirection.To, crossFile = false) //dep?
+  case object ReturnContains extends JavascriptGraphEdgeType("return_contains", ESPrimaEdgeType.ReturnContains, AccessDirection.From, crossFile = false)
+  case object Return extends JavascriptGraphEdgeType("return", ESPrimaEdgeType.Return, AccessDirection.From, crossFile = false)
+  case object Yield extends JavascriptGraphEdgeType("yield", ESPrimaEdgeType.Yield, AccessDirection.From, crossFile = false)
+  case object Await extends JavascriptGraphEdgeType("await", ESPrimaEdgeType.Await, AccessDirection.From, crossFile = false)
+  case object Throw extends JavascriptGraphEdgeType("throw", ESPrimaEdgeType.Throw, AccessDirection.From, crossFile = false)
 
-  case object JSXAttribute extends JavascriptGraphEdgeType("jsx_attribute", ESPrimaEdgeType.JSXAttribute, AccessDirection.From)
-  case object JSXAttributeValue extends JavascriptGraphEdgeType("jsx_attribute_value", ESPrimaEdgeType.JSXAttributeValue, AccessDirection.From)
-  case object JSXTag extends JavascriptGraphEdgeType("jsx_tag", ESPrimaEdgeType.JSXTag, AccessDirection.From)
-  case object JSXChild extends JavascriptGraphEdgeType("jsx_child", ESPrimaEdgeType.JSXChild, AccessDirection.From)
+  case object JSXAttribute extends JavascriptGraphEdgeType("jsx_attribute", ESPrimaEdgeType.JSXAttribute, AccessDirection.From, crossFile = false)
+  case object JSXAttributeValue extends JavascriptGraphEdgeType("jsx_attribute_value", ESPrimaEdgeType.JSXAttributeValue, AccessDirection.From, crossFile = false)
+  case object JSXTag extends JavascriptGraphEdgeType("jsx_tag", ESPrimaEdgeType.JSXTag, AccessDirection.From, crossFile = false)
+  case object JSXChild extends JavascriptGraphEdgeType("jsx_child", ESPrimaEdgeType.JSXChild, AccessDirection.From, crossFile = false)
 
-  case object ObjectProperty extends JavascriptGraphEdgeType("object_property", ESPrimaEdgeType.ObjectProperty, AccessDirection.From)
-  case object ObjectValue extends JavascriptGraphEdgeType("object_value", ESPrimaEdgeType.ObjectValue, AccessDirection.From)
+  case object ObjectProperty extends JavascriptGraphEdgeType("object_property", ESPrimaEdgeType.ObjectProperty, AccessDirection.From, crossFile = false)
+  case object ObjectValue extends JavascriptGraphEdgeType("object_value", ESPrimaEdgeType.ObjectValue, AccessDirection.From, crossFile = false)
 
-  case object TemplateLiteral extends JavascriptGraphEdgeType("template_literal", ESPrimaEdgeType.TemplateLiteral, AccessDirection.From)
-  case object TemplateContains extends JavascriptGraphEdgeType("template_contains", ESPrimaEdgeType.TemplateContains, AccessDirection.From)
+  case object TemplateLiteral extends JavascriptGraphEdgeType("template_literal", ESPrimaEdgeType.TemplateLiteral, AccessDirection.From, crossFile = false)
+  case object TemplateContains extends JavascriptGraphEdgeType("template_contains", ESPrimaEdgeType.TemplateContains, AccessDirection.From, crossFile = false)
 
   // control
-  case object IfBlock extends JavascriptGraphEdgeType("if_block", ESPrimaEdgeType.IfBlock, AccessDirection.From)
-  case object IfTest extends JavascriptGraphEdgeType("if_test", ESPrimaEdgeType.IfTest, AccessDirection.From)
-  case object IfTestContains extends JavascriptGraphEdgeType("if_test_contains", ESPrimaEdgeType.IfTestContains, AccessDirection.From)
-  case object IfContains extends JavascriptGraphEdgeType("if_contains", ESPrimaEdgeType.IfContains, AccessDirection.From)
-  case object BasicExpression extends JavascriptGraphEdgeType("basic_expression", ESPrimaEdgeType.BasicExpression, AccessDirection.To)
+  case object IfBlock extends JavascriptGraphEdgeType("if_block", ESPrimaEdgeType.IfBlock, AccessDirection.From, crossFile = false)
+  case object IfTest extends JavascriptGraphEdgeType("if_test", ESPrimaEdgeType.IfTest, AccessDirection.From, crossFile = false)
+  case object IfTestContains extends JavascriptGraphEdgeType("if_test_contains", ESPrimaEdgeType.IfTestContains, AccessDirection.From, crossFile = false)
+  case object IfContains extends JavascriptGraphEdgeType("if_contains", ESPrimaEdgeType.IfContains, AccessDirection.From, crossFile = false)
+  case object BasicExpression extends JavascriptGraphEdgeType("basic_expression", ESPrimaEdgeType.BasicExpression, AccessDirection.To, crossFile = false)
 
   // Export links (TODO: delete?)
   // case object ExportKeyLink extends JavascriptGraphEdgeType("export_key_link", ESPrimaEdgeType.ExportKey, AccessDirection.From)
@@ -116,13 +113,11 @@ object JavascriptGraphEdgeType extends Plenumeration[JavascriptGraphEdgeType] {
   // case object LinkedTo extends JavascriptGraphEdgeType("linked_to", ESPrimaEdgeType.Link, AccessDirection.To)
 
   // Links
-  case object CallLink extends JavascriptGraphEdgeType("call_link", ESPrimaEdgeType.CallLink, AccessDirection.From) {
-    override val crossFile = true
-  }
+  case object CallLink extends JavascriptGraphEdgeType("call_link", ESPrimaEdgeType.CallLink, AccessDirection.From, crossFile = true)
 }
 
 sealed class GenericGraphEdgeType(category: String, edgeTypeIn: GenericEdgeType, direction: AccessDirection)
-  extends GraphEdgeType(edgeTypeIn.identifier, edgeTypeIn, direction)
+  extends GraphEdgeType(edgeTypeIn.identifier, edgeTypeIn, direction, false)
 
 private object GenericEdgeCategories {
   val SnapshotCategory = "snapshot"

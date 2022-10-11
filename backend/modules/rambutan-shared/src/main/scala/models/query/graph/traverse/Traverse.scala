@@ -62,9 +62,15 @@ case class EdgeTraverse(follow: EdgeTypeFollow, target: EdgeTypeTarget, typeHint
 }
 
 // traverses, emits all instead of spooling in a trace
+@deprecated
 case class RepeatedEdgeTraverse[T, TU](follow: EdgeTypeFollow, shouldTerminate: T => Boolean) extends Traverse {
   def isColumn = true
 
+}
+
+// how can we limit to edge and node traversal?
+case class RepeatedEdgeTraverseNew(inner: List[Traverse]) extends Traverse {
+  def isColumn = true
 }
 
 trait StatefulTeleport {

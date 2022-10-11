@@ -89,6 +89,10 @@ object GraphQuery {
   //     followExports.getOrElse(false))
   // }
 
+  private def repeatedTraverse[_: P] = P("repeated{" ~/ edgeTraverse ~ ("," ~ edgeTraverse).rep(0) ~ "}").map {
+    case (first, rest) => RepeatedEdgeTraverseNew(first :: rest.toList)
+  }
+
   /**
    * Nodes
    */
@@ -138,29 +142,14 @@ object GraphQuery {
       case (k, v) => k -> v.toList
     }.toMap
   }
-  // private def statefulFollowSetting[_: P] = P("follow=" ~/ (edgeTypeList | emptyEdgeTypeList))
-  // private def statefulTargetSetting[_: P] = P("target=" ~/ edgeTypeList)
-  // private def teleportFrom[_: P] = P("teleport_from=" ~/ nodeType)
-  // private def teleportTo[_: P] = P("teleport_to=" ~/ nodeType)
-  // private def statefulTraverse[_: P] = P("stateful_traverse[" ~ teleportFrom ~ "," ~ teleportTo ~ "," ~ statefulMapping ~ "," ~ statefulFollowSetting ~ "," ~ statefulTargetSetting ~ "]") map {
-  //   case (from, to, mapping, follow, target) => StatefulTraverse(from, to, mapping, follow.toList, target.toList)
-  // }
 
   /**
    * Subqueries
    */
-  // private def subquerySetting[_: P]: P[GraphQuery] = P("subquery={" ~ query ~ "}")
-
-  // private def subqueryTraverse[_: P] = P("traverse_subquery[" ~/ (followSetting ~ ",").? ~ subquerySetting ~ "]").map {
-  //   case (follow, subquery) => {
-  //     SubqueryTraverse(follow.getOrElse(EdgeTypeFollow.empty), subquery)
-  //   }
-  // }
-
   private def traverseSetting[_: P]: P[List[Traverse]] = P("traverses={" ~ traverse ~ ("." ~ traverse).rep(0) ~ "}") map {
     case (head, rest) => head :: rest.toList
   }
-  private def reverseTraverse[_: P]: P[ReverseTraverse] = P("reverse[" ~/ (followSetting ~ ",").? ~ traverseSetting ~ "]") map {
+  private def reverseTraverse[_: P]: P[ReverseTraverse] = P("reverse{" ~/ (followSetting ~ ",").? ~ traverseSetting ~ "}") map {
     case (follow, traverses) => ReverseTraverse(follow.getOrElse(EdgeTypeFollow.empty), traverses)
   }
 
@@ -170,10 +159,6 @@ object GraphQuery {
   private def filterTraverse[_: P]: P[FilterTraverse] = P("filter" ~ "{" ~/ traverse ~ ("." ~ traverse).rep(0) ~ "}") map {
     case (head, rest) => FilterTraverse(head :: rest.toList)
   }
-
-  // private def filterNotTraverse[_: P]: P[FilterNotTraverse] = P("filter_not" ~/ "{" ~/ traverse ~ ("." ~ traverse).rep(0) ~ "}") map {
-  //   case (head, rest) => FilterNotTraverse(head :: rest.toList)
-  // }
 
   /**
    * Targeting
@@ -194,7 +179,7 @@ object GraphQuery {
     case nodeFilters => GraphRoot(nodeFilters)
   }
 
-  def traverse[_: P] = P(edgeTraverse | nodeTraverse | onehopTraverse | onehopReverse | filterTraverse | reverseTraverse) // cannot do statefulTraverse
+  def traverse[_: P] = P(edgeTraverse | nodeTraverse | onehopTraverse | onehopReverse | filterTraverse | reverseTraverse | repeatedTraverse)
 
   private def targeting[_: P] = P("%targeting(" ~ fileSetting ~ ")").map {
     case file => QueryTargetingRequest.AllLatest(Some(file))

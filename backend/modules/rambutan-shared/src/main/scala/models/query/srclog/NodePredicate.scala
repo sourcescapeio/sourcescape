@@ -26,6 +26,13 @@ sealed abstract class SimpleNodePredicate(identifierIn: String, val nodeType: No
   }
 }
 
+// hopefully identifier not used
+case class OrNodePredicate(in: List[SimpleNodePredicate]) extends NodePredicate(in.map(_.identifier).mkString(" or ")) {
+  def filters(conditions: Option[Condition]) = {
+    NodeTypesFilter(in.map(_.nodeType)) :: conditions.map(_.filter).toList
+  }
+}
+
 /**
  * Ruby
  */
@@ -167,5 +174,9 @@ object UniversalNodePredicate extends Plenumeration[NodePredicate] {
 object NodePredicate extends Plenumeration[NodePredicate] {
   override val all = {
     UniversalNodePredicate.all ++ GenericGraphNodePredicate.all ++ IndexType.all.flatMap(_.nodePredicate.all)
+  }
+
+  def or(inner: SimpleNodePredicate*) = {
+    OrNodePredicate(inner.toList)
   }
 }
