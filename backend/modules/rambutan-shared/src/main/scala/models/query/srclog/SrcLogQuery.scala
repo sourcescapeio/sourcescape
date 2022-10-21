@@ -5,6 +5,7 @@ import play.api.libs.json._
 import fastparse._
 import MultiLineWhitespace._
 import models.graph.GenericGraphProperty
+import models.index.ruby.OrNode
 
 trait SrcLogQuery {
 
@@ -61,20 +62,73 @@ trait SrcLogQuery {
     }
   }
 
+  // We do assume all variable ids are the same in NodeClause
+  private def findMostSpecific(variable: String, nodes: List[NodeClause]): NodeClause = {
+    def nextSpecific(a: NodeClause, b: NodeClause) = {
+      // strongest condition
+      val bestCondition = (a.condition, b.condition) match {
+        case (Some(ac), Some(bc)) => {
+          if (ac =?= bc) {
+            Some(bc)
+          } else {
+            throw new Exception(s"condition conflict ${a.condition} ${b.condition}")
+          }
+        }
+        case (Some(ac), None) => Some(ac)
+        case (None, Some(bc)) => Some(bc)
+        case _                => None
+      }
+
+      val bestPredicate = (a.predicate, b.predicate) match {
+        case (aPred: SimpleNodePredicate, bPred: SimpleNodePredicate) => {
+          if (aPred.nodeType =?= bPred.nodeType) {
+            aPred // and condition
+          } else {
+            throw new Exception(s"predicate conflict ${aPred} ${bPred}")
+          }
+        }
+        case (aPred: SimpleNodePredicate, bPred: OrNodePredicate) => {
+          if (bPred.in.contains(a.predicate)) {
+            aPred
+          } else {
+            throw new Exception(s"predicate conflict ${aPred} ${bPred}")
+          }
+        }
+        case (aPred: OrNodePredicate, bPred: SimpleNodePredicate) => {
+          if (aPred.in.contains(bPred)) {
+            bPred
+          } else {
+            throw new Exception(s"predicate conflict ${aPred} ${bPred}")
+          }
+        }
+        case (aPred: OrNodePredicate, bPred: OrNodePredicate) => {
+          val inter = aPred.in.intersect(bPred.in)
+          if (inter.length > 0) {
+            OrNodePredicate(inter)
+          } else {
+            throw new Exception(s"predicate conflict ${aPred} ${bPred}")
+          }
+        }
+        case _ => throw new Exception("unimplemented")
+      }
+
+      NodeClause(bestPredicate, variable, bestCondition)
+    }
+
+    nodes match {
+      case Nil         => throw new Exception("should never happen. empty nodes list.")
+      case head :: Nil => head
+      case head :: rest => {
+        rest.foldLeft(head) {
+          case (acc, next) => nextSpecific(acc, next)
+        }
+      }
+    }
+  }
+
   lazy val allNodes = {
     (nodes ++ edges.flatMap(_.implicitNodes)).groupBy(_.variable).map {
-      case (k, vs) => {
-        // dedupe nodes
-        if (vs.map(_.predicate).distinct.length > 1) {
-          throw new Exception(s"invalid nodes. multiple predicate types: ${k} ${vs.map(_.predicate)}")
-        }
-        vs.maxBy { v =>
-          v.condition match {
-            case Some(_) => 1
-            case _       => 0
-          }
-        } // assume predicate is unique
-      }
+      case (k, vs) => findMostSpecific(k, vs)
     }.toList
   }
 

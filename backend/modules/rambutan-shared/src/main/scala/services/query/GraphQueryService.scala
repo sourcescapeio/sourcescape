@@ -48,9 +48,6 @@ class GraphQueryService @Inject() (
   val RecursionSize = 10000
   val ExportHopSize = 10000
 
-  // ???
-  val StatefulBatchSize = 200
-
   /**
    *
    */
@@ -623,7 +620,6 @@ class GraphQueryService @Inject() (
           nodeHint)
         allResults <- source.runWith(models.Sinks.ListAccum[EdgeHop[T]])
         (cross, notCross) = allResults.partition { i =>
-          println(i.directedEdge, i.directedEdge.crossFile)
           i.directedEdge.crossFile
         }
         // TODO: this is ugly
