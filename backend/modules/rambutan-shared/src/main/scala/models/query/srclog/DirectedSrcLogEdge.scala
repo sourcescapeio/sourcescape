@@ -69,6 +69,10 @@ case class DirectedSrcLogEdge(
       case Some(NameCondition(v)) => Some(v)
       case _                      => None
     }
+    val multiName = condition match {
+      case Some(MultiNameCondition(p)) => p
+      case _                           => Nil
+    }
     val props = condition match {
       case Some(GraphPropertyCondition(p)) => p
       case _                               => Nil

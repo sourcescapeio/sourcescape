@@ -157,7 +157,10 @@ object SrcLogQuery {
   // Right now can't name a property index or name for Generic
   private def indexCondition[_: P] = P("index" ~ "=" ~ Lexical.numChars) map (idx => IndexCondition(idx.toInt))
   private def nameCondition[_: P] = P("name" ~ "=" ~ "\"" ~ quotedChars ~ "\"") map (name => NameCondition(name))
-  private def conditionsBlock[_: P] = P("[" ~/ (indexCondition | nameCondition) ~ "]")
+  private def namesCondition[_: P] = P("names" ~ "={" ~ ("\"" ~ quotedChars ~ "\"") ~ ("," ~ "\"" ~ quotedChars ~ "\"").rep(0) ~ "}") map {
+    case (head, rest) => MultiNameCondition(head :: rest.toList)
+  }
+  private def conditionsBlock[_: P] = P("[" ~/ (indexCondition | nameCondition | namesCondition) ~ "]")
 
   private def propConditionsBlock[_: P] = P("{" ~ propCondition ~ ("," ~ propCondition).rep(0) ~ "}") map {
     case (head, rest) => GraphPropertyCondition(head :: rest.toList)

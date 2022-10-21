@@ -83,12 +83,13 @@ object QueryString {
 
   private def stringifyNodeFilter(item: NodeFilter) = {
     item match {
-      case NodeTypeFilter(typ)       => "  type=" + typ.identifier
-      case NodeTypesFilter(inner)    => "  types=" + inner.map(_.identifier).mkString(",")
-      case NodeNotTypesFilter(types) => "  not_types=(" + types.map(_.identifier).mkString(",") + ")"
-      case NodeNameFilter(name)      => "  name=\"" + name + "\""
-      case NodeIndexFilter(index)    => "  index=\"" + index + "\""
-      case NodeIdFilter(id)          => "  id=" + id
+      case NodeTypeFilter(typ)        => "  type=" + typ.identifier
+      case NodeTypesFilter(inner)     => "  types=" + inner.map(_.identifier).mkString(",")
+      case NodeNotTypesFilter(types)  => "  not_types=(" + types.map(_.identifier).mkString(",") + ")"
+      case NodeNameFilter(name)       => "  name=\"" + name + "\""
+      case NodeMultiNameFilter(names) => "  names={" + names.map("\"" + _ + "\"").mkString(",") + "}"
+      case NodeIndexFilter(index)     => "  index=\"" + index + "\""
+      case NodeIdFilter(id)           => "  id=" + id
       case NodePropsFilter(props) => "  props=(" + props.map {
         case GenericGraphProperty(k, v) => k + "=\"" + v + "\""
       }.mkString(", ") + ")"

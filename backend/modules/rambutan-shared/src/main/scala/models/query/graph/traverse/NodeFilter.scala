@@ -27,6 +27,10 @@ case class NodeIndexFilter(index: Int) extends NodeFilter {
   def query = ESQuery.termSearch("index", index.toString)
 }
 
+case class NodeMultiNameFilter(names: List[String]) extends NodeFilter {
+  def query = ESQuery.termsSearch("search_name", names)
+}
+
 case class NodeNameFilter(nameQuery: String) extends NodeFilter {
 
   def query = Traverse.extractNameQuery("search_name", nameQuery)

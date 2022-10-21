@@ -4,18 +4,22 @@ object SrcLogString {
 
   def stringifyNode(node: NodeClause) = {
     val conditionStanza = node.condition match {
-      case Some(NameCondition(v))  => "[name = \"" + v + "\"]"
-      case Some(IndexCondition(v)) => s"[index = ${v}]"
-      case _                       => ""
+      case Some(NameCondition(v))       => "[name = \"" + v + "\"]"
+      case Some(MultiNameCondition(vs)) => "[names={" + vs.map("\"" + _ + "\"").mkString(",") + "}]"
+      case Some(IndexCondition(v))      => s"[index = ${v}]"
+      case None                         => ""
+      case _                            => "??"
     }
     s"${node.predicate.identifier}(${node.variable})" + conditionStanza + "."
   }
 
   def stringifyEdge(edge: EdgeClause) = {
     val conditionStanza = edge.condition match {
-      case Some(NameCondition(v))  => "[name = \"" + v + "\"]"
-      case Some(IndexCondition(v)) => s"[index = ${v}]"
-      case _                       => ""
+      case Some(NameCondition(v))       => "[name = \"" + v + "\"]"
+      case Some(MultiNameCondition(vs)) => "[names={" + vs.map("\"" + _ + "\"").mkString(",") + "}]"
+      case Some(IndexCondition(v))      => s"[index = ${v}]"
+      case None                         => ""
+      case _                            => "??"
     }
 
     s"${edge.predicate.identifier}(${edge.from}, ${edge.to})" + conditionStanza + "."

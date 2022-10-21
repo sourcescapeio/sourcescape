@@ -82,13 +82,6 @@ object GraphQuery {
     case follow => OneHopTraverse(EdgeTypeFollow.all.map(_.reverse))
   }
 
-  // private def repeatedTraverse[_:P] = P("traverse_repeated[" ~/ (followSetting ~ ",").? ~ targetSetting ~ ("," ~ followExportsSEtting).? ~ "]") map {
-  //   case (follow, target, followExports) => EdgeTraverseRepeated(
-  //     follow.getOrElse(EdgeTypeFollow.empty),
-  //     target,
-  //     followExports.getOrElse(false))
-  // }
-
   private def repeatedTraverse[_: P] = P("repeated{" ~/ edgeTraverse ~ ("," ~ edgeTraverse).rep(0) ~ "}").map {
     case (first, rest) => RepeatedEdgeTraverseNew(first :: rest.toList)
   }
@@ -106,6 +99,9 @@ object GraphQuery {
     case (head, rest) => NodeNotTypesFilter(head :: rest.toList)
   }
   private def nodeNameFilter[_: P] = P("name=\"" ~/ Lexical.quotedChars ~ "\"") map (name => NodeNameFilter(name.trim))
+  private def nodeNamesFilter[_: P] = P("names={\"" ~/ ("\"" ~ Lexical.quotedChars ~ "\"") ~ ("," ~ "\"" ~ Lexical.quotedChars ~ "\"").rep(0) ~ "}") map {
+    case (head, rest) => NodeMultiNameFilter(head :: rest.toList)
+  }
   private def nodeIndexFilter[_: P] = P("index=\"" ~/ Lexical.numChars ~ "\"") map (idx => NodeIndexFilter(idx.toInt))
 
   private def nodeProp[_: P] = P(Lexical.keywordChars ~ "=\"" ~ Lexical.quotedChars ~ "\"") map {
@@ -120,7 +116,7 @@ object GraphQuery {
 
   private def nodeIdTargetSetting[_: P] = P(nodeIdFilter) map (_ :: Nil)
   private def nodeNotTypesTargetSetting[_: P] = P(nodeNotTypesFilter) map (_ :: Nil)
-  private def nodeTypeTargetSetting[_: P] = P(nodeTypeFilter ~ ("," ~ (nodeIndexFilter | nodeNameFilter | nodePropsFilter)).?) map {
+  private def nodeTypeTargetSetting[_: P] = P(nodeTypeFilter ~ ("," ~ (nodeIndexFilter | nodeNamesFilter | nodeNameFilter | nodePropsFilter)).?) map {
     case (a, b) => a :: b.toList
   }
   private def nodeTargetSetting[_: P] = P("target=(" ~ (nodeIdTargetSetting | nodeNotTypesTargetSetting | nodeTypeTargetSetting) ~ ")")

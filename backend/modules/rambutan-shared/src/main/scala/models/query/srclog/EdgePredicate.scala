@@ -97,7 +97,6 @@ object RubyEdgePredicate extends Plenumeration[RubyEdgePredicate] {
     override val ingressReferences = true
 
     override def queryTraverse(name: Option[String], index: Option[Int], props: List[GenericGraphProperty], follow: List[GraphEdgeType]) = {
-      println("FOLLOW", follow)
       List(
         EdgeTraverse(
           follow = edgeTypeFollow(follow),
