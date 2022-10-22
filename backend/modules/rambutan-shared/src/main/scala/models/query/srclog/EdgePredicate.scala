@@ -669,8 +669,7 @@ object JavascriptEdgePredicate extends Plenumeration[JavascriptEdgePredicate] {
 
     override def fromImplicit = Some(NodePredicate.or(
       JavascriptNodePredicate.ClassMethod,
-      JavascriptNodePredicate.Function
-    ))
+      JavascriptNodePredicate.Function))
 
     override val singleDirection = true
 
@@ -688,46 +687,25 @@ object JavascriptEdgePredicate extends Plenumeration[JavascriptEdgePredicate] {
   case object AllCalled extends JavascriptEdgePredicate("all_called") {
     override def fromImplicit = Some(NodePredicate.or(
       JavascriptNodePredicate.ClassMethod,
-      JavascriptNodePredicate.Function
-    ))
+      JavascriptNodePredicate.Function))
 
     override def toImplicit = Some(NodePredicate.or(
       JavascriptNodePredicate.ClassMethod,
-      JavascriptNodePredicate.Function
-    ))
+      JavascriptNodePredicate.Function))
 
-    override val preferReverse: Boolean = true
+    override val singleDirection: Boolean = true
 
     override def queryTraverse(name: Option[String], index: Option[Int], props: List[GenericGraphProperty], follow: List[GraphEdgeType]) = {
       RepeatedEdgeTraverseNew(
         List(
           EdgeTraverse(
             follow = edgeTypeFollow(JavascriptGraphEdgeType.MethodFunction :: Nil),
-            target = EdgeTypeTarget(EdgeTypeTraverse.basic(JavascriptGraphEdgeType.FunctionContains) :: Nil)
-          ),
+            target = EdgeTypeTarget(EdgeTypeTraverse.basic(JavascriptGraphEdgeType.FunctionContains) :: Nil)),
           EdgeTraverse(
             follow = edgeTypeFollow(Nil),
-            target = EdgeTypeTarget(EdgeTypeTraverse.basic(JavascriptGraphEdgeType.CallLink) :: Nil)
-          )
-        )        
-      ) :: Nil
+            target = EdgeTypeTarget(EdgeTypeTraverse.basic(JavascriptGraphEdgeType.CallLink) :: Nil)))) :: Nil
     }
-
-    override def reverseTraverse(name: Option[String], index: Option[Int], props: List[GenericGraphProperty], follow: List[GraphEdgeType]) = {
-      RepeatedEdgeTraverseNew(
-        List(
-          EdgeTraverse(
-            follow = edgeTypeFollow(JavascriptGraphEdgeType.MethodFunction.opposite :: Nil),
-            target = EdgeTypeTarget(EdgeTypeTraverse.basic(JavascriptGraphEdgeType.CallLink).reverse :: Nil)
-          ),
-          EdgeTraverse(
-            follow = edgeTypeFollow(Nil), // JavascriptGraphEdgeType.MethodFunction :: Nil
-            target = EdgeTypeTarget(EdgeTypeTraverse.basic(JavascriptGraphEdgeType.FunctionContains).reverse :: Nil)
-          ),
-        )
-      ) :: Nil
-    }    
-  }  
+  }
 
 }
 

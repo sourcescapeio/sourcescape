@@ -16,58 +16,109 @@ class SrcLogCompilerService @Inject() (
 
   val SrcLogLimit = 10
 
-  // private def bestNodeClauseMap
+  /**
+   * Local stuff
+   */
+  def compileQueryMultiple[TU](query: SrcLogQuery)(implicit targeting: QueryTargeting[TU]): Future[Map[String, RelationalQuery]] = {
+    val extractedComponents = SrcLogOperations.extractComponents(query)
 
-  private def spliceAdditionalNodeTraversals(tree: List[DirectedSrcLogEdge], nodesToCheck: Map[String, NodeClause]) = {
-    // This adds an extra node check to the edge
-    tree.map { directedEdge =>
-      // TODO: this is bad. we need to genericize
-      nodesToCheck.get(directedEdge.to) match {
-        case _ if directedEdge.forceForwardDirection => {
-          // don't traverse this way
-          // for diffs, don't traverse because
-          directedEdge
+    for {
+      optimized <- Future.sequence {
+        extractedComponents.map {
+          case (k, v) => {
+            compileQuery(v).map(k -> _)
+          }
         }
-        case Some(toNode) if Option(toNode.predicate) =/= directedEdge.intoImplicit || toNode.condition.isDefined => {
-          // filter down in case edge is not specific enough
-          // the implicit name / index condition should be handled by the edge search
-          directedEdge.copy(nodeCheck = Some(toNode))
+      }
+    } yield {
+      optimized.toMap
+    }
+  }
+
+  def compileQuery[TU](query: SrcLogQuery)(implicit targeting: QueryTargeting[TU]): Future[RelationalQuery] = {
+    // hard code for now as we're only dealing with Javascript
+    optimizeQuery(query)
+  }
+
+  /**
+   * Core logic
+   */
+  private def optimizeQuery[TU](query: SrcLogQuery)(implicit targeting: QueryTargeting[TU]): Future[RelationalQuery] = {
+    // select node
+    val (edges, penalties) = getPenalties(query)
+    println(penalties)
+    for {
+      root <- chooseRoots(penalties, query.allNodes)
+      tree = spanningTree(root.variable, query.vertexes, edges)
+      q = buildRelationalQuery(root, tree, query)
+    } yield {
+      q
+    }
+  }
+
+  /**
+   * Steps
+   */
+  private def getPenalties[TU](query: SrcLogQuery)(implicit targeting: QueryTargeting[TU]) = {
+    val allNodes = query.allNodes
+
+    val baseTraversableEdges = query.baseTraversableEdges
+
+    val withFlips = baseTraversableEdges.flatMap {
+      case e if e.predicate.singleDirection && e.reverse => {
+        // inject typeHint here <<<
+        val hintNode = allNodes.find(_.variable =?= e.from).map(_.predicate)
+        val flipped = e.flip(hintNode)
+        List(flipped, e)
+      }
+      case other => {
+        other :: Nil
+      }
+    }
+
+    findRoots(withFlips, query.vertexes) match {
+      case Nil => {
+        throw new Exception("invalid srclog. could not find valid path")
+      }
+      case roots => {
+        val possibleRoots = roots.map {
+          case (node, edges) => {
+            val forwardContains = edges.count(e => !e.reverse && e.predicate.singleDirection)
+            (node, edges, forwardContains)
+          }
         }
-        case any if directedEdge.mustNodeTraverse => {
-          // for references we must traverse
-          // TODO: need to make universal
-          val toNode = any.getOrElse(NodeClause(JavascriptNodePredicate.NotIdentifierRef, "?", None)) // variable name ignored
-          directedEdge.copy(nodeCheck = Some(toNode))
+
+        val penalties = query.root.flatMap { s =>
+          possibleRoots.find(_._1 =?= s).map(r => Map(r._1 -> r._3))
+        }.getOrElse {
+          possibleRoots.map(r => r._1 -> r._3).toMap
         }
-        case _ => directedEdge
+
+        (withFlips, penalties)
       }
     }
   }
 
-  private def buildNodeClauseMap(query: SrcLogQuery) = {
-    query.allNodes.groupBy(_.variable) flatMap {
-      case (k, vs) => {
-        vs match {
-          case Nil      => None
-          case a :: Nil => Some(k -> a)
-          case a :: more => {
-            val mostExact = more.foldLeft(a) {
-              case (curr, next) => {
-                if (curr.predicate =/= next.predicate) {
-                  throw new Exception(s"multiple constraints for node ${k} ${curr.predicate} ${next.predicate}")
-                } else {
-                  if (next.condition.isDefined && curr.condition.isEmpty) {
-                    next
-                  } else {
-                    curr
-                  }
-                }
-              }
-            }
-            Some(k -> mostExact)
-          }
-        }
+  private def chooseRoots[TU](nodePenalties: Map[String, Int], allNodes: List[NodeClause])(implicit targeting: QueryTargeting[TU]) = {
+    val nodesToCheck = allNodes.flatMap { n =>
+      nodePenalties.get(n.variable) map { penalty =>
+        n -> penalty
       }
+    }
+
+    val base = nodesToCheck.map {
+      case (node, penalty) => {
+        val query = node.getQuery
+        elasticSearchService.count(
+          targeting.nodeIndexName,
+          targeting.rootQuery(query.root)) map { resp =>
+            (node, (resp \ "count").as[Long] * math.pow(4, penalty))
+          }
+      }
+    }
+
+    Future.sequence(base).map { res =>
+      res.minBy(_._2)._1
     }
   }
 
@@ -134,8 +185,67 @@ class SrcLogCompilerService @Inject() (
       offset = None,
       limit = None,
       forceOrdering = None)
+  }  
+
+  /**
+    * Relational query helpers
+    */
+  private def buildNodeClauseMap(query: SrcLogQuery): Map[String, NodeClause] = {
+    query.allNodes.groupBy(_.variable) flatMap {
+      case (k, vs) => {
+        vs match {
+          case Nil      => None
+          case a :: Nil => Some(k -> a)
+          case a :: more => {
+            val mostExact = more.foldLeft(a) {
+              case (curr, next) => {
+                if (curr.predicate =/= next.predicate) {
+                  throw new Exception(s"multiple constraints for node ${k} ${curr.predicate} ${next.predicate}")
+                } else {
+                  if (next.condition.isDefined && curr.condition.isEmpty) {
+                    next
+                  } else {
+                    curr
+                  }
+                }
+              }
+            }
+            Some(k -> mostExact)
+          }
+        }
+      }
+    }
+  }    
+
+  private def spliceAdditionalNodeTraversals(tree: List[DirectedSrcLogEdge], nodesToCheck: Map[String, NodeClause]): List[DirectedSrcLogEdge] = {
+    // This adds an extra node check to the edge
+    tree.map { directedEdge =>
+      // TODO: this is bad. we need to genericize
+      nodesToCheck.get(directedEdge.to) match {
+        case _ if directedEdge.forceForwardDirection => {
+          // don't traverse this way
+          // for diffs, don't traverse because
+          directedEdge
+        }
+        case Some(toNode) if Option(toNode.predicate) =/= directedEdge.intoImplicit || toNode.condition.isDefined => {
+          // filter down in case edge is not specific enough
+          // the implicit name / index condition should be handled by the edge search
+          directedEdge.copy(nodeCheck = Some(toNode))
+        }
+        case any if directedEdge.mustNodeTraverse => {
+          // for references we must traverse
+          // TODO: need to make universal
+          val toNode = any.getOrElse(NodeClause(JavascriptNodePredicate.NotIdentifierRef, "?", None)) // variable name ignored
+          directedEdge.copy(nodeCheck = Some(toNode))
+        }
+        case _ => directedEdge
+      }
+    }
   }
 
+  /**
+    * Helpers
+    */
   /**
    * Algo (DFS):
    * 1. Start with root node as frontier
@@ -167,113 +277,11 @@ class SrcLogCompilerService @Inject() (
    * Algo:
    * 1. Take all nodes that can traverse to every other node
    * 2. Pick node with smallest count
-   */
-  private def chooseRoots[TU](nodePenalties: Map[String, Int], query: SrcLogQuery)(implicit targeting: QueryTargeting[TU]) = {
-    val nodesToCheck = query.allNodes.flatMap { n =>
-      nodePenalties.get(n.variable) map { penalty =>
-        n -> penalty
-      }
-    }
-    val base = nodesToCheck.map {
-      case (node, penalty) => {
-        val query = node.getQuery
-        elasticSearchService.count(
-          targeting.nodeIndexName,
-          targeting.rootQuery(query.root)) map { resp =>
-            (node, (resp \ "count").as[Long] * math.pow(2, penalty))
-          }
-      }
-    }
-
-    Future.sequence(base).map { res =>
-      val bestRoot = res.minBy(_._2)._1
-      (bestRoot, res)
-    }
-  }
-
-  private def getPenalties[TU](query: SrcLogQuery)(implicit targeting: QueryTargeting[TU]) = {
-    val allNodes = query.allNodes
-
-    val baseTraversableEdges = query.baseTraversableEdges
-
-    val withFlips = baseTraversableEdges.flatMap {
-      case e if e.predicate.singleDirection && e.reverse => {
-        // inject typeHint here <<<
-        val hintNode = allNodes.find(_.variable =?= e.from).map(_.predicate)
-        val flipped = e.flip(hintNode)
-        List(flipped, e)
-      }
-      case other => {
-        other :: Nil
-      }
-    }
-
-    findRoots(withFlips, query.vertexes) match {
-      case Nil => {
-        throw new Exception("invalid srclog. could not find valid path")
-      }
-      case roots => {
-        val possibleRoots = roots.map {
-          case (node, edges) => {
-            val forwardContains = edges.count(e => !e.reverse && e.predicate.singleDirection)
-            (node, edges, forwardContains)
-          }
-        }
-
-        val penalties = query.root.flatMap { s =>
-          possibleRoots.find(_._1 =?= s).map(r => Map(r._1 -> r._3))
-        }.getOrElse {
-          possibleRoots.map(r => r._1 -> r._3).toMap
-        }
-
-        (withFlips, penalties)
-      }
-    }
-  }
-
+   */  
   private def findRoots(edges: List[DirectedSrcLogEdge], allVertexes: Set[String]): List[(String, List[DirectedSrcLogEdge])] = {
     // for a representative item in components, verifyConnection
     allVertexes.toList.flatMap { v =>
       scala.util.Try(spanningTree(v, allVertexes, edges)).toOption.map(v -> _)
     }
-  }
-
-  /**
-   *
-   */
-  private def optimizeQuery[TU](query: SrcLogQuery)(implicit targeting: QueryTargeting[TU]): Future[RelationalQuery] = {
-    // select node
-    val (edges, penalties) = getPenalties(query)
-    for {
-      (root, possibleRoots) <- chooseRoots(penalties, query)
-      tree = spanningTree(root.variable, query.vertexes, edges)
-      q = buildRelationalQuery(root, tree, query)
-    } yield {
-      q
-    }
-  }
-
-  /**
-   * Local stuff
-   */
-  def compileQueryMultiple[TU](query: SrcLogQuery)(implicit targeting: QueryTargeting[TU]): Future[Map[String, RelationalQuery]] = {
-    val extractedComponents = SrcLogOperations.extractComponents(query)
-
-    for {
-      optimized <- Future.sequence {
-        extractedComponents.map {
-          case (k, v) => {
-            compileQuery(v).map(k -> _)
-          }
-        }
-      }
-    } yield {
-      optimized.toMap
-    }
-  }
-
-  def compileQuery[TU](query: SrcLogQuery)(implicit targeting: QueryTargeting[TU]): Future[RelationalQuery] = {
-    // hard code for now as we're only dealing with Javascript
-    optimizeQuery(query)
-  }
+  }    
 }

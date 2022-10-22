@@ -475,7 +475,17 @@ class GraphQueryService @Inject() (
       }
       // We never reverse these
       case ((flow, prevFollow), RepeatedEdgeTraverseNew(inner)) => {
-        throw new Exception("invalid reversal: repeated")
+        val (nextFollow, remappedTraverse) = inner.reverse.foldLeft((prevFollow, List.empty[EdgeTraverse])) {
+          case ((prev, acc), next) => {
+            (next.follow, acc :+ EdgeTraverse(prev, next.target, None))
+          }
+        }
+
+        val nextFlow = flow.via {
+          repeatedEdgeTraverseNew(RepeatedEdgeTraverseNew(remappedTraverse))
+        }
+
+        (nextFlow, nextFollow)
       }
       case ((flow, prevFollow), RepeatedEdgeTraverse(_, _)) => {
         throw new Exception("invalid reversal: repeated.legacy")

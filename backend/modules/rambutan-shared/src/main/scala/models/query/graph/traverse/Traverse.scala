@@ -69,7 +69,7 @@ case class RepeatedEdgeTraverse[T, TU](follow: EdgeTypeFollow, shouldTerminate: 
 }
 
 // how can we limit to edge and node traversal?
-case class RepeatedEdgeTraverseNew(inner: List[Traverse]) extends Traverse {
+case class RepeatedEdgeTraverseNew(inner: List[EdgeTraverse]) extends Traverse {
   def isColumn = true
 }
 
