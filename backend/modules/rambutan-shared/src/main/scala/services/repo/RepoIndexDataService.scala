@@ -81,65 +81,6 @@ class RepoIndexDataService @Inject() (
     }
   }
 
-  def getChain(orgId: Int, repoId: Int, nodes: List[NodeClause], edges: List[EdgeClause], predicate: GenericEdgePredicate, leading: String)(implicit context: SpanContext) = {
-    implicit val targeting = GenericGraphTargeting(orgId)
-
-    val A = "A"
-    val B = "B"
-    val Final = "Final"
-
-    val Grouping = 10
-
-    val Initial = ((false, Option.empty[String]), List.empty[RepoSHA])
-
-    Source.repeat(()).scanAsync(Initial) {
-      case (((_, sha), _), _) => {
-
-        val (calcNodes, calcEdges) = sha match {
-          case Some(s) => {
-            (
-              List(
-                NodeClause(GenericGraphNodePredicate.GitCommit, leading, Some(
-                  GraphPropertyCondition(
-                    GenericGraphProperty("sha", s) :: Nil)))),
-                Nil)
-          }
-          case None => {
-            (nodes, edges)
-          }
-        }
-
-        for {
-          source <- srcLogQueryService.runQueryGeneric(SrcLogGenericQuery(
-            nodes = calcNodes,
-            edges = calcEdges ++ List(
-              EdgeClause(
-                predicate,
-                from = leading,
-                to = Final,
-                condition = Some(
-                  GraphPropertyCondition(
-                    GenericGraphProperty("limit", Grouping.toString()) :: Nil)), modifier = None)),
-            root = None,
-            selected = Nil))
-          chainData <- source.runWith(Sinks.ListAccum)
-          shas <- getSHAs(repoId, List(Final), chainData)
-        } yield {
-          // shas.foreach(println)
-
-          val isTerminal = shas.length < Grouping
-          val lastSHA = shas.lastOption.map(_.sha)
-
-          ((isTerminal, lastSHA), shas)
-        }
-      }
-    }.takeWhile {
-      case ((isTerminal, _), shas) => {
-        !isTerminal || shas.nonEmpty
-      }
-    }.mapConcat(i => i._2)
-  }
-
   def getBelowChain(orgId: Int, repoId: Int, sha: String)(implicit context: SpanContext): Future[List[RepoSHA]] = {
     implicit val targeting = GenericGraphTargeting(orgId)
 

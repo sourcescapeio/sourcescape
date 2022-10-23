@@ -27,6 +27,10 @@ sealed abstract class EdgePredicate(
       queryTraverse(name, index, props, Nil)) :: Nil
   }
 
+  // used when emitting possible directed edges
+  val forceForward: Boolean = false
+  val forceReverse: Boolean = false
+
   /**
     * Cost parameters
     */
@@ -755,49 +759,6 @@ object GenericGraphEdgePredicate extends Plenumeration[GenericEdgePredicate] {
   }
 
   /**
-   * Snapshots
-   */
-  case object SnapshotRow extends BasicGenericEdgePredicate(
-    from = GenericGraphNodePredicate.Snapshot,
-    to = GenericGraphNodePredicate.SnapshotRow,
-    edgeType = GenericGraphEdgeType.SnapshotRow)
-
-  case object SnapshotRowCell extends BasicGenericEdgePredicate(
-    from = GenericGraphNodePredicate.SnapshotRow,
-    to = GenericGraphNodePredicate.SnapshotCell,
-    edgeType = GenericGraphEdgeType.SnapshotRowCell)
-
-  case object SnapshotCellData extends BasicGenericEdgePredicate(
-    from = GenericGraphNodePredicate.SnapshotCell,
-    to = GenericGraphNodePredicate.SnapshotCellData,
-    edgeType = GenericGraphEdgeType.SnapshotCellData)
-
-  case object SnapshotColumnCell extends BasicGenericEdgePredicate(
-    from = GenericGraphNodePredicate.SchemaColumn,
-    to = GenericGraphNodePredicate.SnapshotCell,
-    edgeType = GenericGraphEdgeType.SnapshotColumnCell)
-
-  case object SchemaColumn extends BasicGenericEdgePredicate(
-    from = GenericGraphNodePredicate.Schema,
-    to = GenericGraphNodePredicate.SchemaColumn,
-    edgeType = GenericGraphEdgeType.SchemaColumn)
-
-  case object SchemaSnapshot extends BasicGenericEdgePredicate(
-    from = GenericGraphNodePredicate.Schema,
-    to = GenericGraphNodePredicate.Snapshot,
-    edgeType = GenericGraphEdgeType.SchemaSnapshot)
-
-  case object SnapshotRowAnnotation extends BasicGenericEdgePredicate(
-    from = GenericGraphNodePredicate.SnapshotRow,
-    to = GenericGraphNodePredicate.Annotation,
-    edgeType = GenericGraphEdgeType.SnapshotRowAnnotation)
-
-  case object SnapshotCodeIndex extends BasicGenericEdgePredicate(
-    from = GenericGraphNodePredicate.Snapshot,
-    to = GenericGraphNodePredicate.CodeIndex,
-    edgeType = GenericGraphEdgeType.SnapshotCodeIndex)
-
-  /**
    * Gits
    */
   case object GitHeadCommit extends BasicGenericEdgePredicate(
@@ -816,6 +777,8 @@ object GenericGraphEdgePredicate extends Plenumeration[GenericEdgePredicate] {
 
     // override val fromImplicit = Some(GenericGraphNodePredicate.GitCommit)
     // override val toImplicit = Some(GenericGraphNodePredicate.GitCommit)
+
+    override val forceForward = true
 
     override val forceForwardDirection = true
 
@@ -839,6 +802,8 @@ object GenericGraphEdgePredicate extends Plenumeration[GenericEdgePredicate] {
 
     // override val fromImplicit = Some(GenericGraphNodePredicate.GitCommit)
     // override val toImplicit = Some(GenericGraphNodePredicate.GitCommit)
+
+    override val forceForward = true
 
     override val forceForwardDirection = true
 

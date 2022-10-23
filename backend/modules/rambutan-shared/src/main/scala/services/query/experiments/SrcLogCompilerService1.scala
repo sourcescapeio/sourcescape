@@ -59,10 +59,10 @@ class SrcLogCompilerService @Inject() (
         DirectedSrcLogEdge.forward(e) :: Nil
       }
       // TODO: clean this shit up?
-      case e @ EdgeClause(p, from, to, c, _) if p.forceForwardDirection => {
+      case e @ EdgeClause(p, from, to, c, _) if p.forceForward => {
         DirectedSrcLogEdge.forward(e) :: Nil
       }
-      case e @ EdgeClause(p, from, to, c, None) if p.singleDirection => {
+      case e @ EdgeClause(p, from, to, c, None) if p.forceReverse => {
         DirectedSrcLogEdge.reverse(e) :: Nil
       }
       case e @ EdgeClause(p, from, to, c, None) => {
