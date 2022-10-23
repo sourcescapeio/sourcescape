@@ -25,8 +25,7 @@ class QueryController @Inject() (
   queryTargetingService:  services.QueryTargetingService,
   graphQueryService:      services.GraphQueryService,
   relationalQueryService: services.RelationalQueryService,
-  srcLogService:          services.SrcLogCompilerService
-)(implicit ec: ExecutionContext, as: ActorSystem) extends API with StreamResults {
+  srcLogService:          services.SrcLogCompilerService)(implicit ec: ExecutionContext, as: ActorSystem) extends API with StreamResults {
 
   def getGrammars() = {
     api { implicit request =>

@@ -36,7 +36,6 @@ class SrcLogCompilerService @Inject() (
   }
 
   def compileQuery[TU](query: SrcLogQuery)(implicit targeting: QueryTargeting[TU]): Future[RelationalQuery] = {
-    // hard code for now as we're only dealing with Javascript
     optimizeQuery(query)
   }
 
@@ -185,11 +184,11 @@ class SrcLogCompilerService @Inject() (
       offset = None,
       limit = None,
       forceOrdering = None)
-  }  
+  }
 
   /**
-    * Relational query helpers
-    */
+   * Relational query helpers
+   */
   private def buildNodeClauseMap(query: SrcLogQuery): Map[String, NodeClause] = {
     query.allNodes.groupBy(_.variable) flatMap {
       case (k, vs) => {
@@ -215,7 +214,7 @@ class SrcLogCompilerService @Inject() (
         }
       }
     }
-  }    
+  }
 
   private def spliceAdditionalNodeTraversals(tree: List[DirectedSrcLogEdge], nodesToCheck: Map[String, NodeClause]): List[DirectedSrcLogEdge] = {
     // This adds an extra node check to the edge
@@ -244,8 +243,8 @@ class SrcLogCompilerService @Inject() (
   }
 
   /**
-    * Helpers
-    */
+   * Helpers
+   */
   /**
    * Algo (DFS):
    * 1. Start with root node as frontier
@@ -277,11 +276,11 @@ class SrcLogCompilerService @Inject() (
    * Algo:
    * 1. Take all nodes that can traverse to every other node
    * 2. Pick node with smallest count
-   */  
+   */
   private def findRoots(edges: List[DirectedSrcLogEdge], allVertexes: Set[String]): List[(String, List[DirectedSrcLogEdge])] = {
     // for a representative item in components, verifyConnection
     allVertexes.toList.flatMap { v =>
       scala.util.Try(spanningTree(v, allVertexes, edges)).toOption.map(v -> _)
     }
-  }    
+  }
 }
