@@ -11,11 +11,35 @@ import play.api.libs.json._
 sealed abstract class EdgePredicate(
   val identifier: String) extends Identifiable {
 
+  /**
+    * These definitely need to be set
+    */
   // Assumption: at least one of these will be non-null
   // There is no ValidEdge from AnyNode to AnyNode except Assignment
   def fromImplicit: Option[NodePredicate] = None
   def toImplicit: Option[NodePredicate] = None
 
+  def queryTraverse(name: Option[String], index: Option[Int], props: List[GenericGraphProperty], follow: List[GraphEdgeType]): List[Traverse]
+
+  def reverseTraverse(name: Option[String], index: Option[Int], props: List[GenericGraphProperty], follow: List[GraphEdgeType]): List[Traverse] = {
+    ReverseTraverse(
+      EdgeTypeFollow(follow.map(EdgeTypeTraverse.basic)),
+      queryTraverse(name, index, props, Nil)) :: Nil
+  }
+
+  /**
+    * Cost parameters
+    */
+  val forwardCost: Int = 1
+  val reverseCost: Int = 1
+  // forward cost
+  // backward cost
+
+
+
+  /**
+    * WTF are these used for??
+    */
   // reversal preferences
   val suppressNodeCheck: Boolean = false
   val forceForwardDirection: Boolean = false // can only go in forward direction
@@ -28,26 +52,13 @@ sealed abstract class EdgePredicate(
   val ingressReferences: Boolean = false
   val egressReferences: Boolean = false
 
-  val hasIndex: Boolean = false
-  val hasName: Boolean = false
-
   protected def edgeTypeFollow(follows: List[GraphEdgeType]) = {
     EdgeTypeFollow(follows.map(EdgeTypeTraverse.basic))
-  }
-
-  def queryTraverse(name: Option[String], index: Option[Int], props: List[GenericGraphProperty], follow: List[GraphEdgeType]): List[Traverse]
-
-  def reverseTraverse(name: Option[String], index: Option[Int], props: List[GenericGraphProperty], follow: List[GraphEdgeType]): List[Traverse] = {
-    ReverseTraverse(
-      EdgeTypeFollow(follow.map(EdgeTypeTraverse.basic)),
-      queryTraverse(name, index, props, Nil)) :: Nil
   }
 }
 
 sealed trait HasIndex {
   self: EdgePredicate =>
-
-  override val hasIndex = true
 
   protected def indexedEdge(edgeType: GraphEdgeType, index: Option[Int]) = {
     EdgeTypeTraverse(
@@ -58,8 +69,6 @@ sealed trait HasIndex {
 
 sealed trait HasName {
   self: EdgePredicate =>
-
-  override val hasName = true
 
   protected def namedEdge(edgeType: GraphEdgeType, name: Option[String]) = {
     EdgeTypeTraverse(

@@ -39,34 +39,6 @@ case class SrcLogCodeQuery(
     this.copy(selected = ids)
   }
 
-  def setCondition(id: String, parentId: Option[String], conditionType: ConditionType, condition: Option[Condition]) = {
-    // node will blindly copy condition
-    val resetNodes = nodes.map {
-      case n if n.variable =?= id && parentId.isEmpty => n.copy(condition = condition)
-      case n => n
-    }
-
-    val resetEdges = edges.map { e =>
-      val edgeMatch = e.to =?= id && (parentId.isEmpty || parentId =?= Some(e.from))
-
-      val shouldReplace = conditionType match {
-        case ConditionType.Name if e.predicate.hasName => true
-        case ConditionType.Index if e.predicate.hasIndex => true
-        case _ => false
-      }
-
-      if (edgeMatch && shouldReplace) {
-        e.copy(condition = condition)
-      } else {
-        e
-      }
-    }
-
-    this.copy(
-      nodes = resetNodes,
-      edges = resetEdges)
-  }
-
   def subset(sub: Set[String]) = {
     SrcLogCodeQuery(
       language,

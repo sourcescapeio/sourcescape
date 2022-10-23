@@ -16,6 +16,7 @@ trait SrcLogQuery {
   val selected: List[String]
 
   // strips out all edges pointing in wrong direction
+  @deprecated
   lazy val baseTraversableEdges: List[DirectedSrcLogEdge] = {
     //
 

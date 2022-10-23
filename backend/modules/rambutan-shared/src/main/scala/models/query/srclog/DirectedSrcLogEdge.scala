@@ -13,43 +13,13 @@ case class DirectedSrcLogEdge(
   nodeCheck:    Option[NodeClause],
   containsHint: Option[NodePredicate]) {
 
-  def forceForwardDirection = predicate.forceForwardDirection || booleanModifier.isDefined
 
-  def cost = {
-    if (predicate.singleDirection && !reverse && containsHint.isEmpty) {
-      100
-    } else if (predicate.singleDirection && !reverse) {
-      20
-    } else if (predicate.singleDirection) {
-      2
+  def newCost = {
+    if(reverse) {
+      predicate.reverseCost
     } else {
-      1
+      predicate.forwardCost
     }
-  }
-
-  // node traversal
-  def intoImplicit = if (reverse) {
-    predicate.fromImplicit
-  } else {
-    predicate.toImplicit
-  }
-
-  def mustNodeTraverse = {
-    if (reverse) {
-      predicate.ingressReferences
-    } else {
-      predicate.egressReferences
-    }
-  }
-
-  //
-  def equiv(other: EdgeClause) = {
-    val (fromT, toT) = if (reverse) {
-      (other.to, other.from)
-    } else {
-      (other.from, other.to)
-    }
-    (from =?= fromT) && (to =?= toT) && (predicate =?= other.predicate) && (condition =?= other.condition)
   }
 
   def toTraceQuery = {
@@ -125,6 +95,50 @@ case class DirectedSrcLogEdge(
       TraceQuery(
         FromRoot(from, leftJoin = leftJoin),
         withContainsHint))
+  }
+
+
+  /**
+    * Deprecate below
+    */
+
+  def forceForwardDirection = predicate.forceForwardDirection || booleanModifier.isDefined
+
+  def cost = {
+    if (predicate.singleDirection && !reverse && containsHint.isEmpty) {
+      100
+    } else if (predicate.singleDirection && !reverse) {
+      20
+    } else if (predicate.singleDirection) {
+      2
+    } else {
+      1
+    }
+  }
+
+  // node traversal
+  def intoImplicit = if (reverse) {
+    predicate.fromImplicit
+  } else {
+    predicate.toImplicit
+  }
+
+  def mustNodeTraverse = {
+    if (reverse) {
+      predicate.ingressReferences
+    } else {
+      predicate.egressReferences
+    }
+  }
+
+  //
+  def equiv(other: EdgeClause) = {
+    val (fromT, toT) = if (reverse) {
+      (other.to, other.from)
+    } else {
+      (other.from, other.to)
+    }
+    (from =?= fromT) && (to =?= toT) && (predicate =?= other.predicate) && (condition =?= other.condition)
   }
 
   def flip(hintNode: Option[NodePredicate]) = this.copy(
