@@ -11,7 +11,6 @@ import dal.SharedDataAccessLayer
 import scala.concurrent.{ ExecutionContext, Future }
 import akka.util.ByteString
 import play.api.libs.json._
-import models.Schema
 import org.mockito.MockitoSugar
 import silvousplay.api.NoopSpanContext
 

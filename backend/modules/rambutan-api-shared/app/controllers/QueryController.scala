@@ -25,10 +25,8 @@ class QueryController @Inject() (
   queryTargetingService:  services.QueryTargetingService,
   graphQueryService:      services.GraphQueryService,
   relationalQueryService: services.RelationalQueryService,
-  srcLogService:          services.SrcLogCompilerService,
-  // experimental
-  graphQueryServiceExperimental:      services.GraphQueryService, // not really changing this
-  relationalQueryServiceExperimental: services.q10.RelationalQueryService)(implicit ec: ExecutionContext, as: ActorSystem) extends API with StreamResults {
+  srcLogService:          services.SrcLogCompilerService
+)(implicit ec: ExecutionContext, as: ActorSystem) extends API with StreamResults {
 
   def getGrammars() = {
     api { implicit request =>
@@ -401,7 +399,7 @@ class QueryController @Inject() (
               targeting <- queryTargetingService.resolveTargeting(orgId, indexType, QueryTargetingRequest.AllLatest(None))
               relationalQuery <- srcLogService.compileQuery(query)(targeting)
               scroll = QueryScroll(None)
-              result <- relationalQueryServiceExperimental.runQuery(
+              result <- relationalQueryService.runQuery(
                 relationalQuery,
                 explain = true,
                 progressUpdates = true)(targeting, context, scroll)
@@ -459,7 +457,7 @@ class QueryController @Inject() (
                     QueryTargetingRequest.AllLatest(None))
                 }
                 scroll = QueryScroll(scrollKey)
-                result <- relationalQueryServiceExperimental.runQuery(
+                result <- relationalQueryService.runQuery(
                   query,
                   explain = true,
                   progressUpdates = true)(targeting, context, scroll)
@@ -523,7 +521,7 @@ class QueryController @Inject() (
                 }
                 scroll = QueryScroll(scrollKey)
                 source <- {
-                  relationalQueryServiceExperimental.runQuery(
+                  relationalQueryService.runQuery(
                     query,
                     explain = false,
                     progressUpdates = false)(targeting, context, scroll)
