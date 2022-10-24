@@ -9,41 +9,40 @@ import models.index.ruby.RubyNode
 import play.api.libs.json._
 
 sealed abstract class EdgePredicate(
-  val identifier: String) extends Identifiable {
+  val identifier:  String,
+  val forwardCost: Int,
+  val reverseCost: Int) extends Identifiable {
 
   /**
-    * These definitely need to be set
-    */
-  // Assumption: at least one of these will be non-null
-  // There is no ValidEdge from AnyNode to AnyNode except Assignment
+   * New style variables
+   */
+  // At least one of these should be non-null
   def fromImplicit: Option[NodePredicate] = None
   def toImplicit: Option[NodePredicate] = None
 
   def queryTraverse(name: Option[String], index: Option[Int], props: List[GenericGraphProperty], follow: List[GraphEdgeType]): List[Traverse]
 
-  def reverseTraverse(name: Option[String], index: Option[Int], props: List[GenericGraphProperty], follow: List[GraphEdgeType]): List[Traverse] = {
+  final def reverseTraverse(name: Option[String], index: Option[Int], props: List[GenericGraphProperty], follow: List[GraphEdgeType]): List[Traverse] = {
     ReverseTraverse(
       EdgeTypeFollow(follow.map(EdgeTypeTraverse.basic)),
       queryTraverse(name, index, props, Nil)) :: Nil
   }
 
+  // def propagatedFollow = 
+
+  /**
+   * Feature flags
+   */
   // used when emitting possible directed edges
   val forceForward: Boolean = false
   val forceReverse: Boolean = false
 
-  /**
-    * Cost parameters
-    */
-  val forwardCost: Int = 1
-  val reverseCost: Int = 1
-  // forward cost
-  // backward cost
-
-
+  // requires specific nodes for both sides
+  val mustSpecifyNodes: Boolean = false
 
   /**
-    * WTF are these used for??
-    */
+   * LEGACY PARAMETERS. To deprecate
+   */
   // reversal preferences
   val suppressNodeCheck: Boolean = false
   val forceForwardDirection: Boolean = false // can only go in forward direction
@@ -81,13 +80,11 @@ sealed trait HasName {
   }
 }
 
-sealed abstract class ScalaEdgePredicate(identifierIn: String) extends EdgePredicate(s"scala::${identifierIn}")
-
-object ScalaEdgePredicate extends Plenumeration[ScalaEdgePredicate] {
-
-}
-
-sealed abstract class RubyEdgePredicate(identifierIn: String) extends EdgePredicate(s"ruby::${identifierIn}")
+sealed abstract class RubyEdgePredicate(identifierIn: String) extends EdgePredicate(
+  s"ruby::${identifierIn}",
+  forwardCost = 10,
+  reverseCost = 1 // ZFG
+)
 
 object RubyEdgePredicate extends Plenumeration[RubyEdgePredicate] {
 
@@ -167,10 +164,13 @@ object RubyEdgePredicate extends Plenumeration[RubyEdgePredicate] {
   }
 }
 
-sealed abstract class JavascriptEdgePredicate(val identifierIn: String) extends EdgePredicate(s"javascript::${identifierIn}")
+sealed abstract class JavascriptEdgePredicate(identifierIn: String, forwardCost: Int, reverseCost: Int) extends EdgePredicate(
+  s"javascript::${identifierIn}",
+  forwardCost,
+  reverseCost)
 
 object JavascriptEdgePredicate extends Plenumeration[JavascriptEdgePredicate] {
-  case object JSXTag extends JavascriptEdgePredicate("jsx_tag") {
+  case object JSXTag extends JavascriptEdgePredicate("jsx_tag", forwardCost = 1, reverseCost = 1) {
     override val fromImplicit = Some(JavascriptNodePredicate.JSXElement)
 
     override val preferReverse: Boolean = true
@@ -186,7 +186,7 @@ object JavascriptEdgePredicate extends Plenumeration[JavascriptEdgePredicate] {
     }
   }
 
-  case object JSXAttribute extends JavascriptEdgePredicate("jsx_attribute") with HasName {
+  case object JSXAttribute extends JavascriptEdgePredicate("jsx_attribute", forwardCost = 5, reverseCost = 1) with HasName {
     override val fromImplicit = Some(JavascriptNodePredicate.JSXElement)
     override val toImplicit = Some(JavascriptNodePredicate.JSXAttribute)
 
@@ -201,7 +201,7 @@ object JavascriptEdgePredicate extends Plenumeration[JavascriptEdgePredicate] {
     }
   }
 
-  case object JSXAttributeValue extends JavascriptEdgePredicate("jsx_attribute_value") {
+  case object JSXAttributeValue extends JavascriptEdgePredicate("jsx_attribute_value", forwardCost = 1, reverseCost = 1) {
     override val fromImplicit = Some(JavascriptNodePredicate.JSXAttribute)
 
     // should egress?
@@ -217,7 +217,7 @@ object JavascriptEdgePredicate extends Plenumeration[JavascriptEdgePredicate] {
     }
   }
 
-  case object JSXChild extends JavascriptEdgePredicate("jsx_child") {
+  case object JSXChild extends JavascriptEdgePredicate("jsx_child", forwardCost = 10, reverseCost = 1) {
     override val fromImplicit = Some(JavascriptNodePredicate.JSXElement)
 
     // override val singleDirection = true
@@ -232,7 +232,7 @@ object JavascriptEdgePredicate extends Plenumeration[JavascriptEdgePredicate] {
     }
   }
 
-  case object ClassExtends extends JavascriptEdgePredicate("class_extends") {
+  case object ClassExtends extends JavascriptEdgePredicate("class_extends", forwardCost = 1, reverseCost = 1) {
     override val fromImplicit = Some(JavascriptNodePredicate.Class)
 
     override val preferReverse: Boolean = true
@@ -241,14 +241,14 @@ object JavascriptEdgePredicate extends Plenumeration[JavascriptEdgePredicate] {
 
     override def queryTraverse(name: Option[String], index: Option[Int], props: List[GenericGraphProperty], follow: List[GraphEdgeType]) = {
       EdgeTraverse(
-        follow = edgeTypeFollow(follow),
+        follow = edgeTypeFollow(Nil),
         target = EdgeTypeTarget(
           EdgeTypeTraverse.basic(
             JavascriptGraphEdgeType.ClassExtends) :: Nil)) :: Nil
     }
   }
 
-  case object InstanceOf extends JavascriptEdgePredicate("instance_of") {
+  case object InstanceOf extends JavascriptEdgePredicate("instance_of", forwardCost = 1, reverseCost = 1) {
     override val fromImplicit = Some(JavascriptNodePredicate.Instance)
 
     override val egressReferences = true
@@ -262,7 +262,7 @@ object JavascriptEdgePredicate extends Plenumeration[JavascriptEdgePredicate] {
     }
   }
 
-  case object InstanceArg extends JavascriptEdgePredicate("instance_arg") with HasIndex {
+  case object InstanceArg extends JavascriptEdgePredicate("instance_arg", forwardCost = 5, reverseCost = 1) with HasIndex {
     override val fromImplicit = Some(JavascriptNodePredicate.Instance)
 
     override val preferReverse: Boolean = true
@@ -277,7 +277,7 @@ object JavascriptEdgePredicate extends Plenumeration[JavascriptEdgePredicate] {
     }
   }
 
-  case object ClassConstructor extends JavascriptEdgePredicate("class_constructor") with HasName {
+  case object ClassConstructor extends JavascriptEdgePredicate("class_constructor", forwardCost = 1, reverseCost = 1) with HasName {
     override val fromImplicit = Some(JavascriptNodePredicate.Class)
     override val toImplicit = Some(JavascriptNodePredicate.ClassMethod)
 
@@ -291,7 +291,7 @@ object JavascriptEdgePredicate extends Plenumeration[JavascriptEdgePredicate] {
 
   }
 
-  case object ClassMethod extends JavascriptEdgePredicate("class_method") with HasName {
+  case object ClassMethod extends JavascriptEdgePredicate("class_method", forwardCost = 10, reverseCost = 1) with HasName {
     override val fromImplicit = Some(JavascriptNodePredicate.Class)
     override val toImplicit = Some(JavascriptNodePredicate.ClassMethod)
 
@@ -304,7 +304,7 @@ object JavascriptEdgePredicate extends Plenumeration[JavascriptEdgePredicate] {
     }
   }
 
-  case object ClassDecorator extends JavascriptEdgePredicate("class_decorator") {
+  case object ClassDecorator extends JavascriptEdgePredicate("class_decorator", forwardCost = 2, reverseCost = 1) {
     override val fromImplicit = Some(JavascriptNodePredicate.Class)
 
     override def queryTraverse(name: Option[String], index: Option[Int], props: List[GenericGraphProperty], follow: List[GraphEdgeType]) = {
@@ -316,7 +316,7 @@ object JavascriptEdgePredicate extends Plenumeration[JavascriptEdgePredicate] {
     }
   }
 
-  case object ClassProperty extends JavascriptEdgePredicate("class_property") {
+  case object ClassProperty extends JavascriptEdgePredicate("class_property", forwardCost = 10, reverseCost = 1) {
     override val fromImplicit = Some(JavascriptNodePredicate.Class)
     override val toImplicit = Some(JavascriptNodePredicate.ClassProperty)
 
@@ -329,19 +329,19 @@ object JavascriptEdgePredicate extends Plenumeration[JavascriptEdgePredicate] {
     }
   }
 
-  case object ClassPropertyValue extends JavascriptEdgePredicate("class_property_value") {
+  case object ClassPropertyValue extends JavascriptEdgePredicate("class_property_value", forwardCost = 1, reverseCost = 1) {
     override val fromImplicit = Some(JavascriptNodePredicate.ClassProperty)
 
     override def queryTraverse(name: Option[String], index: Option[Int], props: List[GenericGraphProperty], follow: List[GraphEdgeType]) = {
       EdgeTraverse(
-        follow = edgeTypeFollow(follow),
+        follow = edgeTypeFollow(Nil),
         target = EdgeTypeTarget(
           EdgeTypeTraverse.basic(
             JavascriptGraphEdgeType.ClassPropertyValue) :: Nil)) :: Nil
     }
   }
 
-  case object MethodArg extends JavascriptEdgePredicate("method_arg") with HasIndex {
+  case object MethodArg extends JavascriptEdgePredicate("method_arg", forwardCost = 5, reverseCost = 1) with HasIndex {
     override val fromImplicit = Some(JavascriptNodePredicate.ClassMethod)
     override val toImplicit = Some(JavascriptNodePredicate.FunctionArg)
 
@@ -350,7 +350,7 @@ object JavascriptEdgePredicate extends Plenumeration[JavascriptEdgePredicate] {
     override def queryTraverse(name: Option[String], index: Option[Int], props: List[GenericGraphProperty], follow: List[GraphEdgeType]) = {
       List(
         EdgeTraverse(
-          follow = edgeTypeFollow(follow),
+          follow = edgeTypeFollow(Nil),
           target = EdgeTypeTarget(
             EdgeTypeTraverse.basic(
               JavascriptGraphEdgeType.MethodFunction) :: Nil)),
@@ -361,12 +361,12 @@ object JavascriptEdgePredicate extends Plenumeration[JavascriptEdgePredicate] {
     }
   }
 
-  case object MethodDecorator extends JavascriptEdgePredicate("method_decorator") {
+  case object MethodDecorator extends JavascriptEdgePredicate("method_decorator", forwardCost = 2, reverseCost = 1) {
     override val fromImplicit = Some(JavascriptNodePredicate.ClassMethod)
 
     override def queryTraverse(name: Option[String], index: Option[Int], props: List[GenericGraphProperty], follow: List[GraphEdgeType]) = {
       EdgeTraverse(
-        follow = edgeTypeFollow(follow),
+        follow = edgeTypeFollow(Nil),
         target = EdgeTypeTarget(
           EdgeTypeTraverse.basic(
             JavascriptGraphEdgeType.MethodDecorator) :: Nil)) :: Nil
@@ -374,8 +374,10 @@ object JavascriptEdgePredicate extends Plenumeration[JavascriptEdgePredicate] {
   }
 
   @deprecated
-  case object MethodContains extends JavascriptEdgePredicate("method_contains") {
+  case object MethodContains extends JavascriptEdgePredicate("method_contains", forwardCost = 1000, reverseCost = 1) {
     override val fromImplicit = Some(JavascriptNodePredicate.ClassMethod)
+
+    override val mustSpecifyNodes = true
 
     override val singleDirection = true
 
@@ -395,7 +397,7 @@ object JavascriptEdgePredicate extends Plenumeration[JavascriptEdgePredicate] {
     }
   }
 
-  case object FunctionArg extends JavascriptEdgePredicate("function_arg") with HasIndex {
+  case object FunctionArg extends JavascriptEdgePredicate("function_arg", forwardCost = 5, reverseCost = 1) with HasIndex {
     override val fromImplicit = Some(JavascriptNodePredicate.Function)
     override val toImplicit = Some(JavascriptNodePredicate.FunctionArg)
 
@@ -404,26 +406,29 @@ object JavascriptEdgePredicate extends Plenumeration[JavascriptEdgePredicate] {
     override def queryTraverse(name: Option[String], index: Option[Int], props: List[GenericGraphProperty], follow: List[GraphEdgeType]) = {
       List(
         EdgeTraverse(
-          follow = edgeTypeFollow(follow),
+          follow = edgeTypeFollow(Nil),
           target = EdgeTypeTarget(
             indexedEdge(JavascriptGraphEdgeType.FunctionArgument, index) :: Nil)))
     }
   }
 
-  case object FunctionContains extends JavascriptEdgePredicate("function_contains") {
+  @deprecated
+  case object FunctionContains extends JavascriptEdgePredicate("function_contains", forwardCost = 1000, reverseCost = 1) {
     override val fromImplicit = Some(JavascriptNodePredicate.Function)
+
+    override val mustSpecifyNodes = true
 
     override val singleDirection = true
 
     override def queryTraverse(name: Option[String], index: Option[Int], props: List[GenericGraphProperty], follow: List[GraphEdgeType]) = {
       EdgeTraverse(
-        follow = edgeTypeFollow(follow),
+        follow = edgeTypeFollow(Nil),
         target = EdgeTypeTarget(
           EdgeTypeTraverse.basic(JavascriptGraphEdgeType.FunctionContains) :: Nil)) :: Nil
     }
   }
 
-  case object Return extends JavascriptEdgePredicate("return") {
+  case object Return extends JavascriptEdgePredicate("return", forwardCost = 1, reverseCost = 1) {
 
     override val fromImplicit = Some(JavascriptNodePredicate.Return)
 
@@ -440,7 +445,7 @@ object JavascriptEdgePredicate extends Plenumeration[JavascriptEdgePredicate] {
     }
   }
 
-  case object Yield extends JavascriptEdgePredicate("yield") {
+  case object Yield extends JavascriptEdgePredicate("yield", forwardCost = 1, reverseCost = 1) {
 
     override val fromImplicit = Some(JavascriptNodePredicate.Yield)
 
@@ -455,7 +460,7 @@ object JavascriptEdgePredicate extends Plenumeration[JavascriptEdgePredicate] {
     }
   }
 
-  case object Await extends JavascriptEdgePredicate("await") {
+  case object Await extends JavascriptEdgePredicate("await", forwardCost = 1, reverseCost = 1) {
 
     override val fromImplicit = Some(JavascriptNodePredicate.Await)
 
@@ -470,7 +475,7 @@ object JavascriptEdgePredicate extends Plenumeration[JavascriptEdgePredicate] {
     }
   }
 
-  case object Throw extends JavascriptEdgePredicate("throw") {
+  case object Throw extends JavascriptEdgePredicate("throw", forwardCost = 1, reverseCost = 1) {
     override val fromImplicit = Some(JavascriptNodePredicate.Throw)
 
     override def queryTraverse(name: Option[String], index: Option[Int], props: List[GenericGraphProperty], follow: List[GraphEdgeType]) = {
@@ -482,7 +487,7 @@ object JavascriptEdgePredicate extends Plenumeration[JavascriptEdgePredicate] {
     }
   }
 
-  case object Member extends JavascriptEdgePredicate("member") with HasName {
+  case object Member extends JavascriptEdgePredicate("member", forwardCost = 1, reverseCost = 1) with HasName {
     override val toImplicit = Some(JavascriptNodePredicate.Member)
 
     override val preferReverse: Boolean = true
@@ -498,7 +503,7 @@ object JavascriptEdgePredicate extends Plenumeration[JavascriptEdgePredicate] {
     }
   }
 
-  case object Call extends JavascriptEdgePredicate("call") {
+  case object Call extends JavascriptEdgePredicate("call", forwardCost = 1, reverseCost = 1) {
     override val toImplicit = Some(JavascriptNodePredicate.Call)
 
     override val preferReverse: Boolean = true
@@ -513,7 +518,7 @@ object JavascriptEdgePredicate extends Plenumeration[JavascriptEdgePredicate] {
             JavascriptGraphEdgeType.CallOf) :: Nil)) :: Nil
     }
   }
-  case object CallArg extends JavascriptEdgePredicate("call_arg") with HasIndex {
+  case object CallArg extends JavascriptEdgePredicate("call_arg", forwardCost = 5, reverseCost = 1) with HasIndex {
     override val fromImplicit = Some(JavascriptNodePredicate.Call)
 
     override val preferReverse: Boolean = true
@@ -529,7 +534,7 @@ object JavascriptEdgePredicate extends Plenumeration[JavascriptEdgePredicate] {
     }
   }
 
-  case object IfCondition extends JavascriptEdgePredicate("if_condition") {
+  case object IfCondition extends JavascriptEdgePredicate("if_condition", forwardCost = 1, reverseCost = 1) {
     override val fromImplicit = Some(JavascriptNodePredicate.If)
 
     override val preferReverse: Boolean = true
@@ -548,8 +553,10 @@ object JavascriptEdgePredicate extends Plenumeration[JavascriptEdgePredicate] {
             EdgeTypeTraverse.basic(JavascriptGraphEdgeType.IfTest) :: Nil)) :: Nil
     }
   }
-  case object IfBody extends JavascriptEdgePredicate("if_body") {
+  case object IfBody extends JavascriptEdgePredicate("if_body", forwardCost = 1000, reverseCost = 1) {
     override val fromImplicit = Some(JavascriptNodePredicate.If)
+
+    override val mustSpecifyNodes = true
 
     override def queryTraverse(name: Option[String], index: Option[Int], props: List[GenericGraphProperty], follow: List[GraphEdgeType]) = {
       EdgeTraverse(
@@ -565,7 +572,7 @@ object JavascriptEdgePredicate extends Plenumeration[JavascriptEdgePredicate] {
     override val singleDirection = true
   }
 
-  case object BinaryLeft extends JavascriptEdgePredicate("binary_left") {
+  case object BinaryLeft extends JavascriptEdgePredicate("binary_left", forwardCost = 1, reverseCost = 1) {
 
     override val fromImplicit = Some(JavascriptNodePredicate.BinaryExpression)
 
@@ -581,7 +588,7 @@ object JavascriptEdgePredicate extends Plenumeration[JavascriptEdgePredicate] {
     }
   }
 
-  case object BinaryRight extends JavascriptEdgePredicate("binary_right") {
+  case object BinaryRight extends JavascriptEdgePredicate("binary_right", forwardCost = 1, reverseCost = 1) {
     override val fromImplicit = Some(JavascriptNodePredicate.BinaryExpression)
 
     override val preferReverse: Boolean = true
@@ -596,7 +603,7 @@ object JavascriptEdgePredicate extends Plenumeration[JavascriptEdgePredicate] {
     }
   }
 
-  case object UnaryExpression extends JavascriptEdgePredicate("unary_expression") {
+  case object UnaryExpression extends JavascriptEdgePredicate("unary_expression", forwardCost = 1, reverseCost = 1) {
     override val fromImplicit = Some(JavascriptNodePredicate.UnaryExpression)
 
     override val preferReverse: Boolean = true
@@ -609,7 +616,7 @@ object JavascriptEdgePredicate extends Plenumeration[JavascriptEdgePredicate] {
     }
   }
 
-  case object ArrayMember extends JavascriptEdgePredicate("array_member") with HasIndex {
+  case object ArrayMember extends JavascriptEdgePredicate("array_member", forwardCost = 10, reverseCost = 1) with HasIndex {
     override val fromImplicit = Some(JavascriptNodePredicate.Array)
 
     override val preferReverse: Boolean = true
@@ -623,7 +630,7 @@ object JavascriptEdgePredicate extends Plenumeration[JavascriptEdgePredicate] {
     }
   }
 
-  case object ObjectProperty extends JavascriptEdgePredicate("object_property") with HasName {
+  case object ObjectProperty extends JavascriptEdgePredicate("object_property", forwardCost = 10, reverseCost = 1) with HasName {
     override val fromImplicit = Some(JavascriptNodePredicate.Object)
     override val toImplicit = Some(JavascriptNodePredicate.ObjectProperty)
 
@@ -638,7 +645,7 @@ object JavascriptEdgePredicate extends Plenumeration[JavascriptEdgePredicate] {
     }
   }
 
-  case object ObjectPropertyValue extends JavascriptEdgePredicate("object_property_value") with HasName {
+  case object ObjectPropertyValue extends JavascriptEdgePredicate("object_property_value", forwardCost = 1, reverseCost = 1) with HasName {
     override val fromImplicit = Some(JavascriptNodePredicate.ObjectProperty)
 
     override val preferReverse: Boolean = true
@@ -652,7 +659,7 @@ object JavascriptEdgePredicate extends Plenumeration[JavascriptEdgePredicate] {
     }
   }
 
-  case object TemplateComponent extends JavascriptEdgePredicate("template_component") with HasIndex {
+  case object TemplateComponent extends JavascriptEdgePredicate("template_component", forwardCost = 5, reverseCost = 1) with HasIndex {
     override val fromImplicit = Some(JavascriptNodePredicate.TemplateLiteral)
 
     override def queryTraverse(name: Option[String], index: Option[Int], props: List[GenericGraphProperty], follow: List[GraphEdgeType]) = {
@@ -664,7 +671,7 @@ object JavascriptEdgePredicate extends Plenumeration[JavascriptEdgePredicate] {
     }
   }
 
-  case object TemplateContains extends JavascriptEdgePredicate("template_contains") {
+  case object TemplateContains extends JavascriptEdgePredicate("template_contains", forwardCost = 100, reverseCost = 1) {
     override val fromImplicit = Some(JavascriptNodePredicate.TemplateExpression)
 
     override def queryTraverse(name: Option[String], index: Option[Int], props: List[GenericGraphProperty], follow: List[GraphEdgeType]) = {
@@ -678,11 +685,13 @@ object JavascriptEdgePredicate extends Plenumeration[JavascriptEdgePredicate] {
   /**
    * Experimental Repeated Traverses
    */
-  case object Contains extends JavascriptEdgePredicate("contains") {
+  case object Contains extends JavascriptEdgePredicate("contains", forwardCost = 1000, reverseCost = 1) {
 
     override def fromImplicit = Some(NodePredicate.or(
       JavascriptNodePredicate.ClassMethod,
       JavascriptNodePredicate.Function))
+
+    override val mustSpecifyNodes = true
 
     override val singleDirection = true
 
@@ -697,7 +706,7 @@ object JavascriptEdgePredicate extends Plenumeration[JavascriptEdgePredicate] {
     }
   }
 
-  case object AllCalled extends JavascriptEdgePredicate("all_called") {
+  case object AllCalled extends JavascriptEdgePredicate("all_called", forwardCost = 1, reverseCost = 1) {
     override def fromImplicit = Some(NodePredicate.or(
       JavascriptNodePredicate.ClassMethod,
       JavascriptNodePredicate.Function))
@@ -722,7 +731,7 @@ object JavascriptEdgePredicate extends Plenumeration[JavascriptEdgePredicate] {
 
 }
 
-sealed abstract class GenericEdgePredicate(val identifierIn: String) extends EdgePredicate(s"generic::${identifierIn}") {
+sealed abstract class GenericEdgePredicate(val identifierIn: String) extends EdgePredicate(s"generic::${identifierIn}", forwardCost = 1, reverseCost = 1) {
   override val suppressNodeCheck = true
 }
 

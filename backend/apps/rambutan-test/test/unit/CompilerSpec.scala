@@ -14,6 +14,7 @@ import akka.actor.ActorSystem
 import scala.concurrent.Future
 import org.mockito.MockitoSugar
 import models.IndexType
+import models.ESQuery
 
 // sbt "project rambutanTest" "testOnly test.unit.CompilerSpec"
 class CompilerSpec extends PlaySpec with MockitoSugar {
@@ -56,6 +57,27 @@ class CompilerSpec extends PlaySpec with MockitoSugar {
         Nil,
         Map.empty[Int, List[String]],
         None)
+
+      when(mockES.count(IndexType.Javascript.nodeIndexName, ESQuery.bool(
+        filter = ESQuery.bool(
+          must = List(
+            ESQuery.termsSearch("key", Nil),
+            ESQuery.termSearch("type", "throw"))) :: Nil))).thenReturn(Future.successful(Json.obj(
+        "count" -> 10000)))
+
+      when(mockES.count(IndexType.Javascript.nodeIndexName, ESQuery.bool(
+        filter = ESQuery.bool(
+          must = List(
+            ESQuery.termsSearch("key", Nil),
+            ESQuery.termSearch("type", "method"))) :: Nil))).thenReturn(Future.successful(Json.obj(
+        "count" -> 500)))
+
+      when(mockES.count(IndexType.Javascript.nodeIndexName, ESQuery.bool(
+        filter = ESQuery.bool(
+          must = List(
+            ESQuery.termsSearch("key", Nil),
+            ESQuery.termSearch("type", "class"))) :: Nil))).thenReturn(Future.successful(Json.obj(
+        "count" -> 50)))
 
       await {
         compilerService.compileQuery(

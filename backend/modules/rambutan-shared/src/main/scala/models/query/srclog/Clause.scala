@@ -14,17 +14,8 @@ object BooleanModifier extends Plenumeration[BooleanModifier] {
 sealed trait SrcLogClause
 
 case class NodeClause(predicate: NodePredicate, variable: String, condition: Option[Condition]) extends SrcLogClause {
-  // private def name = condition flatMap {
-  //   case NameCondition(v) => Some(v)
-  //   case _                      => None
-  // }.headOption
 
-  // private def index = condition flatMap {
-  //   case IndexCondition(v) => Some(v.toInt)
-  //   case _                       => None
-  // }.headOption
-
-  private def filters = {
+  def filters = {
     predicate.filters(condition)
   }
 
@@ -33,24 +24,10 @@ case class NodeClause(predicate: NodePredicate, variable: String, condition: Opt
     GraphRoot(filters)
   }
 
-  // private def additionalQuery = {
-  //   predicate.additionalQuery(name, index)
-  // }
-
   def getQuery = {
     GraphQuery(
       getRoot,
       Nil)
-  }
-
-  def nodeTraverse = {
-    // everything gets references, even if not necessary
-    // not a big deal?
-    ifNonEmpty(filters) {
-      NodeTraverse(
-        follow = EdgeTypeFollow(EdgeTypeTraverse.BasicFollows.map(EdgeTypeTraverse.basic).map(_.reverse)),
-        filters = filters) :: Nil
-    }
   }
 
   def dto = NodeClauseDTO(predicate, variable, condition.map(_.dto))

@@ -13,15 +13,89 @@ case class DirectedSrcLogEdge(
   nodeCheck:    Option[NodeClause],
   containsHint: Option[NodePredicate]) {
 
-
-  def newCost = {
-    if(reverse) {
+  def edgePenalty = {
+    if (reverse) {
       predicate.reverseCost
     } else {
       predicate.forwardCost
     }
   }
 
+  def propogatedFollow = {
+    withFlag(reverse && nodeCheck.isEmpty) {
+      // predicate.propogatedFollow
+    }
+  }
+
+  def edgeTraverse = {
+    val index = condition match {
+      case Some(IndexCondition(v)) => Some(v.toInt)
+      case _                       => None
+    }
+    val name = condition match {
+      case Some(NameCondition(v)) => Some(v)
+      case _                      => None
+    }
+    // TODO?
+    // val multiName = condition match {
+    //   case Some(MultiNameCondition(p)) => p
+    //   case _                           => Nil
+    // }
+    val props = condition match {
+      case Some(GraphPropertyCondition(p)) => p
+      case _                               => Nil
+    }
+
+    // val baseTraverse = predicate.queryTraverse(name, index, props, Nil)
+    // val 
+
+
+
+    // final def reverseTraverse(name: Option[String], index: Option[Int], props: List[GenericGraphProperty], follow: List[GraphEdgeType]): List[Traverse] = {
+    //   ReverseTraverse(
+    //     EdgeTypeFollow(follow.map(EdgeTypeTraverse.basic)),
+    //     queryTraverse(name, index, props, Nil)) :: Nil
+    // }
+
+
+
+    if (reverse) {
+      // TODO: this logic is not correct.
+      // should not always follow, but should look at flag on previous predicates
+      // val follow = withFlag(predicate.egressReferences || true) {
+      //   EdgeTypeTraverse.BasicFollows
+      // }
+
+      predicate.reverseTraverse(name, index, props, Nil)
+    } else {
+      // val follow = withFlag(predicate.ingressReferences) {
+      //   EdgeTypeTraverse.BasicFollows
+      // }
+
+      predicate.queryTraverse(name, index, props, Nil)
+      // base match {
+      //   case head :: rest => head.copy(follow = new EdgeTypeFollow(follow)) :: rest
+      //   case Nil          => throw new Exception("improperly defined predicate")
+      // }
+    }
+  }
+
+  def nodeTraverse = {
+    withDefined(nodeCheck) { nc =>
+      ifNonEmpty(nc.filters) {
+        List(
+          NodeTraverse(
+            follow = EdgeTypeFollow(predicate.propogatedFollow), // should use self.propagated follows
+            filters = nc.filters)
+        )
+      }
+    }
+  }
+
+  /**
+   * Deprecate below
+   */
+  @deprecated
   def toTraceQuery = {
     // these conditions should never happen
     if (booleanModifier.isDefined && reverse) {
@@ -69,7 +143,7 @@ case class DirectedSrcLogEdge(
       // }
     }
     val withNodeCheck = nodeCheck match {
-      case Some(nc) => withReverse ++ nc.nodeTraverse
+      case Some(nc) => withReverse ++ nodeTraverse
       case _        => withReverse
     }
 
@@ -96,11 +170,6 @@ case class DirectedSrcLogEdge(
         FromRoot(from, leftJoin = leftJoin),
         withContainsHint))
   }
-
-
-  /**
-    * Deprecate below
-    */
 
   def forceForwardDirection = predicate.forceForwardDirection || booleanModifier.isDefined
 
@@ -149,11 +218,35 @@ case class DirectedSrcLogEdge(
 }
 
 object DirectedSrcLogEdge {
-  def reverse(edge: EdgeClause) = {
-    DirectedSrcLogEdge(edge.to, edge.from, edge.predicate, edge.condition, edge.modifier, reverse = true, nodeCheck = None, containsHint = None)
+  def reverse(edge: EdgeClause, nodeMap: Map[String, NodeClause]) = {
+    val nodeCheck = nodeMap.get(edge.from)
+    if (edge.predicate.mustSpecifyNodes && nodeCheck.isEmpty) {
+      throw new Exception(s"More specific node needs to be defined for ${edge.from}")
+    }
+    DirectedSrcLogEdge(
+      edge.to,
+      edge.from,
+      edge.predicate,
+      edge.condition,
+      edge.modifier,
+      reverse = true,
+      nodeCheck = nodeCheck,
+      containsHint = None)
   }
 
-  def forward(edge: EdgeClause) = {
-    DirectedSrcLogEdge(edge.from, edge.to, edge.predicate, edge.condition, edge.modifier, reverse = false, nodeCheck = None, containsHint = None)
+  def forward(edge: EdgeClause, nodeMap: Map[String, NodeClause]) = {
+    val nodeCheck = nodeMap.get(edge.to)
+    if (edge.predicate.mustSpecifyNodes && nodeCheck.isEmpty) {
+      throw new Exception(s"More specific node needs to be defined for ${edge.to}")
+    }
+    DirectedSrcLogEdge(
+      edge.from,
+      edge.to,
+      edge.predicate,
+      edge.condition,
+      edge.modifier,
+      reverse = false,
+      nodeCheck = nodeCheck,
+      containsHint = None)
   }
 }

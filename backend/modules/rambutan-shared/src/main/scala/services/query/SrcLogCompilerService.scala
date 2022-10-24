@@ -144,9 +144,9 @@ class SrcLogCompilerService @Inject() (
         throw new Exception("should never get a boolean edge as an intersection")
       } else if (m.predicate.shouldReverseMissing) {
         // generally the case
-        DirectedSrcLogEdge.reverse(m)
+        DirectedSrcLogEdge.reverse(m, Map.empty[String, NodeClause])
       } else {
-        DirectedSrcLogEdge.forward(m)
+        DirectedSrcLogEdge.forward(m, Map.empty[String, NodeClause])
       }
 
       val intersectTo = Hashing.uuid()

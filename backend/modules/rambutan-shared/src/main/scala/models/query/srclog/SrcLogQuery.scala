@@ -22,16 +22,16 @@ trait SrcLogQuery {
 
     edges.flatMap {
       case e @ EdgeClause(p, from, to, c, Some(_)) => {
-        DirectedSrcLogEdge.forward(e) :: Nil
+        DirectedSrcLogEdge.forward(e, Map.empty[String, NodeClause]) :: Nil
       }
       case e @ EdgeClause(p, from, to, c, _) if p.forceForwardDirection => {
-        DirectedSrcLogEdge.forward(e) :: Nil
+        DirectedSrcLogEdge.forward(e, Map.empty[String, NodeClause]) :: Nil
       }
       case e @ EdgeClause(p, from, to, c, None) if p.singleDirection => {
-        DirectedSrcLogEdge.reverse(e) :: Nil
+        DirectedSrcLogEdge.reverse(e, Map.empty[String, NodeClause]) :: Nil
       }
       case e @ EdgeClause(p, from, to, c, None) => {
-        DirectedSrcLogEdge.forward(e) :: DirectedSrcLogEdge.reverse(e) :: Nil
+        DirectedSrcLogEdge.forward(e, Map.empty[String, NodeClause]) :: DirectedSrcLogEdge.reverse(e, Map.empty[String, NodeClause]) :: Nil
       }
     }
   }
@@ -132,6 +132,10 @@ trait SrcLogQuery {
       case (k, vs) => findMostSpecific(k, vs)
     }.toList
   }
+
+  lazy val nodeMap = allNodes.map {
+    case n => n.variable -> n
+  }.toMap // unique by variable
 
   def subset(sub: Set[String]): SrcLogQuery
 
