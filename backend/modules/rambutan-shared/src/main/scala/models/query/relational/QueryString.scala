@@ -155,10 +155,6 @@ object QueryString {
         val guts = (followStanza :+ traverseStanza).mkString(",\n")
         "reverse{\n" + guts + "\n}"
       }
-      case FilterTraverse(traverses) => {
-        val guts = traverses.map(i => stringifyTraverse(i, tabs + 1)).mkString(".\n")
-        "filter{\n" + guts + "\n}"
-      }
       case NodeTraverse(follow, targets) => {
         val followGuts = follow.traverses.map { t =>
           stringifyEdgeTypeTraverse(t, tabs + 1)

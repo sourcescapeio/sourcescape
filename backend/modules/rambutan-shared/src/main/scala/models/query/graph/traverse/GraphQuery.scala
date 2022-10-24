@@ -150,13 +150,6 @@ object GraphQuery {
   }
 
   /**
-   * Filters
-   */
-  private def filterTraverse[_: P]: P[FilterTraverse] = P("filter" ~ "{" ~/ traverse ~ ("." ~ traverse).rep(0) ~ "}") map {
-    case (head, rest) => FilterTraverse(head :: rest.toList)
-  }
-
-  /**
    * Targeting
    */
   private def repoSetting[_: P] = P("repo=\"" ~/ Lexical.quotedChars ~ "\"")
@@ -175,7 +168,7 @@ object GraphQuery {
     case nodeFilters => GraphRoot(nodeFilters)
   }
 
-  def traverse[_: P] = P(edgeTraverse | nodeTraverse | onehopTraverse | onehopReverse | filterTraverse | reverseTraverse | repeatedTraverse)
+  def traverse[_: P] = P(edgeTraverse | nodeTraverse | onehopTraverse | onehopReverse | reverseTraverse | repeatedTraverse)
 
   private def targeting[_: P] = P("%targeting(" ~ fileSetting ~ ")").map {
     case file => QueryTargetingRequest.AllLatest(Some(file))

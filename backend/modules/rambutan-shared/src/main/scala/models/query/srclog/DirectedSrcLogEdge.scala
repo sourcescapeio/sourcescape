@@ -85,7 +85,7 @@ case class DirectedSrcLogEdge(
       ifNonEmpty(nc.filters) {
         List(
           NodeTraverse(
-            follow = EdgeTypeFollow(predicate.propogatedFollow), // should use self.propagated follows
+            follow = EdgeTypeFollow(Nil), // should use self.propagated follows
             filters = nc.filters)
         )
       }

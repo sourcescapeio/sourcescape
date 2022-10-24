@@ -73,42 +73,11 @@ case class RepeatedEdgeTraverseNew(inner: List[EdgeTraverse]) extends Traverse {
   def isColumn = true
 }
 
-trait StatefulTeleport {
-  def getNames(obj: JsObject): List[String]
-
-  def nameQuery(name: List[String]): List[JsObject]
-
-  def doJoin(node: JsObject, names: List[String], collectedMap: Map[String, List[JsObject]]): List[JsObject]
-}
-
-case class BasicStatefulTeleport(
-  teleportNames: JsObject => List[String],
-  teleportKey:   String) extends StatefulTeleport {
-
-  def getNames(obj: JsObject) = teleportNames(obj)
-
-  def nameQuery(names: List[String]): List[JsObject] = {
-    ESQuery.termsSearch(teleportKey, names.toList) :: Nil
-  }
-
-  def doJoin(node: JsObject, names: List[String], collectedMap: Map[String, List[JsObject]]) = {
-    names.flatMap { name =>
-      collectedMap.getOrElse(name, Nil)
-    }
-  }
-}
-
-case class FilterTraverse(traverses: List[Traverse]) extends Traverse {
-
-  override val isColumn: Boolean = false
-}
-
 case class ReverseTraverse(follow: EdgeTypeFollow, traverses: List[Traverse]) extends Traverse {
   def validate = {
     traverses.foreach {
       case a @ EdgeTraverse(_, _, _) => ()
       case n @ NodeTraverse(_, _)    => ()
-      case f @ FilterTraverse(_)     => ()
       case other                     => throw new Exception("invalid traverse " + other)
     }
   }

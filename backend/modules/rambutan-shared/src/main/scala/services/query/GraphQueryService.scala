@@ -298,11 +298,6 @@ class GraphQueryService @Inject() (
           onehopTraverse(c.follow, initial = true)(targeting, cc, tracing)
         }
       }
-      case e: FilterTraverse => {
-        context.withSpanF("query.graph.trace.filter") { cc =>
-          filterTraverse(e.traverses)(targeting, cc, tracing)
-        }
-      }
     }
   }
 
@@ -432,16 +427,6 @@ class GraphQueryService @Inject() (
     }
   }
 
-  private def filterTraverse[T, TU](traverses: List[Traverse])(implicit targeting: QueryTargeting[TU], context: SpanContext, tracing: QueryTracing[T, TU]): Flow[T, T, _] = {
-    val dropRange = collection.immutable.Range(0, traverses.filter(_.isColumn).length)
-
-    executeTrace(traverses).map {
-      case i => dropRange.foldLeft(i) {
-        case (acc, _) => tracing.dropHead(acc)
-      }
-    }
-  }
-
   private def reverseTraverse[T, TU](traverse: ReverseTraverse)(implicit targeting: QueryTargeting[TU], context: SpanContext, tracing: QueryTracing[T, TU]): Flow[T, T, _] = {
     val traverses = traverse.traverses
     val initial = Flow[T].map(tracing.pushCopy) -> traverse.follow
@@ -464,14 +449,6 @@ class GraphQueryService @Inject() (
         }
 
         (nextFlow, nextFollow.reverse)
-      }
-      case ((flow, prevFollow), FilterTraverse(f)) => {
-        // filters do not need to be reversed
-        // because we're already at the right node
-        val nextFlow = flow.via {
-          filterTraverse(f)
-        }
-        (nextFlow, new EdgeTypeFollow(Nil))
       }
       // We never reverse these
       case ((flow, prevFollow), RepeatedEdgeTraverseNew(inner)) => {
