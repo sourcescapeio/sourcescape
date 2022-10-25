@@ -5,6 +5,7 @@ import workers._
 import models.{ RepoSHAIndex, IndexType, RepoSHAHelpers }
 import models.query._
 import models.graph._
+import models.index._
 
 import org.scalatestplus.play.guice._
 import dal.SharedDataAccessLayer
@@ -16,6 +17,33 @@ import silvousplay.api.NoopSpanContext
 
 trait IndexHelpers {
   self: RambutanSpec =>
+
+  private val Key = "key"
+  private val Repo = "repo"
+  private val SHA = "sha"
+  private val Path = "path"
+
+  protected case class Node(id: String, `type`: String, name: Option[String] = None, index: Option[Int] = None, tags: List[String] = Nil) {
+    def toGraph = GraphNode(id, Repo, SHA, Key, Path, `type`, 0, 0, 0, 0, 0, 0, name, name.toList, tags, index)
+  }
+
+  protected case class Edge(id: String, `type`: String, from: String, to: String, name: Option[String] = None, index: Option[Int] = None) {
+    def toGraph = GraphEdge(Key, `type`, from, to, id, None, name, index)
+  }
+
+  protected def runGraphIndex(indexType: IndexType)(
+    nodes: Node*)(
+    edges: Edge*)(implicit ec: ExecutionContext) = {
+
+    val elasticSearchService = app.injector.instanceOf[ElasticSearchService]
+
+    for {
+      _ <- elasticSearchService.indexBulk(indexType.nodeIndexName, nodes.map(_.toGraph).map(n => Json.toJson(n)))
+      _ <- elasticSearchService.indexBulk(indexType.edgeIndexName, edges.map(_.toGraph).map(n => Json.toJson(n)))
+    } yield {
+      ()
+    }
+  }
 
   protected def runTestIndex(index: RepoSHAIndex, indexType: IndexType)(data: (String, String)*)(implicit ec: ExecutionContext) = {
     val dal = app.injector.instanceOf[SharedDataAccessLayer]

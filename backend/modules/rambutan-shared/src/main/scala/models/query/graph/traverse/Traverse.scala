@@ -61,6 +61,13 @@ case class EdgeTraverse(follow: EdgeTypeFollow, target: EdgeTypeTarget, typeHint
   def targetEdges = target.traverses.map(_.edgeType)
 }
 
+/**
+ * FSM models
+ */
+// trait LinearTraverseFollow
+
+// case class LinearTraverse(follows: List[], target: EdgeTypeTarget())
+
 // traverses, emits all instead of spooling in a trace
 @deprecated
 case class RepeatedEdgeTraverse[T, TU](follow: EdgeTypeFollow, shouldTerminate: T => Boolean) extends Traverse {

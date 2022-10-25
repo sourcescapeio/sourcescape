@@ -36,7 +36,7 @@ import akka.http.scaladsl.model.ws._
 import org.joda.time.DateTime
 import akka.stream.Materializer
 
-abstract class QuerySpec
+abstract class SrcLogQuerySpec
   extends RambutanSpec
   with IndexHelpers
   with QueryHelpers {
@@ -239,9 +239,9 @@ class Test {
   }
 }
 
-// sbt "project rambutanTest" "testOnly test.QuerySpecContainers"
-class QuerySpecContainers
-  extends QuerySpec
+// sbt "project rambutanTest" "testOnly test.SrcLogQuerySpecContainers"
+class SrcLogQuerySpecContainers
+  extends SrcLogQuerySpec
   with ForAllTestContainer {
 
   private val elasticsearch = ElasticsearchContainer(
@@ -288,8 +288,8 @@ class QuerySpecContainers
 }
 
 // sbt "project rambutanTest" "testOnly test.QuerySpecCompose"
-class QuerySpecCompose
-  extends QuerySpec {
+class SrcLogQuerySpecCompose
+  extends SrcLogQuerySpec {
 
   def config() = {
     Map(

@@ -28,7 +28,7 @@ sealed abstract class EdgePredicate(
       queryTraverse(name, index, props, Nil)) :: Nil
   }
 
-  // def propagatedFollow = 
+  // def propagatedFollow =
 
   /**
    * Feature flags
@@ -518,6 +518,7 @@ object JavascriptEdgePredicate extends Plenumeration[JavascriptEdgePredicate] {
             JavascriptGraphEdgeType.CallOf) :: Nil)) :: Nil
     }
   }
+
   case object CallArg extends JavascriptEdgePredicate("call_arg", forwardCost = 5, reverseCost = 1) with HasIndex {
     override val fromImplicit = Some(JavascriptNodePredicate.Call)
 
@@ -553,6 +554,7 @@ object JavascriptEdgePredicate extends Plenumeration[JavascriptEdgePredicate] {
             EdgeTypeTraverse.basic(JavascriptGraphEdgeType.IfTest) :: Nil)) :: Nil
     }
   }
+
   case object IfBody extends JavascriptEdgePredicate("if_body", forwardCost = 1000, reverseCost = 1) {
     override val fromImplicit = Some(JavascriptNodePredicate.If)
 
@@ -698,6 +700,9 @@ object JavascriptEdgePredicate extends Plenumeration[JavascriptEdgePredicate] {
     // NOTE: body doesn't have egress because `*-contains` edges link directly to all nodes
 
     override def queryTraverse(name: Option[String], index: Option[Int], props: List[GenericGraphProperty], follow: List[GraphEdgeType]) = {
+      // ?(MethodFunction)
+      // T(FunctionContains)
+
       List(
         EdgeTraverse(
           follow = edgeTypeFollow(JavascriptGraphEdgeType.MethodFunction :: follow),
@@ -718,6 +723,11 @@ object JavascriptEdgePredicate extends Plenumeration[JavascriptEdgePredicate] {
     override val singleDirection: Boolean = true
 
     override def queryTraverse(name: Option[String], index: Option[Int], props: List[GenericGraphProperty], follow: List[GraphEdgeType]) = {
+
+      // ?(MethodFunction)
+      // T(FunctionContains)
+      // T(CallLink)
+
       RepeatedEdgeTraverseNew(
         List(
           EdgeTraverse(

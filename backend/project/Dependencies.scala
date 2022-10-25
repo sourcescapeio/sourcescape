@@ -4,7 +4,7 @@ object Dependencies {
   object Vsn {
     val Scala = "2.13.8"
 
-    val Play = "2.8.15"
+    val Play = "2.8.18"
 
     val PlaySlick = "5.0.2"
 
@@ -38,7 +38,10 @@ object Dependencies {
     val sangria = "org.sangria-graphql" %% "sangria" % "2.0.1"
     val sangriaSlowLog = "org.sangria-graphql" %% "sangria-slowlog" % "2.0.1"
     val sangriaPlayJson = "org.sangria-graphql" %% "sangria-play-json" % "2.0.1"
-    val sangriaAkkaStreams = "org.sangria-graphql" %% "sangria-akka-streams" % "1.0.2",
+    val sangriaAkkaStreams = "org.sangria-graphql" %% "sangria-akka-streams" % "1.0.2"
+
+    val guice = "com.google.inject"            % "guice"                % "5.1.0"
+    val guiceAssistedInject = "com.google.inject.extensions" % "guice-assistedinject" % "5.1.0"
   }
 
   object Persist {

@@ -47,17 +47,13 @@ case class DirectedSrcLogEdge(
     }
 
     // val baseTraverse = predicate.queryTraverse(name, index, props, Nil)
-    // val 
-
-
+    // val
 
     // final def reverseTraverse(name: Option[String], index: Option[Int], props: List[GenericGraphProperty], follow: List[GraphEdgeType]): List[Traverse] = {
     //   ReverseTraverse(
     //     EdgeTypeFollow(follow.map(EdgeTypeTraverse.basic)),
     //     queryTraverse(name, index, props, Nil)) :: Nil
     // }
-
-
 
     if (reverse) {
       // TODO: this logic is not correct.
@@ -86,8 +82,7 @@ case class DirectedSrcLogEdge(
         List(
           NodeTraverse(
             follow = EdgeTypeFollow(Nil), // should use self.propagated follows
-            filters = nc.filters)
-        )
+            filters = nc.filters))
       }
     }
   }

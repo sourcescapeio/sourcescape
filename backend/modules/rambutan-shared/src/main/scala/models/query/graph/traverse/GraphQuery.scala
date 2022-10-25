@@ -181,4 +181,15 @@ object GraphQuery {
       GraphQuery(root, traverses.toList)
     }
   }
+
+  def parseOrDie(q: String): (Option[QueryTargetingRequest], GraphQuery) = {
+    fastparse.parse(q, fullQuery(_)) match {
+      case fastparse.Parsed.Success((maybeTargeting, query), _) => {
+        (maybeTargeting, query)
+      }
+      case f: fastparse.Parsed.Failure => {
+        throw new Exception("Invalid query")
+      }
+    }
+  }
 }

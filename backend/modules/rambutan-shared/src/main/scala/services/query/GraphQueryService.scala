@@ -29,16 +29,6 @@ class GraphQueryService @Inject() (
   elasticSearchService: ElasticSearchService)(implicit mat: akka.stream.Materializer, ec: ExecutionContext) {
 
   /**
-   * orderings
-   */
-  // TODO: this is super dangerous because conflicts with secondaryOrdering
-  // implicit private val o1 = Ordering.by { a: GraphTrace[TraceUnit] =>
-  //   a.sortKey.mkString("|")
-  // }
-
-  // for nodeCheck stuff
-
-  /**
    * Constants
    */
   val SearchScroll = 10000
@@ -271,6 +261,10 @@ class GraphQueryService @Inject() (
             initial = true)(targeting, cc, tracing)
         }
       }
+      // case lin: LinearTraverse => {
+      //   linearTraverse()
+
+      // }
       case b: NodeTraverse => {
         context.withSpanF("query.graph.trace.node") { cc =>
           nodeTraverse(b.filters, b.follow.traverses)(targeting, cc, tracing)
