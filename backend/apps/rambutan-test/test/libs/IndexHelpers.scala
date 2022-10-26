@@ -18,13 +18,18 @@ import silvousplay.api.NoopSpanContext
 trait IndexHelpers {
   self: RambutanSpec =>
 
-  private val Key = "key"
-  private val Repo = "repo"
-  private val SHA = "sha"
-  private val Path = "path"
+  protected val Repo = "repo"
+  protected val SHA = "sha"
+  protected val Path = "path"
+  protected val RepoId = 1
+  protected val OrgId = -1
+  protected val IndexId = 1
 
-  protected case class Node(id: String, `type`: String, name: Option[String] = None, index: Option[Int] = None, tags: List[String] = Nil) {
-    def toGraph = GraphNode(id, Repo, SHA, Key, Path, `type`, 0, 0, 0, 0, 0, 0, name, name.toList, tags, index)
+  protected val Index = RepoSHAIndex(IndexId, OrgId, Repo, RepoId, SHA, None, None, "1", false, 0L)
+  protected val Key = Index.esKey
+
+  protected case class Node(id: String, `type`: String, name: Option[String] = None, index: Option[Int] = None, props: List[GenericGraphProperty] = Nil) {
+    def toGraph = GraphNode(id, Repo, SHA, Key, Path, `type`, 0, 0, 0, 0, 0, 0, name, name.toList, props, Nil, index)
   }
 
   protected case class Edge(id: String, `type`: String, from: String, to: String, name: Option[String] = None, index: Option[Int] = None) {
@@ -40,6 +45,8 @@ trait IndexHelpers {
     for {
       _ <- elasticSearchService.indexBulk(indexType.nodeIndexName, nodes.map(_.toGraph).map(n => Json.toJson(n)))
       _ <- elasticSearchService.indexBulk(indexType.edgeIndexName, edges.map(_.toGraph).map(n => Json.toJson(n)))
+      _ <- elasticSearchService.refresh(indexType.nodeIndexName)
+      _ <- elasticSearchService.refresh(indexType.edgeIndexName)
     } yield {
       ()
     }

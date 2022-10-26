@@ -2,6 +2,7 @@ package models.index
 
 import models.query.FileKey
 import play.api.libs.json._
+import models.graph.GenericGraphProperty
 
 // NOTE: we can deserialize this as GraphNode
 case class GraphNode(
@@ -23,6 +24,7 @@ case class GraphNode(
   // optionals
   name:        Option[String],
   search_name: List[String],
+  props:       List[GenericGraphProperty],
   tags:        List[String],
   index:       Option[Int]) {
 
@@ -70,6 +72,8 @@ object GraphNode {
         "search_name" -> Json.obj(
           "type" -> "text",
           "analyzer" -> "keyword"), // better analyzer here?
+        "props" -> Json.obj(
+          "type" -> "keyword"),
         "tags" -> Json.obj(
           "type" -> "keyword"),
         "index" -> Json.obj(

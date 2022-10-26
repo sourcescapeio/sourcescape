@@ -14,7 +14,7 @@ sealed trait Traverse {
 object Traverse {
   def extractNameQuery(key: String, name: String) = {
     name.trim match {
-      case n if n.startsWith("{") && n.endsWith("}") => {
+      case n if n.startsWith("/") && n.endsWith("/") => {
         ESQuery.regexpSearch(key, name.drop(1).dropRight(1))
       }
       case n if n.contains("*") => ESQuery.wildcardSearch(key, n)

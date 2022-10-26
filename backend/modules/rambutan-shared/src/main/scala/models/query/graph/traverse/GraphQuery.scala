@@ -16,6 +16,159 @@ case class GraphQuery(root: GraphRoot, traverses: List[Traverse]) {
   def addTraverse(extra: List[Traverse]) = this.copy(traverses = traverses ++ extra)
 }
 
+object GraphQuery2 {
+  object Base {
+    // private def keywordChars[_: P] = P(CharIn("0-9a-zA-Z_").rep(1).!)
+
+    def quotedKeyword[_: P] = {
+      implicit val whitespace = NoWhitespace.noWhitespaceImplicit
+      P("\"" ~/ Lexical.keywordChars ~ "\"")
+    }
+
+    private def keywordList[_: P] = {
+      // implicit val whitespace = MultiLineWhitespace.whitespace
+      P("[" ~/ Base.quotedKeyword ~ ("," ~ Base.quotedKeyword).rep(1) ~ "]").map {
+        case (first, rest) => first :: rest.toList
+      }
+    }
+
+    def keywordArg[_: P] = P(quotedKeyword).map(id => id :: Nil) | keywordList
+
+    //
+    def quotedChars[_: P] = {
+      implicit val whitespace = NoWhitespace.noWhitespaceImplicit
+      P("\"" ~/ Lexical.quotedChars ~ "\"")
+    }
+
+    private def charsList[_: P] = {
+      // implicit val whitespace = MultiLineWhitespace.whitespace
+      P("[" ~/ Base.quotedChars ~ ("," ~ Base.quotedChars).rep(1) ~ "]").map {
+        case (first, rest) => first :: rest.toList
+      }
+    }
+
+    def charsArg[_: P] = P(quotedChars).map(id => id :: Nil) | charsList
+
+    private def numList[_: P] = {
+      // implicit val whitespace = MultiLineWhitespace.whitespace
+      P("[" ~/ Lexical.numChars ~ ("," ~ Lexical.numChars).rep(1) ~ "]").map {
+        case (first, rest) => first.toInt :: rest.toList.map(_.toInt)
+      }
+    }
+
+    def numsArg[_: P] = P(Lexical.numChars).map(id => id.toInt :: Nil) | numList
+  }
+
+  object NodeId {
+    private def nodeIdFilter[_: P] = {
+      implicit val whitespace = SingleLineWhitespace.whitespace
+      P("id" ~ ":" ~/ Base.keywordArg) map (ids => NodeIdsFilter(ids))
+    }
+
+    def targetSetting[_: P] = P(nodeIdFilter) map (_ :: Nil)
+  }
+
+  object NodeType {
+    // Type
+    case class QueryNodeType(val identifier: String) extends models.index.NodeType
+    private def nodeType[_: P] = P(Base.quotedKeyword).map { str =>
+      QueryNodeType(str.trim)
+    }
+
+    private def nodeTypeList[_: P] = {
+      // implicit val whitespace = MultiLineWhitespace.whitespace
+      P("[" ~/ nodeType ~ ("," ~ nodeType).rep(1) ~ "]").map {
+        case (first, rest) => first :: rest.toList
+      }
+    }
+
+    private def nodeTypeArg[_: P] = P(nodeType).map(nt => nt :: Nil) | nodeTypeList
+
+    private def nodeProp[_: P] = {
+      implicit val whitespace = SingleLineWhitespace.whitespace
+      P(Base.quotedKeyword ~ ":" ~ Base.quotedKeyword) map {
+        case (k, v) => GenericGraphProperty(k, v)
+      }
+    }
+
+    // Type
+    private def nodeTypeFilter[_: P] = {
+      implicit val whitespace = SingleLineWhitespace.whitespace
+      P("type" ~ ":" ~/ nodeTypeArg) map (typ => NodeTypesFilter(typ))
+    }
+
+    // Names
+    private def nodeNameFilter[_: P] = {
+      implicit val whitespace = SingleLineWhitespace.whitespace
+      P("name" ~ ":" ~/ Base.charsArg) map (names => NodeNamesFilter(names))
+    }
+
+    // Index
+    private def nodeIndexFilter[_: P] = {
+      implicit val whitespace = SingleLineWhitespace.whitespace
+      P("index" ~ ":" ~/ Base.numsArg) map (idx => NodeIndexesFilter(idx))
+    }
+
+    // Props
+    private def nodePropsFilter[_: P] = {
+      // implicit val whitespace = MultiLineWhitespace.whitespace
+
+      // ~ ("," ~ nodeProp).rep(0)
+      P("props" ~ ":" ~/ "{" ~/ nodeProp ~ "}") map {
+        case head => NodePropsFilter(head :: Nil)
+        // case (head, rest) => NodePropsFilter(head :: rest.toList)
+      }
+    }
+
+    def targetSetting[_: P] = {
+      // implicit val whitespace = MultiLineWhitespace.whitespace
+      P(nodeTypeFilter ~ ("," ~ (nodeNameFilter | nodeIndexFilter | nodePropsFilter)).?) map {
+        case (a, b) => a :: b.toList
+      }
+    }
+  }
+
+  private def root[_: P] = {
+    // implicit val whitespace = MultiLineWhitespace.whitespace
+    P("root" ~ "{" ~/ (NodeId.targetSetting | NodeType.targetSetting) ~ "}") map {
+      case nodeFilters => GraphRoot(nodeFilters)
+    }
+  }
+
+  def query[_: P] = {
+    P(root) map { root =>
+      GraphQuery(root, Nil)
+    }
+  }
+
+  //   P(root ~ ("." ~ traverse).rep(0)) map {
+  //   case (root, traverses) => {
+  //     GraphQuery(root, Nil)
+  //   }
+  // }
+
+  // should we be able to specify targeting in graph query?
+  private def fileSetting[_: P] = P("file=\"" ~/ Lexical.quotedChars ~ "\"")
+
+  private def targeting[_: P] = P("%targeting(" ~ fileSetting ~ ")").map {
+    case file => QueryTargetingRequest.AllLatest(Some(file))
+  }
+
+  def fullQuery[_: P] = P(Start ~ targeting.? ~ query ~ End)
+
+  def parseOrDie(q: String): (Option[QueryTargetingRequest], GraphQuery) = {
+    fastparse.parse(q, fullQuery(_)) match {
+      case fastparse.Parsed.Success((maybeTargeting, query), _) => {
+        (maybeTargeting, query)
+      }
+      case f: fastparse.Parsed.Failure => {
+        println(f)
+        throw new Exception("Invalid query")
+      }
+    }
+  }
+}
+
 object GraphQuery {
   private def edgeTypeInner[_: P] = P(Lexical.keywordChars).map { str =>
     val trimmed = str.trim
@@ -179,17 +332,6 @@ object GraphQuery {
   def query[_: P] = P(root ~ ("." ~ traverse).rep(0)) map {
     case (root, traverses) => {
       GraphQuery(root, traverses.toList)
-    }
-  }
-
-  def parseOrDie(q: String): (Option[QueryTargetingRequest], GraphQuery) = {
-    fastparse.parse(q, fullQuery(_)) match {
-      case fastparse.Parsed.Success((maybeTargeting, query), _) => {
-        (maybeTargeting, query)
-      }
-      case f: fastparse.Parsed.Failure => {
-        throw new Exception("Invalid query")
-      }
     }
   }
 }

@@ -10,7 +10,7 @@ import scala.concurrent.ExecutionContext
 import play.api.libs.json._
 
 trait QueryHelpers {
-  self: RambutanSpec =>
+  self: RambutanSpec with IndexHelpers =>
 
   protected def mapAssert(item: Map[String, JsValue], key: String)(f: JsValue => Unit) = {
     f(item.getOrElse(key, throw new Exception(s"${key} not found")))
@@ -42,13 +42,14 @@ trait QueryHelpers {
     val graphQueryService = app.injector.instanceOf[GraphQueryService]
     val queryTargetingService = app.injector.instanceOf[QueryTargetingService]
 
-    val (targetingRequest, query) = GraphQuery.parseOrDie(q)
+    val (_, query) = GraphQuery2.parseOrDie(q)
 
     val queryTracing = QueryTracing.Basic
+    val targeting = KeysQueryTargeting(IndexType.Javascript, List(Index), Map(), None)
 
     for {
-      targeting <- queryTargetingService.resolveTargeting(-1, indexType, targetingRequest.getOrElse(QueryTargetingRequest.AllLatest(None)))
-      (_, _, source) <- graphQueryService.executeUnit(query, false, None)(targeting, silvousplay.api.NoopSpanContext, QueryTracing.Basic)
+      // targeting <- queryTargetingService.resolveTargeting(-1, indexType,  )
+      (count, _, source) <- graphQueryService.executeUnit(query, false, None)(targeting, silvousplay.api.NoopSpanContext, QueryTracing.Basic)
       data <- source.runWith {
         Sinks.ListAccum[GraphTrace[TraceUnit]]
       }

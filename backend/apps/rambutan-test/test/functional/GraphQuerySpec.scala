@@ -77,81 +77,153 @@ abstract class GraphQuerySpec
   }
 
   "Raw Graph Queries" should {
-    "work" taggedAs (Tag("single")) in {
+    // sbt "project rambutanTest" "testOnly test.GraphQuerySpecCompose -- -z nodes"
+    "nodes" in {
       await {
-        runGraphIndex(IndexType.Javascript) {
-          Node("n1", "require", name = Some("@nestjs/common"))
-          Node("n2", "require")
-          // edge(),
-          // edge()
-        } {
-          Edge("e1", "butt", "n1", "n2")
-        }
+        runGraphIndex(IndexType.Javascript)(
+          Node("n1", "require", name = Some("@nestjs/common"), props = List(GenericGraphProperty("visibility", "private"))),
+          Node("n2", "require", name = Some("jarvis")),
+          Node("n3", "density", name = Some("jamila")))()
       }
 
-      val data = await {
+      println("======")
+      println("GRAPH1")
+      println("======")
+
+      await {
         dataForGraphQuery(IndexType.Javascript) {
           """
-          root[
-            type=require,
-            name="@nestjs/common"
+          root {
+            type: [
+              "require",
+              "density"
+            ]
+          }
+          """
+        }
+      }.foreach(println)
+
+      println("======")
+      println("GRAPH2")
+      println("======")
+
+      await {
+        dataForGraphQuery(IndexType.Javascript) {
+          """
+          root {
+            id: ["n1", "n2"]
+          }
+          """
+        }
+      }.foreach(println)
+
+      println("======")
+      println("GRAPH3")
+      println("======")
+
+      await {
+        dataForGraphQuery(IndexType.Javascript) {
+          """
+          root {
+            type: "require",
+            name: ["*common", "jarvis", "jamila"]
+          }
+          """
+        }
+      }.foreach(println)
+
+      println("======")
+      println("GRAPH4")
+      println("======")
+
+      await {
+        dataForGraphQuery(IndexType.Javascript) {
+          """
+          root {
+            type: "require",
+            props: {"visibility": "private"}
+          }
+          """
+        }
+      }.foreach(println)
+
+    }
+
+    // sbt "project rambutanTest" "testOnly test.GraphQuerySpecCompose -- -z linear.traverse"
+    "linear.traverse" in {
+
+      val N1 = "n1"
+      val N2 = "n2"
+      val N3 = "n3"
+      val N4 = "n4"
+      val N5 = "n5"
+
+      // Data view
+      // https://miro.com/app/board/uXjVPJhOq3s=/?share_link_id=681838518337
+      await {
+        runGraphIndex(IndexType.Javascript)(
+          Node(N1, "require"),
+          Node(N2, "require"),
+          Node(N3, "require")
+        // edge(),
+        // edge()
+        )(
+            Edge("e1", "reference", N1, N4, name = Some("test")),
+            Edge("e2", "reference", N3, N5)
+          //
+          )
+      }
+
+      println("=========")
+      println("TRAVERSE1")
+      println("=========")
+
+      await {
+        dataForGraphQuery(IndexType.Javascript) {
+          """
+          root {
+            type: "require"
+          }.linear_traverse [
+            t("reference")
           ]
           """
         }
-      }
+      }.foreach(println)
 
-      data.foreach(println)
+      // println("=========")
+      // println("TRAVERSE2")
+      // println("=========")
 
+      // await {
+      //   dataForGraphQuery(IndexType.Javascript) {
+      //     """
+      //     root {
+      //       type: "require"
+      //     }.linear_traverse {
+      //       t {
+      //         type: "reference",
+      //         name: "test"
+      //       }
+      //     }
+      //     """
+      //   }
+      // }.foreach(println)      
+
+      // .linear_traverse {
+      //           traverse: [
+      //             ?[butt, { type: butt, name: "hello"}],
+      //             ![butt],
+      //             t[butt2]
+      //           ]
+      //         }.repeated_traverse {
+      //           follow: [],
+      //           repeat: [
+      //             ?[butt],
+      //             ...
+      //           ]
+      //         }
     }
   }
-}
-
-// sbt "project rambutanTest" "testOnly test.GraphQuerySpecContainers"
-class GraphQuerySpecContainers
-  extends GraphQuerySpec
-  with ForAllTestContainer {
-
-  private val elasticsearch = ElasticsearchContainer(
-    DockerImageName.parse("docker.elastic.co/elasticsearch/elasticsearch:7.10.2"))
-
-  private val postgres = PostgreSQLContainer(
-    DockerImageName.parse("postgres:12.4"),
-    databaseName = "sourcescape",
-    username = "sourcescape",
-    password = "sourcescape")
-
-  private val redis = GenericContainer(
-    "redis:5.0.10",
-    exposedPorts = Seq(6379))
-
-  private val primadonna = GenericContainer(
-    "gcr.io/lychee-ai/sourcescape-cli-primadonna:0.2",
-    waitStrategy = Wait.forLogMessage(".*node ./bin/www.*", 1),
-    exposedPorts = Seq(3001))
-
-  private val dorothy = GenericContainer(
-    "gcr.io/lychee-ai/sourcescape-cli-dorothy:0.2",
-    waitStrategy = Wait.forLogMessage(".*WEBrick::HTTPServer#start.*", 1),
-    exposedPorts = Seq(3004))
-
-  def config() = {
-    Map(
-      "primadonna.server" -> s"http://localhost:${primadonna.mappedPort(3001)}",
-      "dorothy.server" -> s"http://localhost:${dorothy.mappedPort(3004)}",
-      "redis.port" -> s"${redis.mappedPort(6379)}",
-      "elasticsearch.port" -> s"${elasticsearch.mappedPort(9200)}",
-      "slick.dbs.default.profile" -> "silvousplay.data.PostgresDriver$",
-      "slick.dbs.default.db.url" -> s"jdbc:postgresql://localhost:${postgres.mappedPort(5432)}/sourcescape?characterEncoding=UTF-8",
-      "slick.dbs.default.db.user" -> "sourcescape",
-      "slick.dbs.default.db.password" -> "sourcescape")
-  }
-
-  override val container = MultipleContainers(
-    postgres,
-    elasticsearch,
-    redis,
-    primadonna,
-    dorothy)
 }
 
 // sbt "project rambutanTest" "testOnly test.GraphQuerySpecCompose"
@@ -160,8 +232,8 @@ class GraphQuerySpecCompose
 
   def config() = {
     Map(
-      "primadonna.server" -> s"http://localhost:${3001}", // use 3002 to test against docker
-      "dorothy.server" -> s"http://localhost:${3004}",
+      // "primadonna.server" -> s"http://localhost:${3001}", // use 3002 to test against docker
+      // "dorothy.server" -> s"http://localhost:${3004}",
       "redis.port" -> s"${6380}",
       "elasticsearch.port" -> s"${9201}",
       "slick.dbs.default.profile" -> "silvousplay.data.PostgresDriver$",
