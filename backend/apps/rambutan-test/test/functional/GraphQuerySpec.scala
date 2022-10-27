@@ -149,8 +149,8 @@ abstract class GraphQuerySpec
 
     }
 
-    // sbt "project rambutanTest" "testOnly test.GraphQuerySpecCompose -- -z linear.traverse"
-    "linear.traverse" in {
+    // sbt "project rambutanTest" "testOnly test.GraphQuerySpecCompose -- -z traverse.linear"
+    "traverse.linear" in {
 
       val N1 = "n1"
       val N2 = "n2"
@@ -158,18 +158,18 @@ abstract class GraphQuerySpec
       val N4 = "n4"
       val N5 = "n5"
 
-      // Data view
-      // https://miro.com/app/board/uXjVPJhOq3s=/?share_link_id=681838518337
       await {
         runGraphIndex(IndexType.Javascript)(
-          Node(N1, "require"),
-          Node(N2, "require"),
-          Node(N3, "require")
+          Node(N1, "class"),
+          Node(N2, "class"),
+          Node(N3, "class"),
+          Node(N4, "method"),
+          Node(N5, "call"),
         // edge(),
         // edge()
         )(
-            Edge("e1", "reference", N1, N4, name = Some("test")),
-            Edge("e2", "reference", N3, N5)
+            Edge("e1", "method", N1, N4, name = Some("test")),
+            Edge("e2", "class-decorator", N3, N5)
           //
           )
       }
@@ -182,14 +182,111 @@ abstract class GraphQuerySpec
         dataForGraphQuery(IndexType.Javascript) {
           """
           root {
-            type: "require"
+            type: "class"
           }.linear_traverse [
-            t("reference")
+            t["javascript::class_decorator"]
           ]
           """
         }
       }.foreach(println)
 
+      println("=========")
+      println("TRAVERSE2")
+      println("=========")
+
+      await {
+        dataForGraphQuery(IndexType.Javascript) {
+          """
+          root {
+            type: ["method", "call"]
+          }.linear_traverse [
+            t["javascript::class_decorator".reverse]
+          ]
+          """
+        }
+      }.foreach(println)
+
+      // , {
+      //         type: "reference",
+      //         name: "test"
+      //       }
+
+      println("=========")
+      println("TRAVERSE3")
+      println("=========")
+
+      await {
+        dataForGraphQuery(IndexType.Javascript) {
+          """
+          root {
+            type: "class"
+          }.linear_traverse [
+            t[
+              {
+                type: "javascript::class_method",
+                name: "test"
+              }
+            ]
+          ]
+          """
+        }
+      }.foreach(println)
+    }
+
+
+    // sbt "project rambutanTest" "testOnly test.GraphQuerySpecCompose -- -z traverse.follows"
+    "traverse.follows" in {
+      val NRoot = Range(0, 4).toArray.map { idx =>
+        s"n${idx}"
+      }
+      val NRest = Range(4, 12).toArray.map { idx =>
+        s"n${idx}"
+      }
+      val N = NRoot ++ NRest
+
+      val allNodes = List(
+        NRoot.map { s => Node(s, "class")},
+        NRest.map { s => Node(s, "call")}
+      ).flatten
+
+      val allEdges = List(
+        path(N(0), ("class-property", N(4)), ("class-decorator", N(5)), ("method", N(6))),
+        path(N(1), ("class-decorator", N(7))),
+        path(N(2), ("method", N(8))),
+        path(N(3), ("class-decorator", N(9)), ("method", N(10)), ("method", N(11))) // should get partial
+      ).flatten
+
+      allNodes.foreach(println)
+      allEdges.foreach(println)
+
+      await {
+        runGraphIndex(IndexType.Javascript)(
+          allNodes:_*
+        )(
+          allEdges:_*
+        )
+      }
+
+      println("=========")
+      println("TRAVERSE1")
+      println("=========")
+
+      await {
+        dataForGraphQuery(IndexType.Javascript) {
+          """
+          root {
+            type: "class"
+          }.linear_traverse [
+            ?["javascript::class_property"],
+            *["javascript::class_decorator"],
+            t["javascript::class_method"]
+          ]
+          """
+        }
+      }.foreach(println)
+
+
+      // what are the rules around duplicates?
       // println("=========")
       // println("TRAVERSE2")
       // println("=========")
@@ -198,30 +295,19 @@ abstract class GraphQuerySpec
       //   dataForGraphQuery(IndexType.Javascript) {
       //     """
       //     root {
-      //       type: "require"
-      //     }.linear_traverse {
-      //       t {
-      //         type: "reference",
-      //         name: "test"
-      //       }
-      //     }
+      //       type: "class"
+      //     }.linear_traverse [
+      //       *["javascript::class_method"],
+      //       *["javascript::class_decorator"],
+      //       *["javascript::class_method"],
+      //       *["javascript::class_decorator"],
+      //       t["javascript::class_method"]
+      //     ]
       //     """
       //   }
-      // }.foreach(println)      
-
-      // .linear_traverse {
-      //           traverse: [
-      //             ?[butt, { type: butt, name: "hello"}],
-      //             ![butt],
-      //             t[butt2]
-      //           ]
-      //         }.repeated_traverse {
-      //           follow: [],
-      //           repeat: [
-      //             ?[butt],
-      //             ...
-      //           ]
-      //         }
+      //   // what are the rules around duplicates? we do want to be able to parallelize it
+      //   // we can revisit later
+      // }.foreach(println)
     }
   }
 }

@@ -98,7 +98,11 @@ trait QueryTracingBasic[TU] {
   def getKey(unit: TU): String
 }
 
-trait QueryTracing[T, TU] extends QueryTracingBasic[TU] {
+trait QueryTracingReduced[T, TU] extends QueryTracingBasic[TU] {
+  def getTerminus(trace: T): TU
+}
+
+trait QueryTracing[T, TU] extends QueryTracingReduced[T, TU] {
   self =>
 
   def traceHop(unit: T, edgeType: GraphEdgeType, edgeJs: JsObject, initial: Boolean): T
@@ -106,8 +110,6 @@ trait QueryTracing[T, TU] extends QueryTracingBasic[TU] {
   /**
    * Inherited
    */
-  def getTerminus(trace: T): TU
-
   def pushExternalKey(trace: T): T
 
   def pushCopy(trace: T): T

@@ -723,11 +723,9 @@ object JavascriptEdgePredicate extends Plenumeration[JavascriptEdgePredicate] {
     override val singleDirection: Boolean = true
 
     override def queryTraverse(name: Option[String], index: Option[Int], props: List[GenericGraphProperty], follow: List[GraphEdgeType]) = {
-
       // ?(MethodFunction)
       // T(FunctionContains)
       // T(CallLink)
-
       RepeatedEdgeTraverseNew(
         List(
           EdgeTraverse(

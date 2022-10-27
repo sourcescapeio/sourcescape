@@ -57,8 +57,23 @@ object EdgeTypeTraverse {
 case class EdgeTraverse(follow: EdgeTypeFollow, target: EdgeTypeTarget, typeHint: Option[NodeType] = None) extends Traverse {
 
   def isColumn = (follow.traverses ++ target.traverses).nonEmpty
+}
 
-  def targetEdges = target.traverses.map(_.edgeType)
+sealed abstract class FollowType(val identifier: String) extends Identifiable
+
+object FollowType extends Plenumeration[FollowType] {
+  case object Optional extends FollowType("?")
+  case object Star extends FollowType("*")
+  case object Target extends FollowType("t")
+}
+
+case class EdgeFollow(traverses: List[EdgeTypeTraverse], followType: FollowType)
+
+case class LinearTraverse(follows: List[EdgeFollow], target: EdgeFollow) extends Traverse {
+
+  // ???
+  def isColumn = (follows.flatMap(_.traverses) ++ target.traverses).nonEmpty
+
 }
 
 /**

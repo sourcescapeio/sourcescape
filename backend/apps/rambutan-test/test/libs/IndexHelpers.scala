@@ -14,6 +14,7 @@ import akka.util.ByteString
 import play.api.libs.json._
 import org.mockito.MockitoSugar
 import silvousplay.api.NoopSpanContext
+import silvousplay.Hashing
 
 trait IndexHelpers {
   self: RambutanSpec =>
@@ -34,6 +35,16 @@ trait IndexHelpers {
 
   protected case class Edge(id: String, `type`: String, from: String, to: String, name: Option[String] = None, index: Option[Int] = None) {
     def toGraph = GraphEdge(Key, `type`, from, to, id, None, name, index)
+  }
+
+  protected def path(root: String, items: (String, String)*) = {
+    val (_, results) = items.foldLeft((root, List.empty[Edge])) {
+      case ((from, acc), (nextType, nextTo)) => {
+        nextTo -> (Edge(Hashing.uuid(), nextType, from, nextTo) :: acc)
+      }
+    }
+
+    results.reverse
   }
 
   protected def runGraphIndex(indexType: IndexType)(

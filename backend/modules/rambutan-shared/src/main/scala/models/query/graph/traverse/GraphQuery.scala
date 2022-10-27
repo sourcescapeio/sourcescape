@@ -128,6 +128,90 @@ object GraphQuery2 {
     }
   }
 
+  object Traverse {
+    private def reverseSetting[_: P] = P("reverse") map (_ => true)
+
+    private def edgeType[_: P] = {
+      P(Base.quotedChars).map { str =>
+        val trimmed = str.trim
+        trimmed.split("::") match {
+          case Array(v) => GenericGraphEdgeType.withNameUnsafe(trimmed)
+          case Array(idx, v) => IndexType.withNameUnsafe(idx) match {
+            case IndexType.Javascript => JavascriptGraphEdgeType.withNameUnsafe(trimmed)
+            case IndexType.Ruby       => RubyGraphEdgeType.withNameUnsafe(trimmed)
+          }
+        }
+      }
+    }
+
+    private def basicEdgeType[_: P] = {
+      implicit val whitespace = NoWhitespace.noWhitespaceImplicit
+
+      P(edgeType ~ ("." ~/ reverseSetting).?).map {
+        case (edgeT, Some(_)) => edgeT.opposite
+        case (edgeT, _)       => edgeT
+      }.map { item =>
+        EdgeTypeTraverse(item, None)
+      }
+    }
+
+    // edge type filter
+
+    private def edgeIndexFilter[_: P] = {
+      implicit val whitespace = SingleLineWhitespace.whitespace
+      P("index" ~ ":" ~/ Base.numsArg) map (idx => EdgeIndexesFilter(idx.map(_.toInt)))
+    }
+    private def edgeNameFilter[_: P] = {
+      implicit val whitespace = SingleLineWhitespace.whitespace
+      P("name" ~ ":" ~/ Base.charsArg) map (names => EdgeNamesFilter(names))
+    }
+
+    private def edgeFilter[_: P] = P(edgeIndexFilter | edgeNameFilter)
+
+    private def expandedEdgeType[_: P] = {
+      // implicit val whitespace = MultiLineWhitespace.whitespace
+      P("{" ~/ "type" ~ ":" ~ basicEdgeType ~ ("," ~ edgeFilter).? ~ "}").map {
+        case (ty, filt) => ty.copy(filter = filt)
+      }
+    }
+
+    private def edgeTypeStanza[_: P] = {
+      // implicit val whitespace = MultiLineWhitespace.whitespace
+      P(expandedEdgeType | basicEdgeType)
+    }
+
+    // *
+    private def follow[_: P](followType: FollowType) = {
+      // implicit val whitespace = MultiLineWhitespace.whitespace
+      P(s"${followType.identifier}[" ~/ edgeTypeStanza ~ ("," ~ edgeTypeStanza).rep(0) ~ "]").map {
+        case (head, rest) => {
+          val all = head :: rest.toList
+          EdgeFollow(all, followType)
+        }
+      }
+    }
+
+    private def linearFollow[_: P] = P(follow(FollowType.Optional) | follow(FollowType.Star) | follow(FollowType.Target))
+
+    private def linearTraverse[_: P] = {
+      // implicit val whitespace = MultiLineWhitespace.whitespace
+      P("linear_traverse" ~ "[" ~/ linearFollow ~ ("," ~ linearFollow).rep(0) ~ "]") map {
+        case (head, rest) => {
+          val follows = (head :: rest.toList)
+          val finalTarget = follows.last match {
+            case v if v.followType =?= FollowType.Target => v
+            case _                                       => throw new Exception("final follow in traverse is not a target")
+          }
+          LinearTraverse(
+            follows.dropRight(1),
+            finalTarget)
+        }
+      }
+    }
+
+    def traverses[_: P] = P(linearTraverse)
+  }
+
   private def root[_: P] = {
     // implicit val whitespace = MultiLineWhitespace.whitespace
     P("root" ~ "{" ~/ (NodeId.targetSetting | NodeType.targetSetting) ~ "}") map {
@@ -136,16 +220,10 @@ object GraphQuery2 {
   }
 
   def query[_: P] = {
-    P(root) map { root =>
-      GraphQuery(root, Nil)
+    P(root ~ ("." ~ Traverse.traverses).rep(0)) map {
+      case (root, traverses) => GraphQuery(root, traverses.toList)
     }
   }
-
-  //   P(root ~ ("." ~ traverse).rep(0)) map {
-  //   case (root, traverses) => {
-  //     GraphQuery(root, Nil)
-  //   }
-  // }
 
   // should we be able to specify targeting in graph query?
   private def fileSetting[_: P] = P("file=\"" ~/ Lexical.quotedChars ~ "\"")
