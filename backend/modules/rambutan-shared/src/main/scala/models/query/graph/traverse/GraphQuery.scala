@@ -198,18 +198,20 @@ object GraphQuery2 {
       P("linear_traverse" ~ "[" ~/ linearFollow ~ ("," ~ linearFollow).rep(0) ~ "]") map {
         case (head, rest) => {
           val follows = (head :: rest.toList)
-          val finalTarget = follows.last match {
-            case v if v.followType =?= FollowType.Target => v
-            case _                                       => throw new Exception("final follow in traverse is not a target")
-          }
           LinearTraverse(
-            follows.dropRight(1),
-            finalTarget)
+            follows)
         }
       }
     }
 
-    def traverses[_: P] = P(linearTraverse)
+    private def nodeCheck[_: P] = {
+      // implicit val whitespace = MultiLineWhitespace.whitespace
+      P("node_check" ~ "{" ~/ (NodeId.targetSetting | NodeType.targetSetting) ~ "}") map {
+        case nodeFilters => NodeTraverse(EdgeTypeFollow.empty, nodeFilters)
+      }
+    }
+
+    def traverses[_: P] = P(linearTraverse | nodeCheck)
   }
 
   private def root[_: P] = {

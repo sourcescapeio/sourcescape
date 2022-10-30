@@ -22,17 +22,15 @@ import scalaz.Alpha
 
 private case class EdgeHop[T](obj: T, directedEdge: GraphEdgeType, edgeObj: JsObject)
 
-private case class GNFAHop[T](obj: T, state: Set[String]) {
+// forceStop is used for initial emits
+private case class GNFAHop[T](obj: T, state: Set[String], forceStop: Boolean) {
   def terminalTuple = {
     val terminalSegment = withFlag(state.contains(GNFA.End)) {
-      (GNFAHop(obj, Set(GNFA.End)), true) :: Nil
+      (GNFAHop(obj, Set(GNFA.End), forceStop = false), true) :: Nil
     }
 
-    val remainder = (state - GNFA.End) match {
-      case s if s.isEmpty => Nil
-      case s => {
-        (GNFAHop(obj, s), false) :: Nil
-      }
+    val remainder = withFlag(!forceStop) {
+      (GNFAHop(obj, state, forceStop = false), false) :: Nil
     }
 
     terminalSegment ++ remainder
@@ -112,26 +110,58 @@ private object GNFA {
       }
     }
 
+    // just recalculate
+    val reverseBaseEdgeMap = baseEdges.groupBy(_._3).map {
+      case (toVertex, vs) => {
+        toVertex -> vs.map(v => (v._2, v._1)).toSet
+      }
+    }
+
+
+    def propagateEquivalence(
+      acc: Map[String, Set[(EdgeTypeTraverse, String)]],
+      fromVertex: String,
+      toVertex: String
+    ) = {
+      // pass back toVertex edges to fromVertex
+      val toVertexEdges = acc.getOrElse(toVertex, Set.empty[(EdgeTypeTraverse, String)])
+      val fromVertexEdges = acc.getOrElse(fromVertex, Set.empty[(EdgeTypeTraverse, String)]) ++ toVertexEdges
+
+      val edgePropMap = acc ++ Map(fromVertex -> fromVertexEdges)
+
+      // any edges going into fromVertex, also need to go into toVertex
+      val nodesToProp = reverseBaseEdgeMap.getOrElse(fromVertex, Set.empty[(EdgeTypeTraverse, String)])
+      val nodePropMap = nodesToProp.toList.map {
+        case (edgeTraverse, fromFromVertex) => {
+          val propped = edgePropMap.getOrElse(fromFromVertex, Set.empty[(EdgeTypeTraverse, String)]) ++ Set((edgeTraverse, toVertex))
+          fromFromVertex -> propped
+        }
+      }.toMap
+
+      edgePropMap ++ nodePropMap
+    }
+
+    // handles degenerate case where start is equiv to initial
+    def propEndEquivalence(equivToEnd: Set[String], fromVertex: String, toVertex: String) = {
+      if (equivToEnd.contains(toVertex)) {
+        equivToEnd + fromVertex
+      } else {
+        equivToEnd
+      }
+    }
+
     // second pass with equivalences
-    val (_, flattenedMap) = zipReversed.foldLeft((End, baseEdgeMap)) {
-      case ((toVertex, acc), (follow, fromVertex)) => {
+    val (_, flattenedMap, equivToEnd) = zipReversed.foldLeft((End, baseEdgeMap, Set(GNFA.End))) {
+      case ((toVertex, acc, equivToEnd), (follow, fromVertex)) => {
         follow.followType match {
           case FollowType.Optional => {
-            // pass back toVertex edges to fromVertex
-            val toVertexEdges = acc.getOrElse(toVertex, Set.empty[(EdgeTypeTraverse, String)])
-            val fromVertexEdges = acc.getOrElse(fromVertex, Set.empty[(EdgeTypeTraverse, String)]) ++ toVertexEdges
-            
-            (fromVertex, acc ++ Map(fromVertex -> fromVertexEdges))
+            (fromVertex, propagateEquivalence(acc, fromVertex, toVertex), propEndEquivalence(equivToEnd, fromVertex, toVertex))
           }
           case FollowType.Star => {
-            // pass back toVertex edges to fromVertex
-            val toVertexEdges = acc.getOrElse(toVertex, Set.empty[(EdgeTypeTraverse, String)])
-            val fromVertexEdges = acc.getOrElse(fromVertex, Set.empty[(EdgeTypeTraverse, String)]) ++ toVertexEdges
-            
-            (fromVertex, acc ++ Map(fromVertex -> fromVertexEdges))            
+            (fromVertex, propagateEquivalence(acc, fromVertex, toVertex), propEndEquivalence(equivToEnd, fromVertex, toVertex))
           }
           case FollowType.Target => {
-            (fromVertex, acc)
+            (fromVertex, acc, equivToEnd)
           }
         }
       }
@@ -141,7 +171,7 @@ private object GNFA {
       case (k, vs) => k -> vs.groupBy(_._1.edgeType)
     }
 
-    (start, finalMap)
+    (start, finalMap, equivToEnd.contains(start))
   }
 }
 
@@ -298,7 +328,7 @@ class GraphQueryService @Inject() (
     withTerminal.statefulMapConcat { () =>
       // Initialization is actually not useful?
       var collect = collection.mutable.ListBuffer.empty[V0]
-      var currentRootId: Option[List[String]] = None
+      var currentRootId: Option[Vector[String]] = None
 
       {
         case Right(element) => {
@@ -386,10 +416,12 @@ class GraphQueryService @Inject() (
         }
       }
       case lin: LinearTraverse => {
-        context.withSpanF("query.graph.trace.linear") { cc =>
-          val (start, transitions) = GNFA.calculateLinear(
-            lin.follows :+ lin.target,
+        context.withSpanF("query.graph.trace.edge") { cc =>
+          val (start, transitions, emitInitial) = GNFA.calculateLinear(
+            lin.follows,
           )
+
+          println("====================")
 
           transitions.toList.sortBy(_._1).foreach {
             case (k, vs) => {
@@ -402,12 +434,15 @@ class GraphQueryService @Inject() (
             }
           }
 
+          println("====================")
+
           Flow[T].map { i =>
-            GNFAHop(i, Set(start))
+            GNFAHop(i, Set(start), forceStop = false)
           }.via {
             gnfaTraverse(
               transitions,
-              initial = true
+              initial = true,
+              emitInitial = emitInitial,
             )(targeting, cc, tracing)
           }.map(_.obj)
         }
@@ -415,6 +450,28 @@ class GraphQueryService @Inject() (
       case b: NodeTraverse => {
         context.withSpanF("query.graph.trace.node") { cc =>
           nodeTraverse(b.filters, b.follow.traverses)(targeting, cc, tracing)
+        }
+      }
+      case ln: LinearNodeTraverse => {
+        context.withSpanF("query.graph.trace.node") { cc =>
+          val (start, transitions, emitInitial) = GNFA.calculateLinear(
+            ln.follows,
+          )
+
+          Flow[T].map { i =>
+            GNFAHop(i, Set(start), forceStop = false)
+          }.via {
+            gnfaTraverse(
+              transitions,
+              initial = true,
+              emitInitial = emitInitial,
+            )(targeting, cc, tracing)
+          }.map(_.obj).via {
+            nodeCheck(targeting.nodeIndexName, ln.filters).mapConcat {
+              case ((trace, Some(obj)), true) => Some(trace)
+              case _ => None
+            }
+          }
         }
       }
       case r: ReverseTraverse => {
@@ -528,7 +585,8 @@ class GraphQueryService @Inject() (
 
   private def gnfaTraverse[T, TU](
     transitionMap: Map[String, Map[GraphEdgeType, Set[(EdgeTypeTraverse, String)]]],
-    initial: Boolean
+    initial: Boolean,
+    emitInitial: Boolean
   )(implicit targeting: QueryTargeting[TU], context: SpanContext, tracing: QueryTracing[T, TU]): Flow[GNFAHop[T], GNFAHop[T], _] = {
 
     implicit val ordering = Ordering.by { a: GNFAHop[T] =>
@@ -537,12 +595,14 @@ class GraphQueryService @Inject() (
 
     gnfaHop(
       transitionMap, 
-      initial = initial
+      initial = initial,
+      emitInitial = emitInitial
     ).mapConcat(_.terminalTuple).via {
       maybeRecurse { _ =>
         gnfaTraverse(
           transitionMap,
-          initial = false
+          initial = false,
+          emitInitial = false,
         )
       }
     }
@@ -661,12 +721,16 @@ class GraphQueryService @Inject() (
     } // id is unique so this is okay-ish
     val keys = traces.map(tracing.getTerminus).distinct
 
+    // println("TRACEMAP")
+    // traceMap.foreach(println)
+
     for {
       source <- ifNonEmpty(traverses) {
         context.withSpan(
           "query.graph.elasticsearch.initialize",
           "query.graph.recursion" -> recursion.toString(),
           "query.graph.count.input" -> keys.size.toString()) { cc =>
+            // println(targeting.edgeQuery(traverses, keys, nodeHint))
             for {
               (cnt, src) <- elasticSearchService.source(
                 edgeIndex,
@@ -688,10 +752,12 @@ class GraphQueryService @Inject() (
       }
     } yield {
       source.mapConcat { item =>
+        // println(item)
         val edgeType = (item \ "_source" \ "type").as[String]
         // should never happen
         val directedEdge = typeMap.getOrElse(edgeType, throw Errors.streamError("invalid type")).edgeType
         val id = directedEdge.direction.extract(item)
+        // println("CHECK TRACEMAP", id, traceMap.getOrElse(id, Nil))
         traceMap.getOrElse(id, Nil).map(trace => EdgeHop(trace, directedEdge, item))
       }
     }
@@ -747,13 +813,14 @@ class GraphQueryService @Inject() (
 
   private def gnfaHop[T, TU](
     transitionMap: Map[String, Map[GraphEdgeType, Set[(EdgeTypeTraverse, String)]]],
-    initial: Boolean
+    initial: Boolean,
+    emitInitial: Boolean
   )(implicit targeting: QueryTargeting[TU], context: SpanContext, tracing: QueryTracing[T, TU]): Flow[GNFAHop[T], GNFAHop[T], Any] = {
 
     val recursion = !initial
 
-    val ordering = Ordering.by { a: EdgeHop[GNFAHop[T]] =>
-      tracing.sortKey(a.obj.obj).mkString("|")
+    val ordering = Ordering.by { a: GNFAHop[T] =>
+      tracing.sortKey(a.obj).mkString("|")
     }
 
     implicit val wrappedTracing = GNFAHop.wrapTracing(tracing)
@@ -766,30 +833,38 @@ class GraphQueryService @Inject() (
         }
       }.groupBy(_._1).map {
         case (k, vs) => k -> vs.map(_._2)
-      }      
+      }
 
-      // List[Source[EdgeHop[GNFAHop[T]]]]
+      println("==========")
       val work = tracesByState.map {
         case (state, traces) => {
-          val traverses = transitionMap.getOrElse(state, throw new Exception(s"invalid state ${state}")).values.toList.flatten.map(_._1)
+
+          val traverses = transitionMap.getOrElse(state, Map()).values.toList.flatten.map(_._1).distinct
+
+          println("CHECK TMAP", state, traces.map { trace =>
+            tracing.getId(tracing.getTerminus(trace.obj))
+          }, traverses.map(_.edgeType.identifier).mkString(","))
 
           for {
-            source <- directionEdgeQuery(
-              targeting.edgeIndexName,
-              recursion,
-              traverses,
-              traces.toList,
-              nodeHint = None
-            )
+            source <- ifNonEmpty(traverses) {
+              directionEdgeQuery(
+                targeting.edgeIndexName,
+                recursion,
+                traverses,
+                traces.toList,
+                nodeHint = None
+              )
+            }
             sliceResults <- source.runWith(Sinks.ListAccum[EdgeHop[GNFAHop[T]]])
           } yield {
             sliceResults
           }
         }
       }
-
-      for {
+      
+      for {        
         allResults <- Future.sequence(work).map(_.flatten.toList)
+        _ = println("==========")
         (cross, notCross) = allResults.partition { i =>
           i.directedEdge.crossFile
         }
@@ -816,7 +891,7 @@ class GraphQueryService @Inject() (
           (item \ "_source" \ "id").as[String] -> item
         }.toMap
       } yield {
-        allResults.sorted(ordering).map {
+        val mappedResults = allResults.map {
           case EdgeHop(gnfaTrace, directedEdge, edgeObj) => {
             val baseTrace = tracing.traceHop(gnfaTrace.obj, directedEdge, edgeObj, initial)
             val id = directedEdge.direction.extractOpposite(edgeObj)
@@ -841,9 +916,26 @@ class GraphQueryService @Inject() (
               }
             }.toSet
 
-            GNFAHop(nextTrace, newState)
+            GNFAHop(nextTrace, newState, forceStop = false)
           }
         }
+
+        // allResults
+        val allAllResults = (mappedResults ++ withFlag(emitInitial && initial) {
+          traces.map(_.copy(state = Set(GNFA.End), forceStop = true))
+        })
+        
+        val emit = allAllResults.sorted(ordering) // problem to sort after???
+
+        emit.distinct.foreach { e =>
+          println {
+            tracing.iterateAll(e.obj).map(tracing.getId).mkString("->")
+          }
+          println("--" + e.state.mkString(","))
+        }
+
+        // TODO: is this efficient?
+        emit.distinct
       }
     }.mapConcat(i => i)
   }

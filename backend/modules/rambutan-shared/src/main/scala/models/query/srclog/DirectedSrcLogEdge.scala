@@ -13,6 +13,9 @@ case class DirectedSrcLogEdge(
   nodeCheck:    Option[NodeClause],
   containsHint: Option[NodePredicate]) {
 
+  /**
+   * Optimization
+   */
   def edgePenalty = {
     if (reverse) {
       predicate.reverseCost
@@ -21,13 +24,10 @@ case class DirectedSrcLogEdge(
     }
   }
 
-  def propogatedFollow = {
-    withFlag(reverse && nodeCheck.isEmpty) {
-      // predicate.propogatedFollow
-    }
-  }
-
-  def edgeTraverse = {
+  /**
+   * Transpiler
+   */
+  lazy val baseEdge = {
     val index = condition match {
       case Some(IndexCondition(v)) => Some(v.toInt)
       case _                       => None
@@ -46,42 +46,55 @@ case class DirectedSrcLogEdge(
       case _                               => Nil
     }
 
-    // val baseTraverse = predicate.queryTraverse(name, index, props, Nil)
-    // val
-
-    // final def reverseTraverse(name: Option[String], index: Option[Int], props: List[GenericGraphProperty], follow: List[GraphEdgeType]): List[Traverse] = {
-    //   ReverseTraverse(
-    //     EdgeTypeFollow(follow.map(EdgeTypeTraverse.basic)),
-    //     queryTraverse(name, index, props, Nil)) :: Nil
-    // }
-
-    if (reverse) {
-      // TODO: this logic is not correct.
-      // should not always follow, but should look at flag on previous predicates
-      // val follow = withFlag(predicate.egressReferences || true) {
-      //   EdgeTypeTraverse.BasicFollows
-      // }
-
-      predicate.reverseTraverse(name, index, props, Nil)
-    } else {
-      // val follow = withFlag(predicate.ingressReferences) {
-      //   EdgeTypeTraverse.BasicFollows
-      // }
-
-      predicate.queryTraverse(name, index, props, Nil)
-      // base match {
-      //   case head :: rest => head.copy(follow = new EdgeTypeFollow(follow)) :: rest
-      //   case Nil          => throw new Exception("improperly defined predicate")
-      // }
-    }
+    predicate.newQueryTraverse(name, index, props)
   }
 
-  def nodeTraverse = {
+  lazy val reversedPropagatedFollows = {
+    baseEdge.propagatedFollows.reverse.map(_.reverse)
+  }
+
+  def edgeTraverse = {
+
+    println("BASE", baseEdge)
+    if (reverse) {
+      println("FOLLOWS", baseEdge.propagatedFollows)
+    }
+
+    // Reverse
+    // apply either nodeTraverse or carry over
+
+    // inject follows
+
+    baseEdge :: Nil
+
+    // if (reverse) {
+    //   // TODO: this logic is not correct.
+    //   // should not always follow, but should look at flag on previous predicates
+    //   // val follow = withFlag(predicate.egressReferences || true) {
+    //   //   EdgeTypeTraverse.BasicFollows
+    //   // }
+
+    //   predicate.reverseTraverse(name, index, props, Nil)
+    // } else {
+    //   // val follow = withFlag(predicate.ingressReferences) {
+    //   //   EdgeTypeTraverse.BasicFollows
+    //   // }
+
+    //   predicate.queryTraverse(name, index, props, Nil)
+    //   // base match {
+    //   //   case head :: rest => head.copy(follow = new EdgeTypeFollow(follow)) :: rest
+    //   //   case Nil          => throw new Exception("improperly defined predicate")
+    //   // }
+    // }
+  }
+
+  // define the node traverse
+  def nodeTraverse: List[Traverse] = {
     withDefined(nodeCheck) { nc =>
       ifNonEmpty(nc.filters) {
         List(
-          NodeTraverse(
-            follow = EdgeTypeFollow(Nil), // should use self.propagated follows
+          LinearNodeTraverse(
+            follows = reversedPropagatedFollows,
             filters = nc.filters))
       }
     }
@@ -90,6 +103,18 @@ case class DirectedSrcLogEdge(
   /**
    * Deprecate below
    */
+  private def nodeTraverseLegacy = {
+    // everything gets references, even if not necessary
+    // not a big deal?
+    withDefined(nodeCheck) { nc =>
+      ifNonEmpty(nc.filters) {
+        NodeTraverse(
+          follow = EdgeTypeFollow(EdgeTypeTraverse.BasicFollows.map(EdgeTypeTraverse.basic).map(_.reverse)),
+          filters = nc.filters) :: Nil
+      }
+    }
+  }
+
   @deprecated
   def toTraceQuery = {
     // these conditions should never happen
@@ -138,7 +163,7 @@ case class DirectedSrcLogEdge(
       // }
     }
     val withNodeCheck = nodeCheck match {
-      case Some(nc) => withReverse ++ nodeTraverse
+      case Some(nc) => withReverse ++ nodeTraverseLegacy
       case _        => withReverse
     }
 

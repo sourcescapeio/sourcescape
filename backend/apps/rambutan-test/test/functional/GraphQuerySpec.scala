@@ -309,6 +309,86 @@ abstract class GraphQuerySpec
       //   // we can revisit later
       // }.foreach(println)
     }
+
+
+    // sbt "project rambutanTest" "testOnly test.GraphQuerySpecCompose -- -z traverse.follows2"
+    "traverse.follows2" in {
+      val NRoot = Range(0, 4).toArray.map { idx =>
+        s"n${idx}"
+      }
+      val NRest = Range(4, 12).toArray.map { idx =>
+        s"n${idx}"
+      }
+      val N = NRoot ++ NRest
+
+      val allNodes = List(
+        NRoot.map { s => Node(s, "class")},
+        NRest.map { s => Node(s, "call")}
+      ).flatten
+
+      val allEdges = List(
+        path(N(0), ("class-property", N(4)), ("class-decorator", N(5)), ("class-decorator", N(6))), // should emit 3
+        path(N(1), ("class-decorator", N(7))), // should emit 1
+        path(N(2), ("method", N(8))),
+        path(N(3), ("class-decorator", N(9)), ("class-property", N(10))) // should emit 1 partial
+      ).flatten
+
+      allNodes.foreach(println)
+      allEdges.foreach(println)
+
+      await {
+        runGraphIndex(IndexType.Javascript)(
+          allNodes:_*
+        )(
+          allEdges:_*
+        )
+      }
+
+      println("=========")
+      println("TRAVERSE1")
+      println("=========")
+
+      await {
+        dataForGraphQuery(IndexType.Javascript) {
+          """
+          root {
+            type: "class"
+          }.linear_traverse [
+            ?["javascript::class_property"],
+            *["javascript::class_decorator"]
+          ]
+          """
+        }
+      }.foreach { trace =>
+        val s = (trace.tracesInternal :+ trace.terminus).flatMap { ti =>
+          (ti.tracesInternal :+ ti.terminus).map(_.id)
+        }.mkString("->")
+
+        println(s)
+      }
+
+      await {
+        // should omit initials
+        dataForGraphQuery(IndexType.Javascript) {
+          """
+          root {
+            type: "class"
+          }.linear_traverse [
+            ?["javascript::class_property"],
+            *["javascript::class_decorator"]
+          ].node_check {
+            type: "call"
+          }
+          """
+        }
+      }.foreach { trace =>
+        val s = (trace.tracesInternal :+ trace.terminus).flatMap { ti =>
+          (ti.tracesInternal :+ ti.terminus).map(_.id)
+        }.mkString("->")
+
+        println(s)
+      }
+    }
   }
 }
 

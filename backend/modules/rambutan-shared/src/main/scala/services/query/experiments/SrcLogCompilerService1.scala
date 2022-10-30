@@ -208,7 +208,6 @@ class SrcLogCompilerService @Inject() (
     // Need to create a Map of Map[Node -> reversed edges into it]
     // edgeTraverse looks at this map
     // nodeTraverse looks at self
-
     val traverses = directedEdge.edgeTraverse ++ directedEdge.nodeTraverse
 
     val leftJoin = directedEdge.booleanModifier.isDefined

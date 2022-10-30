@@ -475,10 +475,10 @@ class RelationalQueryService @Inject() (
       )(
           getKey,
           aKey,
-          bKey)(builder, cc, implicitly[Ordering[List[String]]], implicitly[Writes[List[String]]])
+          bKey)(builder, cc, implicitly[Ordering[Vector[String]]], implicitly[Writes[Vector[String]]])
 
       nextJoin.out ~> cc.terminateFor {
-        Flow[(List[String], (Option[Joined[T]], Option[Joined[T]]))].map {
+        Flow[(Vector[String], (Option[Joined[T]], Option[Joined[T]]))].map {
           case (k, (maybeA, maybeB)) => {
             maybeA.getOrElse(Map()) ++ maybeB.getOrElse(Map())
           }
@@ -610,7 +610,7 @@ class RelationalQueryService @Inject() (
   /**
    * MERGE JOINS
    */
-  implicit val ordering: Ordering[List[String]] = Ordering.by { in: List[String] =>
+  implicit val ordering: Ordering[Vector[String]] = Ordering.by { in: Vector[String] =>
     in.mkString("|")
   }
 

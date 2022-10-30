@@ -67,12 +67,28 @@ object FollowType extends Plenumeration[FollowType] {
   case object Target extends FollowType("t")
 }
 
-case class EdgeFollow(traverses: List[EdgeTypeTraverse], followType: FollowType)
+sealed trait SrcLogTraverse extends Traverse {
+  def propagatedFollows: List[EdgeFollow]
+}
 
-case class LinearTraverse(follows: List[EdgeFollow], target: EdgeFollow) extends Traverse {
+case class EdgeFollow(traverses: List[EdgeTypeTraverse], followType: FollowType) {
+  def reverse = this.copy(traverses = traverses.map(_.reverse))
+}
+
+case class LinearTraverse(follows: List[EdgeFollow]) extends SrcLogTraverse {
+
+  def propagatedFollows: List[EdgeFollow] = {
+    follows.takeWhile(_.followType =/= FollowType.Target)
+  }
 
   // ???
-  def isColumn = (follows.flatMap(_.traverses) ++ target.traverses).nonEmpty
+  def isColumn = follows.flatMap(_.traverses).nonEmpty
+
+}
+
+case class LinearNodeTraverse(follows: List[EdgeFollow], filters: List[NodeFilter]) extends Traverse {
+  // Node traverse does not increment trace
+  override val isColumn: Boolean = false
 
 }
 
@@ -85,16 +101,20 @@ case class LinearTraverse(follows: List[EdgeFollow], target: EdgeFollow) extends
 
 // traverses, emits all instead of spooling in a trace
 @deprecated
-case class RepeatedEdgeTraverse[T, TU](follow: EdgeTypeFollow, shouldTerminate: T => Boolean) extends Traverse {
+case class RepeatedEdgeTraverse[T, TU](follow: EdgeTypeFollow, shouldTerminate: T => Boolean) extends SrcLogTraverse {
   def isColumn = true
+
+  def propagatedFollows: List[EdgeFollow] = Nil
 
 }
 
 // how can we limit to edge and node traversal?
+@deprecated
 case class RepeatedEdgeTraverseNew(inner: List[EdgeTraverse]) extends Traverse {
   def isColumn = true
 }
 
+@deprecated
 case class ReverseTraverse(follow: EdgeTypeFollow, traverses: List[Traverse]) extends Traverse {
   def validate = {
     traverses.foreach {
@@ -112,6 +132,7 @@ case class OneHopTraverse(follow: List[EdgeTypeTraverse]) extends Traverse {
 
 }
 
+@deprecated
 case class NodeTraverse(follow: EdgeTypeFollow, filters: List[NodeFilter]) extends Traverse {
   // Node traverse does not increment trace
   override val isColumn: Boolean = false
