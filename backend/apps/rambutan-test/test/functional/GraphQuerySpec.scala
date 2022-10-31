@@ -388,6 +388,33 @@ abstract class GraphQuerySpec
 
         println(s)
       }
+
+      println("=========")
+      println("TRAVERSE2")
+      println("=========")
+
+      await {
+        dataForGraphQuery(IndexType.Javascript) {
+          """
+          root {
+            type: "class"
+          }.repeated_traverse {
+            follow : [
+              ?["javascript::class_property"]
+            ],
+            repeat: [
+              t["javascript::class_decorator"]
+            ]
+          }
+          """
+        }
+      }.foreach { trace =>
+        val s = (trace.tracesInternal :+ trace.terminus).flatMap { ti =>
+          (ti.tracesInternal :+ ti.terminus).map(_.id)
+        }.mkString("->")
+
+        println(s)
+      }
     }
   }
 }

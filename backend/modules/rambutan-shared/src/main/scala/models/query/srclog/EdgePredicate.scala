@@ -31,7 +31,10 @@ sealed abstract class EdgePredicate(
    */
   // used when emitting possible directed edges
   val forceForward: Boolean = false
-  val forceReverse: Boolean = false
+  val forceReverse: Boolean = false // may deprecate this and just rely on costs
+
+  //
+  val repeated: Boolean = false
 
   // requires specific nodes for both sides
   val mustSpecifyNodes: Boolean = false
@@ -948,7 +951,7 @@ object JavascriptEdgePredicate extends Plenumeration[JavascriptEdgePredicate] {
     }
   }
 
-  case object AllCalled extends JavascriptEdgePredicate("all_called", forwardCost = 1, reverseCost = 1) {
+  case object AllCalled extends JavascriptEdgePredicate("all_called", forwardCost = 100000, reverseCost = 1) {
     override def fromImplicit = Some(NodePredicate.or(
       JavascriptNodePredicate.ClassMethod,
       JavascriptNodePredicate.Function))
@@ -957,6 +960,8 @@ object JavascriptEdgePredicate extends Plenumeration[JavascriptEdgePredicate] {
       JavascriptNodePredicate.ClassMethod,
       JavascriptNodePredicate.Function))
 
+    override val repeated: Boolean = true
+
     def newQueryTraverse(name: Option[String], index: Option[Int], props: List[GenericGraphProperty]): SrcLogTraverse = {
       lin(
         ?(basic(JavascriptGraphEdgeType.MethodFunction)),
@@ -964,6 +969,7 @@ object JavascriptEdgePredicate extends Plenumeration[JavascriptEdgePredicate] {
         t(basic(JavascriptGraphEdgeType.CallOf)))
     }
 
+    //
     override val singleDirection: Boolean = true
 
     override def queryTraverse(name: Option[String], index: Option[Int], props: List[GenericGraphProperty], follow: List[GraphEdgeType]) = {

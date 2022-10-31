@@ -51,6 +51,7 @@ case class EdgePropsFilter(props: List[GenericGraphProperty]) extends EdgeFilter
 }
 
 // Used by teleport
+@deprecated
 case class MultiEdgeFilter(names: List[String], indexes: List[Int]) extends EdgeFilter {
   def query = {
     ESQuery.bool(

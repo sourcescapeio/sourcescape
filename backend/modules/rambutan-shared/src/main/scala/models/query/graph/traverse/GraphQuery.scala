@@ -112,11 +112,8 @@ object GraphQuery2 {
     // Props
     private def nodePropsFilter[_: P] = {
       // implicit val whitespace = MultiLineWhitespace.whitespace
-
-      // ~ ("," ~ nodeProp).rep(0)
-      P("props" ~ ":" ~/ "{" ~/ nodeProp ~ "}") map {
-        case head => NodePropsFilter(head :: Nil)
-        // case (head, rest) => NodePropsFilter(head :: rest.toList)
+      P("props" ~ ":" ~/ "{" ~/ nodeProp ~ ("," ~ nodeProp).rep(0) ~ "}") map {
+        case (head, rest) => NodePropsFilter(head :: rest.toList)
       }
     }
 
@@ -193,14 +190,15 @@ object GraphQuery2 {
 
     private def linearFollow[_: P] = P(follow(FollowType.Optional) | follow(FollowType.Star) | follow(FollowType.Target))
 
+    private def linearFollowList[_: P] = P("[" ~ linearFollow ~ ("," ~ linearFollow).rep(0) ~ "]").map {
+      case (head, rest) => head :: rest.toList
+    }
+
     private def linearTraverse[_: P] = {
       // implicit val whitespace = MultiLineWhitespace.whitespace
-      P("linear_traverse" ~ "[" ~/ linearFollow ~ ("," ~ linearFollow).rep(0) ~ "]") map {
-        case (head, rest) => {
-          val follows = (head :: rest.toList)
-          LinearTraverse(
-            follows)
-        }
+      P("linear_traverse" ~/ linearFollowList) map { follows =>
+        LinearTraverse(
+          follows)
       }
     }
 
@@ -211,7 +209,13 @@ object GraphQuery2 {
       }
     }
 
-    def traverses[_: P] = P(linearTraverse | nodeCheck)
+    private def repeatedTraverse[_: P] = {
+      P("repeated_traverse" ~ "{" ~/ "follow" ~ ":" ~ linearFollowList ~ "," ~ "repeat" ~ ":" ~ linearFollowList ~ "}") map {
+        case (follow, repeat) => RepeatedLinearTraverse(follow, repeat)
+      }
+    }
+
+    def traverses[_: P] = P(linearTraverse | nodeCheck | repeatedTraverse)
   }
 
   private def root[_: P] = {

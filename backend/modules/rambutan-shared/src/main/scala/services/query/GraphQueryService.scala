@@ -447,33 +447,37 @@ class GraphQueryService @Inject() (
           }.map(_.obj)
         }
       }
-      case b: NodeTraverse => {
-        context.withSpanF("query.graph.trace.node") { cc =>
-          nodeTraverse(b.filters, b.follow.traverses)(targeting, cc, tracing)
-        }
-      }
-      case ln: LinearNodeTraverse => {
-        context.withSpanF("query.graph.trace.node") { cc =>
+      case rlin: RepeatedLinearTraverse => {
+        context.withSpanF("query.graph.trace.repeated") { cc =>
           val (start, transitions, emitInitial) = GNFA.calculateLinear(
-            ln.follows,
+            rlin.follows,
           )
 
+          // initial hop
           Flow[T].map { i =>
             GNFAHop(i, Set(start), forceStop = false)
           }.via {
             gnfaTraverse(
               transitions,
               initial = true,
-              emitInitial = emitInitial,
+              emitInitial = emitInitial
             )(targeting, cc, tracing)
           }.map(_.obj).via {
-            nodeCheck(targeting.nodeIndexName, ln.filters).mapConcat {
-              case ((trace, Some(obj)), true) => Some(trace)
-              case _ => None
-            }
+            repeatedEdgeTraverseLinear(
+              rlin.repeated
+            )
           }
+
+          // TODO: last one should be a target
+
         }
       }
+      case b: NodeTraverse => {
+        context.withSpanF("query.graph.trace.node") { cc =>
+          nodeTraverse(b.filters, b.follow.traverses)(targeting, cc, tracing)
+        }
+      }
+      // deprecate below
       case r: ReverseTraverse => {
         context.withSpanF("query.graph.trace.reverse") { cc =>
           reverseTraverse(r)(targeting, cc, tracing)
@@ -530,6 +534,35 @@ class GraphQueryService @Inject() (
           .via(nodeTraverseInner(filters, follow))
       }
     }
+  }
+
+  private def repeatedEdgeTraverseLinear[T, TU](
+    repeated: List[EdgeFollow])(implicit targeting: QueryTargeting[TU], context: SpanContext, tracing: QueryTracing[T, TU]): Flow[T, T, _] = {
+      // never repeat initial
+      implicit val ordering = tracing.ordering
+
+      val (start, transitions, _) = GNFA.calculateLinear(
+        repeated
+      )
+
+      Flow[T].map { i =>
+        GNFAHop(i, Set(start), forceStop = false)
+      }.via {
+        gnfaTraverse(
+          transitions,
+          initial = true,
+          emitInitial = false
+        )
+      }.mapConcat { i =>
+        List(
+          (i.obj, true),
+          (i.obj, false)
+        )
+      }.via {
+        maybeRecurse { _ =>
+          repeatedEdgeTraverseLinear(repeated)
+        }
+      }
   }
 
   private def repeatedEdgeTraverseNew[T, TU](

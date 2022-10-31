@@ -50,52 +50,61 @@ case class DirectedSrcLogEdge(
   }
 
   lazy val reversedPropagatedFollows = {
-    baseEdge.propagatedFollows.reverse.map(_.reverse)
+    withFlag(reverse) {
+      val props = baseEdge match {
+        case LinearTraverse(follows) => {
+          follows.takeWhile(_.followType =/= FollowType.Target)
+        }
+        case _ => throw new Exception("invalid reversal")
+      }
+
+      props.reverse.map(_.reverse)
+    }
   }
 
-  def edgeTraverse = {
-
-    println("BASE", baseEdge)
+  def edgeTraverse(injectBefore: List[EdgeFollow]) = {
     if (reverse) {
-      println("FOLLOWS", baseEdge.propagatedFollows)
+      baseEdge match {
+        case LinearTraverse(follows) => {
+          val reversedFollows = follows.dropWhile(_.followType =/= FollowType.Target).map(_.reverse).reverse
+          if (predicate.repeated) {
+            RepeatedLinearTraverse(injectBefore, reversedFollows) :: Nil
+          } else {
+            LinearTraverse(injectBefore ++ reversedFollows) :: Nil
+          }
+        }
+        case _ => throw new Exception("cannot reverse this type of edge")
+      }
+    } else {
+      baseEdge match {
+        case LinearTraverse(follows) => {
+          if (predicate.repeated) {
+            RepeatedLinearTraverse(injectBefore, follows) :: Nil
+          } else {
+            LinearTraverse(injectBefore ++ follows) :: Nil
+          }
+        }
+        case other => other :: Nil
+      }
     }
-
-    // Reverse
-    // apply either nodeTraverse or carry over
-
-    // inject follows
-
-    baseEdge :: Nil
-
-    // if (reverse) {
-    //   // TODO: this logic is not correct.
-    //   // should not always follow, but should look at flag on previous predicates
-    //   // val follow = withFlag(predicate.egressReferences || true) {
-    //   //   EdgeTypeTraverse.BasicFollows
-    //   // }
-
-    //   predicate.reverseTraverse(name, index, props, Nil)
-    // } else {
-    //   // val follow = withFlag(predicate.ingressReferences) {
-    //   //   EdgeTypeTraverse.BasicFollows
-    //   // }
-
-    //   predicate.queryTraverse(name, index, props, Nil)
-    //   // base match {
-    //   //   case head :: rest => head.copy(follow = new EdgeTypeFollow(follow)) :: rest
-    //   //   case Nil          => throw new Exception("improperly defined predicate")
-    //   // }
-    // }
   }
 
   // define the node traverse
   def nodeTraverse: List[Traverse] = {
+
+    // NodeTraverse(
+    //   follow = EdgeTypeFollow.empty,
+    //   filters = nc.filters) :: Nil).flatten
+
     withDefined(nodeCheck) { nc =>
       ifNonEmpty(nc.filters) {
         List(
-          LinearNodeTraverse(
-            follows = reversedPropagatedFollows,
-            filters = nc.filters))
+          ifNonEmpty(reversedPropagatedFollows) {
+            LinearTraverse(reversedPropagatedFollows) :: Nil
+          },
+          NodeTraverse(
+            follow = EdgeTypeFollow.empty,
+            filters = nc.filters) :: Nil).flatten
       }
     }
   }

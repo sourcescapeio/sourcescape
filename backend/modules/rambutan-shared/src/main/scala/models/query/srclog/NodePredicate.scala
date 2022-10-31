@@ -22,7 +22,7 @@ sealed abstract class SimpleNodePredicate(identifierIn: String, val nodeType: No
   }
 
   protected def typeFilter: NodeFilter = {
-    NodeTypeFilter(nodeType)
+    NodeTypesFilter(List(nodeType))
   }
 }
 

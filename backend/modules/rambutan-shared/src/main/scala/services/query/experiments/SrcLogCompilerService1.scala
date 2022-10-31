@@ -11,6 +11,8 @@ import play.api.libs.json._
 import services.ElasticSearchService
 import akka.stream.scaladsl.Source
 import models.Sinks
+import scala.util.Success
+import scala.util.Failure
 
 @Singleton
 class SrcLogCompilerService @Inject() (
@@ -33,10 +35,11 @@ class SrcLogCompilerService @Inject() (
 
     for {
       nodeCosts <- getNodeCosts(query.allNodes.filter(n => allRoots.contains(n.variable)))
-      withCosts = allSpanningTrees.map {
+      withCosts = allSpanningTrees.flatMap {
         case (rootKey, (edges, penalty)) => {
-          val nodeCost = nodeCosts.getOrElse(rootKey, throw new Exception("invalid error"))
-          (rootKey, edges, penalty * nodeCost)
+          nodeCosts.get(rootKey) map { nodeCost =>
+            (rootKey, edges, penalty * nodeCost)
+          }
         }
       }
       (rootKey, optimalTree, _) = withCosts.minBy(_._3)
@@ -44,9 +47,6 @@ class SrcLogCompilerService @Inject() (
     } yield {
       buildRelationalQuery(rootNode, optimalTree, query)
     }
-    // } yield {
-    //   q
-    // }
   }
 
   /**
@@ -142,8 +142,13 @@ class SrcLogCompilerService @Inject() (
 
     val allEdges = (tree ++ missingEdges)
 
+    // should only have 1 because it is tree
+    val edgeMap = tree.map { directedEdge =>
+      directedEdge.to -> directedEdge
+    }.toMap
+
     val traceQueries = allEdges.map { edge =>
-      calculateTraceQuery(edge)
+      calculateTraceQuery(edge, edgeMap.get(edge.from))
     }
 
     val selects = query.selected match {
@@ -199,16 +204,21 @@ class SrcLogCompilerService @Inject() (
     }
   }
 
-  def calculateTraceQuery(directedEdge: DirectedSrcLogEdge) = {
+  def calculateTraceQuery(directedEdge: DirectedSrcLogEdge, intoEdge: Option[DirectedSrcLogEdge]) = {
     // these conditions should never happen
     if (directedEdge.booleanModifier.isDefined && directedEdge.reverse) {
       throw new Exception("INVALID: boolean edges must be forward facing")
     }
 
-    // Need to create a Map of Map[Node -> reversed edges into it]
-    // edgeTraverse looks at this map
-    // nodeTraverse looks at self
-    val traverses = directedEdge.edgeTraverse ++ directedEdge.nodeTraverse
+    // This is needed for reversed egress -> ingress
+    // ex: InstanceOf >> Member
+    val edgePropFollows = intoEdge.map { i =>
+      withFlag(i.nodeCheck.isEmpty) {
+        i.reversedPropagatedFollows
+      }
+    }.getOrElse(Nil)
+
+    val traverses: List[Traverse] = directedEdge.edgeTraverse(edgePropFollows) ++ directedEdge.nodeTraverse
 
     val leftJoin = directedEdge.booleanModifier.isDefined
 
