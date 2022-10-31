@@ -28,7 +28,7 @@ class StringifySpec extends PlaySpec with MockitoSugar {
     // sbt "project rambutanTest" "testOnly test.unit.StringifySpec -- -z work"
     "work" in {
 
-      val (_, q) = GraphQuery2.parseOrDie("""
+      val (_, q) = GraphQuery.parseOrDie("""
         root {
           type: "class"
         }.linear_traverse [
@@ -39,10 +39,8 @@ class StringifySpec extends PlaySpec with MockitoSugar {
         }
       """)
 
-      println(q)
-
       println {
-        QueryString2.stringifyGraphQuery(q)
+        QueryString.stringifyGraphQuery(q)
       }
     }
   }

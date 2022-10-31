@@ -16,25 +16,25 @@ trait SrcLogQuery {
   val selected: List[String]
 
   // strips out all edges pointing in wrong direction
-  @deprecated
-  lazy val baseTraversableEdges: List[DirectedSrcLogEdge] = {
-    //
+  // @deprecated
+  // lazy val baseTraversableEdges: List[DirectedSrcLogEdge] = {
+  //   //
 
-    edges.flatMap {
-      case e @ EdgeClause(p, from, to, c, Some(_)) => {
-        DirectedSrcLogEdge.forward(e, Map.empty[String, NodeClause]) :: Nil
-      }
-      case e @ EdgeClause(p, from, to, c, _) if p.forceForwardDirection => {
-        DirectedSrcLogEdge.forward(e, Map.empty[String, NodeClause]) :: Nil
-      }
-      case e @ EdgeClause(p, from, to, c, None) if p.singleDirection => {
-        DirectedSrcLogEdge.reverse(e, Map.empty[String, NodeClause]) :: Nil
-      }
-      case e @ EdgeClause(p, from, to, c, None) => {
-        DirectedSrcLogEdge.forward(e, Map.empty[String, NodeClause]) :: DirectedSrcLogEdge.reverse(e, Map.empty[String, NodeClause]) :: Nil
-      }
-    }
-  }
+  //   edges.flatMap {
+  //     case e @ EdgeClause(p, from, to, c, Some(_)) => {
+  //       DirectedSrcLogEdge.forward(e, Map.empty[String, NodeClause]) :: Nil
+  //     }
+  //     case e @ EdgeClause(p, from, to, c, _) if p.forceForwardDirection => {
+  //       DirectedSrcLogEdge.forward(e, Map.empty[String, NodeClause]) :: Nil
+  //     }
+  //     case e @ EdgeClause(p, from, to, c, None) if p.singleDirection => {
+  //       DirectedSrcLogEdge.reverse(e, Map.empty[String, NodeClause]) :: Nil
+  //     }
+  //     case e @ EdgeClause(p, from, to, c, None) => {
+  //       DirectedSrcLogEdge.forward(e, Map.empty[String, NodeClause]) :: DirectedSrcLogEdge.reverse(e, Map.empty[String, NodeClause]) :: Nil
+  //     }
+  //   }
+  // }
 
   lazy val vertexes: Set[String] = {
     (nodes.map(_.variable) ++ edges.flatMap {

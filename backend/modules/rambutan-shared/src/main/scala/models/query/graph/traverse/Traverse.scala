@@ -23,24 +23,6 @@ object Traverse {
   }
 }
 
-sealed case class EdgeTypeFollow(traverses: List[EdgeTypeTraverse]) {
-  def reverse = this.copy(traverses = traverses.map(_.reverse))
-}
-
-object EdgeTypeFollow {
-  def empty = EdgeTypeFollow(Nil)
-
-  def all = GraphEdgeType.all.map(g => EdgeTypeTraverse(g, None)).toList
-}
-
-case class EdgeTypeTarget(traverses: List[EdgeTypeTraverse]) {
-  def reverse = this.copy(traverses = traverses.map(_.reverse))
-}
-
-object EdgeTypeTarget {
-  def empty = EdgeTypeTarget(Nil)
-}
-
 case class EdgeTypeTraverse(edgeType: GraphEdgeType, filter: Option[EdgeFilter]) {
 
   def flattened = (edgeType.edgeType, filter)
@@ -52,11 +34,6 @@ object EdgeTypeTraverse {
   val BasicFollows = GraphEdgeType.follows
 
   def basic(edgeType: GraphEdgeType) = EdgeTypeTraverse(edgeType, None)
-}
-
-case class EdgeTraverse(follow: EdgeTypeFollow, target: EdgeTypeTarget, typeHint: Option[NodeType] = None) extends Traverse {
-
-  def isColumn = (follow.traverses ++ target.traverses).nonEmpty
 }
 
 sealed abstract class FollowType(val identifier: String) extends Identifiable
@@ -82,42 +59,15 @@ case class RepeatedLinearTraverse(follows: List[EdgeFollow], repeated: List[Edge
   def isColumn = true
 }
 
-/**
- * FSM models
- */
-// traverses, emits all instead of spooling in a trace
+// Still used by Git
 @deprecated
-case class RepeatedEdgeTraverse[T, TU](follow: EdgeTypeFollow, shouldTerminate: T => Boolean) extends SrcLogTraverse {
+case class RepeatedEdgeTraverse[T, TU](follow: EdgeFollow, shouldTerminate: T => Boolean) extends SrcLogTraverse {
   def isColumn = true
 
 }
 
-// how can we limit to edge and node traversal?
-@deprecated
-case class RepeatedEdgeTraverseNew(inner: List[EdgeTraverse]) extends Traverse {
-  def isColumn = true
-}
-
-@deprecated
-case class ReverseTraverse(follow: EdgeTypeFollow, traverses: List[Traverse]) extends Traverse {
-  def validate = {
-    traverses.foreach {
-      case a @ EdgeTraverse(_, _, _) => ()
-      case n @ NodeTraverse(_, _)    => ()
-      case other                     => throw new Exception("invalid traverse " + other)
-    }
-  }
-
-  override val isColumn: Boolean = true
-}
-
-case class OneHopTraverse(follow: List[EdgeTypeTraverse]) extends Traverse {
-  override val isColumn: Boolean = true
-
-}
-
-@deprecated
-case class NodeTraverse(follow: EdgeTypeFollow, filters: List[NodeFilter]) extends Traverse {
+// switch to NodeCheck that does not follow
+case class NodeCheck(filters: List[NodeFilter]) extends Traverse {
   // Node traverse does not increment trace
   override val isColumn: Boolean = false
 

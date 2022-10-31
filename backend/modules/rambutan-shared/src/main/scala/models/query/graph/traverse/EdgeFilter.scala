@@ -8,22 +8,10 @@ sealed trait EdgeFilter {
   def query: JsObject
 }
 
-@deprecated
-case class EdgeIndexFilter(idx: Int) extends EdgeFilter {
-  def query = {
-    ESQuery.termSearch("index", idx.toString)
-  }
-}
-
 case class EdgeIndexesFilter(idxes: List[Int]) extends EdgeFilter {
   def query = {
     ESQuery.termsSearch("index", idxes.map(_.toString))
   }
-}
-
-@deprecated
-case class EdgeNameFilter(name: String) extends EdgeFilter {
-  def query = Traverse.extractNameQuery("name", name)
 }
 
 case class EdgeNamesFilter(names: List[String]) extends EdgeFilter {
@@ -47,14 +35,5 @@ case class EdgeNamesFilter(names: List[String]) extends EdgeFilter {
 case class EdgePropsFilter(props: List[GenericGraphProperty]) extends EdgeFilter {
   def query = {
     ESQuery.termsSearch("props", props.map(_.encode))
-  }
-}
-
-// Used by teleport
-@deprecated
-case class MultiEdgeFilter(names: List[String], indexes: List[Int]) extends EdgeFilter {
-  def query = {
-    ESQuery.bool(
-      filter = ESQuery.termsSearch("name", names) :: Nil) //, ESQuery.termsSearch("index", indexes.map(_.toString))))
   }
 }

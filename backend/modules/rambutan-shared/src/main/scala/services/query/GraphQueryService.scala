@@ -406,15 +406,6 @@ class GraphQueryService @Inject() (
     traverse: Traverse)(implicit targeting: QueryTargeting[TU], context: SpanContext, tracing: QueryTracing[T, TU]): Flow[T, T, _] = {
 
     traverse match {
-      case a: EdgeTraverse => {
-        context.withSpanF("query.graph.trace.edge") { cc =>
-          edgeTraverse(
-            a.follow.traverses,
-            a.target.traverses,
-            a.typeHint,
-            initial = true)(targeting, cc, tracing)
-        }
-      }
       case lin: LinearTraverse => {
         context.withSpanF("query.graph.trace.edge") { cc =>
           val (start, transitions, emitInitial) = GNFA.calculateLinear(
@@ -472,20 +463,9 @@ class GraphQueryService @Inject() (
 
         }
       }
-      case b: NodeTraverse => {
+      case b: NodeCheck => {
         context.withSpanF("query.graph.trace.node") { cc =>
-          nodeTraverse(b.filters, b.follow.traverses)(targeting, cc, tracing)
-        }
-      }
-      // deprecate below
-      case r: ReverseTraverse => {
-        context.withSpanF("query.graph.trace.reverse") { cc =>
-          reverseTraverse(r)(targeting, cc, tracing)
-        }
-      }
-      case ren: RepeatedEdgeTraverseNew => {
-        context.withSpanF("query.graph.trace.repeated") { cc =>
-          repeatedEdgeTraverseNew(ren)(targeting, cc, tracing)
+          nodeCheck(b.filters)(targeting, cc, tracing)
         }
       }
       case re: RepeatedEdgeTraverse[T, TU] => {
@@ -494,48 +474,12 @@ class GraphQueryService @Inject() (
           repeatedEdgeTraverse(re)(targeting, cc, tracing)
         }
       }
-      // debug
-      case c: OneHopTraverse => {
-        context.withSpanF("query.graph.trace.hop") { cc =>
-          onehopTraverse(c.follow, initial = true)(targeting, cc, tracing)
-        }
-      }
     }
   }
 
   /**
    * Helpers
    */
-  private def nodeTraverse[T, TU](
-    filters: List[NodeFilter],
-    follow:  List[EdgeTypeTraverse])(implicit targeting: QueryTargeting[TU], context: SpanContext, tracing: QueryTracing[T, TU]): Flow[T, T, _] = {
-    nodeTraverseInner(filters, follow).map(_._1)
-  }
-
-  private def nodeTraverseInner[T, TU](
-    filters: List[NodeFilter],
-    follow:  List[EdgeTypeTraverse])(implicit targeting: QueryTargeting[TU], context: SpanContext, tracing: QueryTracing[T, TU]): Flow[T, (T, Option[JsObject]), Any] = {
-
-    val nodeIndex = targeting.nodeIndexName
-    val edgeIndex = targeting.edgeIndexName
-
-    // node hop should mark true /false
-    val initialHop = nodeCheck(nodeIndex, filters)
-
-    implicit val ordering = Ordering.by { a: (T, Option[JsObject]) =>
-      tracing.sortKey(a._1).mkString("|")
-    }
-
-    initialHop.via {
-      maybeRecurse { _ =>
-        Flow[(T, Option[JsObject])]
-          .map(_._1) // assert(_._2 =?= None)
-          .via(onehopTraverse(follow, initial = false))
-          .via(nodeTraverseInner(filters, follow))
-      }
-    }
-  }
-
   private def repeatedEdgeTraverseLinear[T, TU](
     repeated: List[EdgeFollow])(implicit targeting: QueryTargeting[TU], context: SpanContext, tracing: QueryTracing[T, TU]): Flow[T, T, _] = {
       // never repeat initial
@@ -563,27 +507,6 @@ class GraphQueryService @Inject() (
           repeatedEdgeTraverseLinear(repeated)
         }
       }
-  }
-
-  private def repeatedEdgeTraverseNew[T, TU](
-    traverse: RepeatedEdgeTraverseNew)(implicit targeting: QueryTargeting[TU], context: SpanContext, tracing: QueryTracing[T, TU]): Flow[T, T, _] = {
-
-    implicit val ordering = tracing.ordering
-
-    traverse.inner.foldLeft(Flow[T]) {
-      case (flow, e) => flow.via {
-        applyTraverse(e) // but also emit
-      }
-    }.mapConcat { trace =>
-      // dangerous because this never terminates
-      List(
-        (trace, true),
-        (trace, false))
-    }.via {
-      maybeRecurse { _ =>
-        repeatedEdgeTraverseNew(traverse)
-      }
-    }
   }
 
   @deprecated
@@ -641,34 +564,6 @@ class GraphQueryService @Inject() (
     }
   }
 
-  private def edgeTraverse[T, TU](
-    follow:   List[EdgeTypeTraverse],
-    target:   List[EdgeTypeTraverse],
-    typeHint: Option[NodeType],
-    initial:  Boolean)(implicit targeting: QueryTargeting[TU], context: SpanContext, tracing: QueryTracing[T, TU]): Flow[T, T, _] = {
-
-    val edgeIndex = targeting.edgeIndexName
-
-    implicit val ordering = tracing.ordering
-
-    val allTraverses = follow ++ target
-    val targetSet: Set[GraphEdgeType] = target.map(_.edgeType).toSet
-
-    edgeHop(
-      allTraverses,
-      nodeHint = typeHint,
-      initial = initial).map {
-      case EdgeHop(trace, directedEdge, item) => {
-        val isTerminal = targetSet.contains(directedEdge)
-        (trace, isTerminal)
-      }
-    }.via {
-      maybeRecurse { _ =>
-        edgeTraverse(follow, target, typeHint, initial = false)
-      }
-    }
-  }
-
   private def onehopTraverse[T, TU](
     follow:  List[EdgeTypeTraverse],
     initial: Boolean)(implicit targeting: QueryTargeting[TU], context: SpanContext, tracing: QueryTracing[T, TU]): Flow[T, T, _] = {
@@ -681,61 +576,6 @@ class GraphQueryService @Inject() (
         trace
       }
     }
-  }
-
-  private def reverseTraverse[T, TU](traverse: ReverseTraverse)(implicit targeting: QueryTargeting[TU], context: SpanContext, tracing: QueryTracing[T, TU]): Flow[T, T, _] = {
-    val traverses = traverse.traverses
-    val initial = Flow[T].map(tracing.pushCopy) -> traverse.follow
-
-    val (lastFlow, lastFollow) = traverses.reverse.foldLeft(initial) {
-      case ((flow, prevFollow), EdgeTraverse(nextFollow, target, _)) => {
-        val nextFlow = flow.via {
-          edgeTraverse(
-            prevFollow.traverses,
-            target.reverse.traverses,
-            typeHint = None,
-            initial = false)
-        }
-
-        (nextFlow, nextFollow.reverse)
-      }
-      case ((flow, prevFollow), NodeTraverse(nextFollow, targets)) => {
-        val nextFlow = flow.via {
-          nodeTraverse(targets, prevFollow.traverses)
-        }
-
-        (nextFlow, nextFollow.reverse)
-      }
-      // We never reverse these
-      case ((flow, prevFollow), RepeatedEdgeTraverseNew(inner)) => {
-        val (nextFollow, remappedTraverse) = inner.reverse.foldLeft((prevFollow, List.empty[EdgeTraverse])) {
-          case ((prev, acc), next) => {
-            (next.follow, acc :+ EdgeTraverse(prev, next.target, None))
-          }
-        }
-
-        val nextFlow = flow.via {
-          repeatedEdgeTraverseNew(RepeatedEdgeTraverseNew(remappedTraverse))
-        }
-
-        (nextFlow, nextFollow)
-      }
-      case ((flow, prevFollow), RepeatedEdgeTraverse(_, _)) => {
-        throw new Exception("invalid reversal: repeated.legacy")
-      }
-      case ((flow, prevFollow), ReverseTraverse(_, _)) => {
-        throw new Exception("invalid reversal: reverse")
-      }
-      case ((flow, prevFollow), OneHopTraverse(_)) => {
-        throw new Exception("invalid reversal: onehop")
-      }
-    }
-
-    lastFlow
-    // NOTE: node traverse is applied at SrcLog level
-    // lastFlow.via {
-    //   nodeTraverse(indexType, indexId, subQuery.root.filters.toList, lastFollow)
-    // }
   }
 
   // Assumes you don't have two traverse of the same edgeType in different directions
@@ -790,14 +630,12 @@ class GraphQueryService @Inject() (
         // should never happen
         val directedEdge = typeMap.getOrElse(edgeType, throw Errors.streamError("invalid type")).edgeType
         val id = directedEdge.direction.extract(item)
-        // println("CHECK TRACEMAP", id, traceMap.getOrElse(id, Nil))
         traceMap.getOrElse(id, Nil).map(trace => EdgeHop(trace, directedEdge, item))
       }
     }
   }
 
   private def nodeCheck[T, TU](
-    nodeIndex: String,
     filters:   List[NodeFilter])(implicit targeting: QueryTargeting[TU], context: SpanContext, tracing: QueryTracing[T, TU]) = {
 
     Flow[T].groupedWithin(NodeHopSize, 100.milliseconds).mapAsync(1) { traces =>
@@ -805,7 +643,7 @@ class GraphQueryService @Inject() (
 
       for {
         (total, source) <- elasticSearchService.source(
-          nodeIndex,
+          targeting.nodeIndexName,
           ESQuery.bool(
             filter = ESQuery.bool(
               must = query :: filters.map(_.query)) :: Nil),
@@ -841,6 +679,8 @@ class GraphQueryService @Inject() (
       }
     }.mapConcat {
       s => s
+    }.map {
+      case ((a, _), _) => a
     }
   }
 
@@ -868,15 +708,10 @@ class GraphQueryService @Inject() (
         case (k, vs) => k -> vs.map(_._2)
       }
 
-      println("==========")
       val work = tracesByState.map {
         case (state, traces) => {
 
           val traverses = transitionMap.getOrElse(state, Map()).values.toList.flatten.map(_._1).distinct
-
-          println("CHECK TMAP", state, traces.map { trace =>
-            tracing.getId(tracing.getTerminus(trace.obj))
-          }, traverses.map(_.edgeType.identifier).mkString(","))
 
           for {
             source <- ifNonEmpty(traverses) {
@@ -897,7 +732,6 @@ class GraphQueryService @Inject() (
       
       for {        
         allResults <- Future.sequence(work).map(_.flatten.toList)
-        _ = println("==========")
         (cross, notCross) = allResults.partition { i =>
           i.directedEdge.crossFile
         }
@@ -960,13 +794,6 @@ class GraphQueryService @Inject() (
         
         val emit = allAllResults.sorted(ordering) // problem to sort after???
 
-        emit.distinct.foreach { e =>
-          println {
-            tracing.iterateAll(e.obj).map(tracing.getId).mkString("->")
-          }
-          println("--" + e.state.mkString(","))
-        }
-
         // TODO: is this efficient?
         emit.distinct
       }
@@ -974,6 +801,7 @@ class GraphQueryService @Inject() (
   }
 
   // NOTE: the .trace outputted here is already hopped
+  @deprecated
   private def edgeHop[T, TU](
     edgeTraverses: List[EdgeTypeTraverse],
     nodeHint:      Option[NodeType],

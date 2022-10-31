@@ -135,6 +135,8 @@ class Test {
   }
 
   "Scanning directories" should {
+
+    // sbt "project rambutanTest" "testOnly test.SrcLogQuerySpecCompose -- -z work"
     "work" taggedAs (Tag("single")) in {
       curl.graphql(graphql"""
         mutation addScan {

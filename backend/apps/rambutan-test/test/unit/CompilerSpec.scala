@@ -28,7 +28,7 @@ class CompilerSpec extends PlaySpec with MockitoSugar {
     // sbt "project rambutanTest" "testOnly test.unit.CompilerSpec -- -z work"
     "work" in {
       val mockES = mock[ElasticSearchService]
-      val compilerService = new q1.SrcLogCompilerService(
+      val compilerService = new SrcLogCompilerService(
         mockES)
 
       val targeting = KeysQueryTargeting(
@@ -72,14 +72,14 @@ class CompilerSpec extends PlaySpec with MockitoSugar {
       }
 
       println {
-        QueryString2.stringify(q)
+        QueryString.stringify(q)
       }
     }
 
     // sbt "project rambutanTest" "testOnly test.unit.CompilerSpec -- -z edge.follows.propagation"
     "edge.follows.propagation" in {
       val mockES = mock[ElasticSearchService]
-      val compilerService = new q1.SrcLogCompilerService(
+      val compilerService = new SrcLogCompilerService(
         mockES)
 
       val targeting = KeysQueryTargeting(
@@ -109,13 +109,13 @@ class CompilerSpec extends PlaySpec with MockitoSugar {
             javascript::instance_of(A, B).
             javascript::member(B, C).
             """,
-          IndexType.Javascript))(targeting)
+            IndexType.Javascript))(targeting)
       }
 
       println(q)
 
       println {
-        QueryString2.stringify(q)
+        QueryString.stringify(q)
       }
     }
 

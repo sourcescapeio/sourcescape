@@ -10,11 +10,6 @@ sealed trait NodeFilter {
   def query: JsObject
 }
 
-@deprecated
-case class NodeTypeFilter(`type`: Identifiable) extends NodeFilter {
-  def query = ESQuery.termSearch("type", `type`.identifier)
-}
-
 case class NodeTypesFilter(types: List[Identifiable]) extends NodeFilter {
   def query = ESQuery.termsSearch("type", types.map(_.identifier))
 }
@@ -24,31 +19,8 @@ case class NodeNotTypesFilter(types: List[NodeType]) extends NodeFilter {
     mustNot = ESQuery.termsSearch("type", types.map(_.identifier)) :: Nil)
 }
 
-@deprecated
-case class NodeIndexFilter(index: Int) extends NodeFilter {
-  def query = ESQuery.termSearch("index", index.toString)
-}
-
 case class NodeIndexesFilter(indexes: List[Int]) extends NodeFilter {
   def query = ESQuery.termsSearch("index", indexes.map(_.toString))
-}
-
-@deprecated
-case class NodeMultiNameFilter(names: List[String]) extends NodeFilter {
-  def query = ESQuery.termsSearch("search_name", names)
-}
-
-@deprecated
-case class NodeNameFilter(nameQuery: String) extends NodeFilter {
-
-  def query = Traverse.extractNameQuery("search_name", nameQuery)
-}
-
-@deprecated
-case class NodeExactNamesFilter(names: List[String]) extends NodeFilter {
-
-  def query = ESQuery.termsSearch("search_name", names)
-
 }
 
 case class NodeNamesFilter(names: List[String]) extends NodeFilter {
@@ -68,11 +40,6 @@ case class NodeNamesFilter(names: List[String]) extends NodeFilter {
         })
     }
   }
-}
-
-@deprecated
-case class NodeIdFilter(id: String) extends NodeFilter {
-  def query = ESQuery.termSearch("id", id)
 }
 
 case class NodeIdsFilter(ids: List[String]) extends NodeFilter {

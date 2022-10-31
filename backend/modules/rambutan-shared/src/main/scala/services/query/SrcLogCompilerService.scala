@@ -8,17 +8,22 @@ import play.api.mvc._
 import play.api.mvc.Results._
 import play.api.libs.ws._
 import play.api.libs.json._
+import services.ElasticSearchService
+import akka.stream.scaladsl.Source
+import models.Sinks
+import scala.util.Success
+import scala.util.Failure
 
 @Singleton
 class SrcLogCompilerService @Inject() (
-  configuration:        play.api.Configuration,
   elasticSearchService: ElasticSearchService)(implicit mat: akka.stream.Materializer, ec: ExecutionContext) {
 
   val SrcLogLimit = 10
 
-  /**
-   * Local stuff
-   */
+  def compileQuery[TU](query: SrcLogQuery)(implicit targeting: QueryTargeting[TU]): Future[RelationalQuery] = {
+    optimizeQuery(query)
+  }
+
   def compileQueryMultiple[TU](query: SrcLogQuery)(implicit targeting: QueryTargeting[TU]): Future[Map[String, RelationalQuery]] = {
     val extractedComponents = SrcLogOperations.extractComponents(query)
 
@@ -35,97 +40,156 @@ class SrcLogCompilerService @Inject() (
     }
   }
 
-  def compileQuery[TU](query: SrcLogQuery)(implicit targeting: QueryTargeting[TU]): Future[RelationalQuery] = {
-    optimizeQuery(query)
-  }
-
   /**
    * Core logic
    */
   private def optimizeQuery[TU](query: SrcLogQuery)(implicit targeting: QueryTargeting[TU]): Future[RelationalQuery] = {
     // select node
-    val (edges, penalties) = getPenalties(query)
-    println(penalties)
+    val traversableEdges = calculateAllTraversableEdges(query)
+    val allSpanningTrees = calculateAllSpanningTrees(traversableEdges, query.vertexes)
+    val allRoots = allSpanningTrees.map(_._1).toSet
+
     for {
-      root <- chooseRoots(penalties, query.allNodes)
-      tree = spanningTree(root.variable, query.vertexes, edges)
-      q = buildRelationalQuery(root, tree, query)
+      nodeCosts <- getNodeCosts(query.allNodes.filter(n => allRoots.contains(n.variable)))
+      withCosts = allSpanningTrees.flatMap {
+        case (rootKey, (edges, penalty)) => {
+          nodeCosts.get(rootKey) map { nodeCost =>
+            (rootKey, edges, penalty * nodeCost)
+          }
+        }
+      }
+      (rootKey, optimalTree, _) = withCosts.minBy(_._3)
+      rootNode = query.nodeMap.getOrElse(rootKey, throw new Exception(s"Invalid root ${rootKey}"))
     } yield {
-      q
+      buildRelationalQuery(rootNode, optimalTree, query)
     }
   }
 
   /**
-   * Steps
+   * 1. For each EdgeClause, emit all directed possibilities based on settings
    */
-  private def getPenalties[TU](query: SrcLogQuery)(implicit targeting: QueryTargeting[TU]) = {
-    val allNodes = query.allNodes
+  private def calculateAllTraversableEdges(query: SrcLogQuery) = {
+    val nodeMap = query.nodeMap
 
-    val baseTraversableEdges = query.baseTraversableEdges
-
-    val withFlips = baseTraversableEdges.flatMap {
-      case e if e.predicate.singleDirection && e.reverse => {
-        // inject typeHint here <<<
-        val hintNode = allNodes.find(_.variable =?= e.from).map(_.predicate)
-        val flipped = e.flip(hintNode)
-        List(flipped, e)
+    query.edges.flatMap {
+      case e @ EdgeClause(p, from, to, c, Some(_)) => {
+        // We have a boolean modifier here so we need to left join
+        DirectedSrcLogEdge.forward(e, nodeMap) :: Nil
       }
-      case other => {
-        other :: Nil
+      case e @ EdgeClause(p, from, to, c, _) if p.forceForward => {
+        // Still need this for Git edges
+        DirectedSrcLogEdge.forward(e, nodeMap) :: Nil
       }
-    }
-
-    findRoots(withFlips, query.vertexes) match {
-      case Nil => {
-        throw new Exception("invalid srclog. could not find valid path")
-      }
-      case roots => {
-        val possibleRoots = roots.map {
-          case (node, edges) => {
-            val forwardContains = edges.count(e => !e.reverse && e.predicate.singleDirection)
-            (node, edges, forwardContains)
-          }
-        }
-
-        val penalties = query.root.flatMap { s =>
-          possibleRoots.find(_._1 =?= s).map(r => Map(r._1 -> r._3))
-        }.getOrElse {
-          possibleRoots.map(r => r._1 -> r._3).toMap
-        }
-
-        (withFlips, penalties)
+      case e @ EdgeClause(p, from, to, c, None) => {
+        DirectedSrcLogEdge.forward(e, nodeMap) :: DirectedSrcLogEdge.reverse(e, nodeMap) :: Nil
       }
     }
   }
 
-  private def chooseRoots[TU](nodePenalties: Map[String, Int], allNodes: List[NodeClause])(implicit targeting: QueryTargeting[TU]) = {
-    val nodesToCheck = allNodes.flatMap { n =>
-      nodePenalties.get(n.variable) map { penalty =>
-        n -> penalty
-      }
-    }
-
-    val base = nodesToCheck.map {
-      case (node, penalty) => {
-        val query = node.getQuery
-        elasticSearchService.count(
-          targeting.nodeIndexName,
-          targeting.rootQuery(query.root)) map { resp =>
-            (node, (resp \ "count").as[Long] * math.pow(4, penalty))
-          }
-      }
-    }
-
-    Future.sequence(base).map { res =>
-      res.minBy(_._2)._1
-    }
+  /**
+   * 2. Calculate all spanning trees given directed edges, with edge cost
+   */
+  private def calculateAllSpanningTrees(edges: List[DirectedSrcLogEdge], allVertexes: Set[String]): Map[String, (List[DirectedSrcLogEdge], Int)] = {
+    // for a representative item in components, verifyConnection
+    (allVertexes.toList.flatMap { v =>
+      scala.util.Try {
+        spanningTree(v, allVertexes, edges)
+      }.toOption.map(v -> _)
+    } match {
+      case Nil      => throw new Exception("invalid srclog. could not find valid path")
+      case nonEmpty => nonEmpty
+    }).toMap
   }
 
-  private def buildRelationalQuery(root: NodeClause, tree: List[DirectedSrcLogEdge], query: SrcLogQuery) = {
-    val nodeClauseMap = buildNodeClauseMap(query)
+  /**
+   * Algo (Greedy DFS):
+   * 1. Start with root node as frontier
+   * 2. Expand frontier by checking all available edges from frontier to new vertexes
+   * 3. If already at all vertexes, then terminate
+   * 4. If not, add one edge with lowest cost to list, add new vertex to frontier
+   */
+  private def spanningTree(root: String, allVertexes: Set[String], traversableEdges: List[DirectedSrcLogEdge]): (List[DirectedSrcLogEdge], Int) = {
+    val traversableEdgeMap = traversableEdges.groupBy(_.from)
 
-    val withNodeCheck = spliceAdditionalNodeTraversals(tree, nodeClauseMap)
+    def traverse(frontier: Set[String], edges: List[DirectedSrcLogEdge], penalty: Int): (List[DirectedSrcLogEdge], Int) = {
+      if (frontier.equals(allVertexes)) {
+        (edges, penalty)
+      } else {
+        val possibleExpansion = frontier.toList.flatMap(f => traversableEdgeMap.getOrElse(f, Nil)).filterNot { e =>
+          frontier.contains(e.to)
+        }
 
+        val chosenEdge = possibleExpansion.minBy(_.edgePenalty)
+
+        traverse(frontier + chosenEdge.to, edges :+ chosenEdge, penalty * chosenEdge.edgePenalty) // NOTE: must be in order
+      }
+    }
+
+    traverse(Set(root), Nil, penalty = 1)
+  }
+
+  /**
+   * 3. Get node root count to calculate true cost
+   */
+  private def getNodeCosts[TU](nodes: List[NodeClause])(implicit targeting: QueryTargeting[TU]): Future[Map[String, Long]] = {
+    Source(nodes).mapAsync(4) { node =>
+      val query = node.getQuery
+      elasticSearchService.count(
+        targeting.nodeIndexName,
+        targeting.rootQuery(query.root)) map { resp =>
+          node.variable -> (resp \ "count").as[Long]
+        }
+    }.runWith(Sinks.ListAccum).map(_.toMap)
+  }
+
+  /**
+   * 4. Build relational query
+   */
+  private def buildRelationalQuery(root: NodeClause, tree: List[DirectedSrcLogEdge], query: SrcLogQuery): RelationalQuery = {
+    // edges that are not included in the spanning tree are filled in as intersections
+    // TODO: this is not accurately accounted for in cost calculation
+    val missingTuples = fillMissingEdges(tree, query)
+    val missingEdges = missingTuples.map(_._1)
+    val intersections = missingTuples.map(_._2)
+
+    // we need to do a first pass to see what follows are passed forward
+
+    val allEdges = (tree ++ missingEdges)
+
+    // should only have 1 because it is tree
+    val edgeMap = tree.map { directedEdge =>
+      directedEdge.to -> directedEdge
+    }.toMap
+
+    val traceQueries = allEdges.map { edge =>
+      calculateTraceQuery(edge, edgeMap.get(edge.from))
+    }
+
+    val selects = query.selected match {
+      case Nil => query.vertexes.toList
+      case s   => s
+    }
+
+    RelationalQuery(
+      RelationalSelect.Select(selects),
+      KeyedQuery(
+        root.variable,
+        root.getQuery),
+      traceQueries,
+      Map(), // having,
+      Map(), // havingOr
+      intersections.map {
+        case (a, b) => a :: b :: Nil
+      },
+      offset = None,
+      limit = None,
+      forceOrdering = None)
+  }
+
+  /**
+   * Relational query helpers
+   */
+  private def fillMissingEdges(tree: List[DirectedSrcLogEdge], query: SrcLogQuery) = {
     // calculate missing edges to fill as intersections
     val missing = query.edges.flatMap { e =>
       withFlag(tree.find(_.equiv(e)).isEmpty) {
@@ -133,10 +197,7 @@ class SrcLogCompilerService @Inject() (
       }
     }
 
-    // what is the nodeclause for the directed edge
-    //
-
-    val tups = missing.map { m =>
+    missing.map { m =>
       val baseEdge = if (m.modifier.isDefined) {
         // this will never happen, but let's explicitly call it out
         // should never have multiple boolean edges into a node
@@ -152,135 +213,33 @@ class SrcLogCompilerService @Inject() (
       val intersectTo = Hashing.uuid()
       val mappedEdge = baseEdge.copy(
         to = intersectTo,
-        nodeCheck = nodeClauseMap.get(baseEdge.to))
+        nodeCheck = query.nodeMap.get(baseEdge.to))
       (mappedEdge, (baseEdge.to, intersectTo))
     }
-
-    //
-    val allEdges = withNodeCheck ++ tups.map(_._1)
-    val intersections = tups.map(_._2)
-
-    val selects = query.selected match {
-      case Nil => query.vertexes.toList
-      case s   => s
-    }
-
-    // We shouldn't really need this, right?
-    // val having = (query.vertexes -- query.leftJoinVertexes).map { k =>
-    //   k -> HavingFilter.IS_NOT_NULL
-    // }.toMap
-
-    RelationalQuery(
-      RelationalSelect.Select(selects),
-      KeyedQuery(
-        root.variable,
-        root.getQuery),
-      allEdges.map(_.toTraceQuery),
-      Map(), // having,
-      Map(),
-      intersections.map {
-        case (a, b) => a :: b :: Nil
-      },
-      offset = None,
-      limit = None,
-      forceOrdering = None)
   }
 
-  /**
-   * Relational query helpers
-   */
-  private def buildNodeClauseMap(query: SrcLogQuery): Map[String, NodeClause] = {
-    query.allNodes.groupBy(_.variable) flatMap {
-      case (k, vs) => {
-        vs match {
-          case Nil      => None
-          case a :: Nil => Some(k -> a)
-          case a :: more => {
-            val mostExact = more.foldLeft(a) {
-              case (curr, next) => {
-                if (curr.predicate =/= next.predicate) {
-                  throw new Exception(s"multiple constraints for node ${k} ${curr.predicate} ${next.predicate}")
-                } else {
-                  if (next.condition.isDefined && curr.condition.isEmpty) {
-                    next
-                  } else {
-                    curr
-                  }
-                }
-              }
-            }
-            Some(k -> mostExact)
-          }
-        }
+  def calculateTraceQuery(directedEdge: DirectedSrcLogEdge, intoEdge: Option[DirectedSrcLogEdge]) = {
+    // these conditions should never happen
+    if (directedEdge.booleanModifier.isDefined && directedEdge.reverse) {
+      throw new Exception("INVALID: boolean edges must be forward facing")
+    }
+
+    // This is needed for reversed egress -> ingress
+    // ex: InstanceOf >> Member
+    val edgePropFollows = intoEdge.map { i =>
+      withFlag(i.nodeCheck.isEmpty) {
+        i.reversedPropagatedFollows
       }
-    }
-  }
+    }.getOrElse(Nil)
 
-  private def spliceAdditionalNodeTraversals(tree: List[DirectedSrcLogEdge], nodesToCheck: Map[String, NodeClause]): List[DirectedSrcLogEdge] = {
-    // This adds an extra node check to the edge
-    tree.map { directedEdge =>
-      // TODO: this is bad. we need to genericize
-      nodesToCheck.get(directedEdge.to) match {
-        case _ if directedEdge.forceForwardDirection => {
-          // don't traverse this way
-          // for diffs, don't traverse because
-          directedEdge
-        }
-        case Some(toNode) if Option(toNode.predicate) =/= directedEdge.intoImplicit || toNode.condition.isDefined => {
-          // filter down in case edge is not specific enough
-          // the implicit name / index condition should be handled by the edge search
-          directedEdge.copy(nodeCheck = Some(toNode))
-        }
-        case any if directedEdge.mustNodeTraverse => {
-          // for references we must traverse
-          // TODO: need to make universal
-          val toNode = any.getOrElse(NodeClause(JavascriptNodePredicate.NotIdentifierRef, "?", None)) // variable name ignored
-          directedEdge.copy(nodeCheck = Some(toNode))
-        }
-        case _ => directedEdge
-      }
-    }
-  }
+    val traverses: List[Traverse] = directedEdge.edgeTraverse(edgePropFollows) ++ directedEdge.nodeTraverse
 
-  /**
-   * Helpers
-   */
-  /**
-   * Algo (DFS):
-   * 1. Start with root node as frontier
-   * 2. Expand frontier by checking all available edges from frontier to new vertexes
-   * 3. If already at all vertexes, then terminate
-   * 4. If not, add one edge with lowest cost to list, add new vertex to frontier
-   */
-  private def spanningTree(root: String, allVertexes: Set[String], traversableEdges: List[DirectedSrcLogEdge]): List[DirectedSrcLogEdge] = {
-    val traversableEdgeMap = traversableEdges.groupBy(_.from)
+    val leftJoin = directedEdge.booleanModifier.isDefined
 
-    def traverse(frontier: Set[String], edges: List[DirectedSrcLogEdge]): List[DirectedSrcLogEdge] = {
-      if (frontier.equals(allVertexes)) {
-        edges
-      } else {
-        val possibleExpansion = frontier.toList.flatMap(f => traversableEdgeMap.getOrElse(f, Nil)).filterNot { e =>
-          frontier.contains(e.to)
-        }
-
-        val chosenEdge = possibleExpansion.minBy(_.cost)
-
-        traverse(frontier + chosenEdge.to, edges :+ chosenEdge) // NOTE: must be in order
-      }
-    }
-
-    traverse(Set(root), Nil)
-  }
-
-  /**
-   * Algo:
-   * 1. Take all nodes that can traverse to every other node
-   * 2. Pick node with smallest count
-   */
-  private def findRoots(edges: List[DirectedSrcLogEdge], allVertexes: Set[String]): List[(String, List[DirectedSrcLogEdge])] = {
-    // for a representative item in components, verifyConnection
-    allVertexes.toList.flatMap { v =>
-      scala.util.Try(spanningTree(v, allVertexes, edges)).toOption.map(v -> _)
-    }
+    KeyedQuery(
+      directedEdge.to,
+      TraceQuery(
+        FromRoot(directedEdge.from, leftJoin = leftJoin),
+        traverses))
   }
 }

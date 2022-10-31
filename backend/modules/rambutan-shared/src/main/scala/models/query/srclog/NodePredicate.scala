@@ -92,7 +92,7 @@ object JavascriptNodePredicate extends Plenumeration[JavascriptNodePredicate] {
     // override name filter
     override def filters(conditions: Option[Condition]) = {
       val maybeName = conditions match {
-        case Some(NameCondition(n)) => NodeNameFilter("\"" + n + "\"") :: Nil
+        case Some(NameCondition(n)) => NodeNamesFilter(List("\"" + n + "\"")) :: Nil
         case _                      => Nil
       }
 

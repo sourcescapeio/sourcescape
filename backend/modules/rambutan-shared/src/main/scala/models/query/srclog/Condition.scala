@@ -22,19 +22,19 @@ sealed abstract class Condition(val `type`: ConditionType) {
     toJson)
 }
 case class IndexCondition(index: Int) extends Condition(ConditionType.Index) {
-  def filter = NodeIndexFilter(index - 1)
+  def filter = NodeIndexesFilter(List(index - 1))
 
   def toJson = Json.toJson(index)
 }
 
 case class MultiNameCondition(names: List[String]) extends Condition(ConditionType.MultiName) {
-  def filter = NodeMultiNameFilter(names)
+  def filter = NodeNamesFilter(names)
 
   def toJson = Json.toJson(names)
 }
 
 case class NameCondition(name: String) extends Condition(ConditionType.Name) {
-  def filter = NodeNameFilter(name)
+  def filter = NodeNamesFilter(List(name))
 
   def toJson = Json.toJson(name)
 }

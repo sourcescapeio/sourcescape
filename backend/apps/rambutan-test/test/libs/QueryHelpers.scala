@@ -38,17 +38,14 @@ trait QueryHelpers {
   }
 
   protected def dataForGraphQuery(indexType: IndexType)(q: String)(implicit ec: ExecutionContext) = {
-    val srcLogService = app.injector.instanceOf[SrcLogCompilerService]
     val graphQueryService = app.injector.instanceOf[GraphQueryService]
-    val queryTargetingService = app.injector.instanceOf[QueryTargetingService]
 
-    val (_, query) = GraphQuery2.parseOrDie(q)
+    val (_, query) = GraphQuery.parseOrDie(q)
 
     val queryTracing = QueryTracing.Basic
     val targeting = KeysQueryTargeting(IndexType.Javascript, List(Index), Map(), None)
 
     for {
-      // targeting <- queryTargetingService.resolveTargeting(-1, indexType,  )
       (count, _, source) <- graphQueryService.executeUnit(query, false, None)(targeting, silvousplay.api.NoopSpanContext, QueryTracing.Basic)
       data <- source.runWith {
         Sinks.ListAccum[GraphTrace[TraceUnit]]
