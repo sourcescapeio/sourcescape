@@ -36,67 +36,14 @@ import akka.http.scaladsl.model.ws._
 import org.joda.time.DateTime
 import akka.stream.Materializer
 
-abstract class SrcLogQuerySpec
+sealed abstract class SrcLogQuerySpec
   extends RambutanSpec
   with IndexHelpers
   with QueryHelpers {
   // to override. not using val cuz we want to force laziness for testcontainers
   def config(): Map[String, Any]
 
-  val TSCONFIG = """
-{
-  "compilerOptions": {
-    "module": "commonjs",
-    "declaration": true,
-    "removeComments": true,
-    "emitDecoratorMetadata": true,
-    "experimentalDecorators": true,
-    "target": "es2017",
-    "sourceMap": true,
-    "outDir": "./dist",
-    "baseUrl": "./",
-    "incremental": true,
-    "resolveJsonModule": true,
-    "esModuleInterop": true,
-    "lib": ["ESNext.String", "es2015"]
-  },
-  "exclude": ["node_modules", "dist"]
-}
-  """
-
-  val PROGRAM = """
-import { Controller, Post} from '@nestjs/common'
-@Controller('app')
-class Hello {
-
-  @Post('/test')
-  async doSomething() {
-    return true;
-  }
-}
-  """
-
-  val PROGRAM2 = """
-class TestService {
-	start() {
-		console.warn('test');
-	}
-}
-
-
-class Test {
-	constructor(private testService: TestService) {
-	}
-
-	test2({a: number, b: string}) {
-	
-	}
-
-	test() {
-		this.testService.start()
-	}
-}  
-  """
+  import FileHelpers._
 
   override def fakeApplication() = {
     val mockFileService = mock[FileService]
@@ -136,8 +83,8 @@ class Test {
 
   "Scanning directories" should {
 
-    // sbt "project rambutanTest" "testOnly test.SrcLogQuerySpecCompose -- -z work"
-    "work" taggedAs (Tag("single")) in {
+    // sbt "project rambutanTest" "testOnly test.SrcLogQuerySpecCompose -- -z basic"
+    "basic" in {
       curl.graphql(graphql"""
         mutation addScan {
           path1: createScan(path: "/data/projects") {
@@ -160,8 +107,6 @@ class Test {
         (res \ "data" \ "repos" \\ "id").map(_.as[Int])(0)
       }
 
-      println("BEFORE INDEX")
-
       await {
         runTestIndex(
           RepoSHAIndex(
@@ -176,9 +121,7 @@ class Test {
             deleted = false,
             created = new DateTime().getMillis()),
           IndexType.Javascript)(
-            "tsconfig.json" -> TSCONFIG,
-            "test.ts" -> PROGRAM,
-            "test2.ts" -> PROGRAM2)
+            directory("examples/001_basic"): _*)
       }
 
       val data = await {
@@ -238,58 +181,95 @@ class Test {
       //   }
       // }
     }
+
+    // sbt "project rambutanTest" "testOnly test.SrcLogQuerySpecCompose -- -z all.calls"
+    "all.calls" in {
+      curl.graphql(graphql"""
+        mutation addScan {
+          path1: createScan(path: "/data/projects") {
+            id
+            path
+          }
+        }
+      """) { res =>
+        println(res)
+      }
+
+      val repoId = curl.graphql(graphql"""
+        {
+          repos {
+            id
+            path
+          }
+        }
+      """) { res =>
+        (res \ "data" \ "repos" \\ "id").map(_.as[Int])(0)
+      }
+
+      val CurrentIndex = RepoSHAIndex(
+        id = 1,
+        orgId = -1,
+        repoName = "/data/projects",
+        repoId = repoId,
+        sha = "123",
+        rootIndexId = None,
+        dirtySignature = None,
+        workId = "123",
+        deleted = false,
+        created = new DateTime().getMillis())
+
+      await {
+        runTestIndex(
+          CurrentIndex,
+          IndexType.Javascript)(
+            directory("examples/001_basic"): _*)
+      }
+
+      await {
+        dataForGraphQuery(IndexType.Javascript, index = CurrentIndex) {
+          """
+          root {
+            all
+          }.linear_traverse[
+            t["javascript::call_link"]
+          ]
+          """
+        }
+      }.foreach { trace =>
+        val s = (trace.tracesInternal :+ trace.terminus).flatMap { ti =>
+          (ti.tracesInternal :+ ti.terminus).map(_.id)
+        }.mkString("->")
+
+        println(s)
+      }
+
+      val data = await {
+        dataForQuery(IndexType.Javascript, QueryTargetingRequest.AllLatest(None))(
+          """
+            javascript::all_called(FZERO, F).
+            javascript::contains(F, WARNCALL).
+
+            javascript::member(CONSOLE, WARN)[name = "warn"].
+            javascript::call(WARN, WARNCALL).
+          """)
+      }.foreach { d =>
+        println("====================")
+        println("RESULT")
+        println("====================")
+        d.map {
+          case (k, v) => {
+            println(k)
+            println(Json.prettyPrint((v \ "terminus" \ "node").as[JsValue]))
+            println((v \ "terminus" \ "node" \ "extracted").as[String])
+            println((v \ "terminus" \ "node" \ "nearby" \ "code").as[String])
+          }
+        }
+      }
+    }
+
   }
 }
 
-// sbt "project rambutanTest" "testOnly test.SrcLogQuerySpecContainers"
-class SrcLogQuerySpecContainers
-  extends SrcLogQuerySpec
-  with ForAllTestContainer {
-
-  private val elasticsearch = ElasticsearchContainer(
-    DockerImageName.parse("docker.elastic.co/elasticsearch/elasticsearch:7.10.2"))
-
-  private val postgres = PostgreSQLContainer(
-    DockerImageName.parse("postgres:12.4"),
-    databaseName = "sourcescape",
-    username = "sourcescape",
-    password = "sourcescape")
-
-  private val redis = GenericContainer(
-    "redis:5.0.10",
-    exposedPorts = Seq(6379))
-
-  private val primadonna = GenericContainer(
-    "gcr.io/lychee-ai/sourcescape-cli-primadonna:0.2",
-    waitStrategy = Wait.forLogMessage(".*node ./bin/www.*", 1),
-    exposedPorts = Seq(3001))
-
-  private val dorothy = GenericContainer(
-    "gcr.io/lychee-ai/sourcescape-cli-dorothy:0.2",
-    waitStrategy = Wait.forLogMessage(".*WEBrick::HTTPServer#start.*", 1),
-    exposedPorts = Seq(3004))
-
-  def config() = {
-    Map(
-      "primadonna.server" -> s"http://localhost:${primadonna.mappedPort(3001)}",
-      "dorothy.server" -> s"http://localhost:${dorothy.mappedPort(3004)}",
-      "redis.port" -> s"${redis.mappedPort(6379)}",
-      "elasticsearch.port" -> s"${elasticsearch.mappedPort(9200)}",
-      "slick.dbs.default.profile" -> "silvousplay.data.PostgresDriver$",
-      "slick.dbs.default.db.url" -> s"jdbc:postgresql://localhost:${postgres.mappedPort(5432)}/sourcescape?characterEncoding=UTF-8",
-      "slick.dbs.default.db.user" -> "sourcescape",
-      "slick.dbs.default.db.password" -> "sourcescape")
-  }
-
-  override val container = MultipleContainers(
-    postgres,
-    elasticsearch,
-    redis,
-    primadonna,
-    dorothy)
-}
-
-// sbt "project rambutanTest" "testOnly test.QuerySpecCompose"
 class SrcLogQuerySpecCompose
   extends SrcLogQuerySpec {
 

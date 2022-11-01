@@ -36,7 +36,7 @@ import akka.http.scaladsl.model.ws._
 import org.joda.time.DateTime
 import akka.stream.Materializer
 
-abstract class GraphQuerySpec
+sealed abstract class GraphQuerySpec
   extends RambutanSpec
   with IndexHelpers
   with QueryHelpers {
@@ -397,7 +397,7 @@ abstract class GraphQuerySpec
         dataForGraphQuery(IndexType.Javascript) {
           """
           root {
-            type: "class"
+            all
           }.repeated_traverse {
             follow : [
               ?["javascript::class_property"]

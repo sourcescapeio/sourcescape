@@ -100,6 +100,8 @@ object QueryString {
       case NodePropsFilter(props) => s"${indent}props: {" + props.map {
         case GenericGraphProperty(k, v) => s"${indent}${indent}" + "\"" + k + "\"" + " : " + "\"" + v + "\""
       }.mkString(", ") + "\n}"
+      case NodeAllFilter         => s"${indent}all"
+      case NodeNotTypesFilter(_) => "NOT_IMPLEMENTED!!!"
     }
   }
 
@@ -115,8 +117,11 @@ object QueryString {
       }
       case RepeatedLinearTraverse(follows, repeated) => {
         ".repeated_traverse {\n" +
-          s"${spaces}follow: ${}" + follows.map(i => stringifyFollow(i, tabs + 1)).mkString(",\n") + "\n"
-        s"${spaces}repeat: ${}" + repeated.map(i => stringifyFollow(i, tabs + 1)).mkString(",\n") + "\n}"
+          s"${spaces}follow: [" + follows.map(i => stringifyFollow(i, tabs + 1)).mkString(",\n") + "\n]" +
+          s"${spaces}repeat: [" + repeated.map(i => stringifyFollow(i, tabs + 1)).mkString(",\n") + "\n]"
+      }
+      case RepeatedEdgeTraverse(_, _) => {
+        "!not_supported!"
       }
     }
   }

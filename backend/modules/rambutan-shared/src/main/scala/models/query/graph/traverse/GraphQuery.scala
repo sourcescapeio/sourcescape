@@ -123,6 +123,15 @@ object GraphQuery {
     }
   }
 
+  object NodeAll {
+    def targetSetting[_: P] = {
+      implicit val whitespace = NoWhitespace.noWhitespaceImplicit
+      P("all") map { _ =>
+        NodeAllFilter :: Nil
+      }
+    }
+  }
+
   object Traverse {
     private def reverseSetting[_: P] = P("reverse") map (_ => true)
 
@@ -202,7 +211,7 @@ object GraphQuery {
 
     private def nodeCheck[_: P] = {
       // implicit val whitespace = MultiLineWhitespace.whitespace
-      P("node_check" ~ "{" ~/ (NodeId.targetSetting | NodeType.targetSetting) ~ "}") map {
+      P("node_check" ~ "{" ~/ (NodeId.targetSetting | NodeType.targetSetting | NodeAll.targetSetting) ~ "}") map {
         case nodeFilters => NodeCheck(nodeFilters)
       }
     }
@@ -218,7 +227,7 @@ object GraphQuery {
 
   private def root[_: P] = {
     // implicit val whitespace = MultiLineWhitespace.whitespace
-    P("root" ~ "{" ~/ (NodeId.targetSetting | NodeType.targetSetting) ~ "}") map {
+    P("root" ~ "{" ~/ (NodeId.targetSetting | NodeType.targetSetting | NodeAll.targetSetting) ~ "}") map {
       case nodeFilters => GraphRoot(nodeFilters)
     }
   }

@@ -14,6 +14,7 @@ case class NodeTypesFilter(types: List[Identifiable]) extends NodeFilter {
   def query = ESQuery.termsSearch("type", types.map(_.identifier))
 }
 
+// what's good with this one?
 case class NodeNotTypesFilter(types: List[NodeType]) extends NodeFilter {
   def query = ESQuery.bool(
     mustNot = ESQuery.termsSearch("type", types.map(_.identifier)) :: Nil)
@@ -57,4 +58,8 @@ case class NodePropsFilter(props: List[GenericGraphProperty]) extends NodeFilter
       must = groupedTerms.toList)
   }
 
+}
+
+case object NodeAllFilter extends NodeFilter {
+  def query = ESQuery.matchAll
 }

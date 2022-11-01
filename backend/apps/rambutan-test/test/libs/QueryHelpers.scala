@@ -8,6 +8,7 @@ import models.graph._
 import org.scalatestplus.play.guice._
 import scala.concurrent.ExecutionContext
 import play.api.libs.json._
+import models.RepoSHAIndex
 
 trait QueryHelpers {
   self: RambutanSpec with IndexHelpers =>
@@ -37,13 +38,15 @@ trait QueryHelpers {
     }
   }
 
-  protected def dataForGraphQuery(indexType: IndexType)(q: String)(implicit ec: ExecutionContext) = {
+  protected def dataForGraphQuery(indexType: IndexType, index: RepoSHAIndex = Index)(q: String)(implicit ec: ExecutionContext) = {
     val graphQueryService = app.injector.instanceOf[GraphQueryService]
 
     val (_, query) = GraphQuery.parseOrDie(q)
 
+    println(QueryString.stringifyGraphQuery(query))
+
     val queryTracing = QueryTracing.Basic
-    val targeting = KeysQueryTargeting(IndexType.Javascript, List(Index), Map(), None)
+    val targeting = KeysQueryTargeting(IndexType.Javascript, List(index), Map(), None)
 
     for {
       (count, _, source) <- graphQueryService.executeUnit(query, false, None)(targeting, silvousplay.api.NoopSpanContext, QueryTracing.Basic)
