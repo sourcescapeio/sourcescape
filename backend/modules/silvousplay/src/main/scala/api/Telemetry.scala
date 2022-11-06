@@ -123,9 +123,9 @@ case object NoopSpanContext extends SpanContext {
   def withSpanF[T1, T2](name: String, attrib: (String, String)*)(f: SpanContext => Flow[T1, T2, _])(implicit ec: ExecutionContext): Flow[T1, T2, _] = f(this)
 
   def event(name: String, attrib: (String, String)*): Unit = {
-    println(name, attrib.map {
-      case (k, v) => s"${k}[${v}]"
-    }.mkString(" "))
+    // println(name, attrib.map {
+    //   case (k, v) => s"${k}[${v}]"
+    // }.mkString(" "))
   }
 }
 

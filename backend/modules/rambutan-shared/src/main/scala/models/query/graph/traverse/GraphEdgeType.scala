@@ -20,8 +20,19 @@ sealed class GraphEdgeType(
     edgeType.isContains && direction =?= AccessDirection.From
   }
 
-  // TODO: ewwww
-  def opposite: GraphEdgeType = new GraphEdgeType(identifier + ".reverse", edgeType, direction.reverse, crossFile)
+  private def reverseIdentifier = {
+    if (identifier.endsWith(".reverse")) {
+      identifier.replaceFirst("\\.reverse$", "")
+    } else {
+      s"${identifier}.reverse"
+    }
+  }
+
+  def opposite: GraphEdgeType = new GraphEdgeType(
+    reverseIdentifier,
+    edgeType,
+    direction.reverse,
+    crossFile)
 }
 
 sealed class RubyGraphEdgeType(edgeTypeIn: RubyEdgeType, direction: AccessDirection)

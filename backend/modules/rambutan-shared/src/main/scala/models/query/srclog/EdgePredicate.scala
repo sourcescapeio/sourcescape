@@ -519,7 +519,7 @@ object JavascriptEdgePredicate extends Plenumeration[JavascriptEdgePredicate] {
       lin(
         ?(basic(JavascriptGraphEdgeType.MethodFunction)),
         t(basic(JavascriptGraphEdgeType.FunctionContains)),
-        t(basic(JavascriptGraphEdgeType.CallOf)))
+        t(basic(JavascriptGraphEdgeType.CallOf.opposite)))
     }
   }
 

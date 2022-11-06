@@ -45,12 +45,11 @@ sealed abstract class SrcLogQuerySpec
 
   import FileHelpers._
 
+  val LocalRepo = LocalRepoConfig(-1, "/data/projects", 1, "/data/projects", "remote", RemoteType.GitHub, Nil)
+
   override def fakeApplication() = {
     val mockFileService = mock[FileService]
     val mockGitService = mock[LocalGitService]
-    when(mockGitService.scanGitDirectory(any)).thenReturn(Source(
-      List(
-        GitScanResult("/data/projects/project1", true, Set("git@github.com:org/project1.git")))))
 
     val renderedConfig = config().toSeq
 
@@ -68,6 +67,7 @@ sealed abstract class SrcLogQuerySpec
   override def beforeEach() = {
     // clear all indexed data sync
     val indexUpgradeService = app.injector.instanceOf[IndexUpgradeService]
+    val repoDataService = app.injector.instanceOf[LocalRepoDataService]
 
     val redisService = app.injector.instanceOf[RedisService]
 
@@ -75,6 +75,7 @@ sealed abstract class SrcLogQuerySpec
       _ <- indexUpgradeService.deleteAllIndexesSync()
       _ <- wipeElasticSearch()
       _ <- redisService.redisClient.flushall()
+      _ <- repoDataService.upsertRepo(LocalRepo)
     } yield {
       ()
     }
@@ -85,35 +86,13 @@ sealed abstract class SrcLogQuerySpec
 
     // sbt "project rambutanTest" "testOnly test.SrcLogQuerySpecCompose -- -z basic"
     "basic" in {
-      curl.graphql(graphql"""
-        mutation addScan {
-          path1: createScan(path: "/data/projects") {
-            id
-            path
-          }
-        }
-      """) { res =>
-        println(res)
-      }
-
-      val repoId = curl.graphql(graphql"""
-        {
-          repos {
-            id
-            path
-          }
-        }
-      """) { res =>
-        (res \ "data" \ "repos" \\ "id").map(_.as[Int])(0)
-      }
-
       await {
         runTestIndex(
           RepoSHAIndex(
             id = 1,
             orgId = -1,
             repoName = "/data/projects",
-            repoId = repoId,
+            repoId = LocalRepo.repoId,
             sha = "123",
             rootIndexId = None,
             dirtySignature = None,
@@ -184,33 +163,11 @@ sealed abstract class SrcLogQuerySpec
 
     // sbt "project rambutanTest" "testOnly test.SrcLogQuerySpecCompose -- -z all.calls"
     "all.calls" in {
-      curl.graphql(graphql"""
-        mutation addScan {
-          path1: createScan(path: "/data/projects") {
-            id
-            path
-          }
-        }
-      """) { res =>
-        println(res)
-      }
-
-      val repoId = curl.graphql(graphql"""
-        {
-          repos {
-            id
-            path
-          }
-        }
-      """) { res =>
-        (res \ "data" \ "repos" \\ "id").map(_.as[Int])(0)
-      }
-
       val CurrentIndex = RepoSHAIndex(
         id = 1,
         orgId = -1,
         repoName = "/data/projects",
-        repoId = repoId,
+        repoId = LocalRepo.repoId,
         sha = "123",
         rootIndexId = None,
         dirtySignature = None,

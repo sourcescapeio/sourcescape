@@ -16,66 +16,39 @@ import silvousplay.api.SpanContext
 
 @Singleton
 class RepoIndexDataService @Inject() (
-  dao:                dal.SharedDataAccessLayer,
-  repoDataService:    RepoDataService,
-  srcLogQueryService: SrcLogQueryService,
-  indexerService:     IndexerService,
-  configuration:      play.api.Configuration)(implicit ec: ExecutionContext, mat: akka.stream.Materializer) {
+  dao:                   dal.SharedDataAccessLayer,
+  repoDataService:       RepoDataService,
+  srcLogQueryService:    SrcLogQueryService,
+  srcLogCompilerService: SrcLogCompilerService,
+  graphQueryService:     GraphQueryService,
+  nodeHydrationService:  NodeHydrationService,
+  indexerService:        IndexerService,
+  configuration:         play.api.Configuration)(implicit ec: ExecutionContext, mat: akka.stream.Materializer) {
 
   /**
    *
    * SHAs
    */
-  // val RootBranches = List("master", "develop", "main")
-  // def getBranchChain(repoId: Int, branch: String): Future[List[RepoSHA]] = {
-  //   for {
-  //     allShas <- getSHAsForRepoBranch(repoId, branch)
-  //   } yield {
-  //     // TODO: move to db query with index
-  //     val filtered = allShas.filter(_.branches.contains(branch))
-  //     val filteredMap = filtered.map { sha =>
-  //       sha.sha -> sha
-  //     }.toMap
-  //     val ids = filtered.flatMap(sha => sha.parents.map(_ -> sha.sha))
-  //     val sorted = silvousplay.TSort.topologicalSort(ids).flatMap(filteredMap.get).toList.reverse
-
-  //     val intersection = sorted.find(_.branches.intersect(RootBranches).nonEmpty)
-
-  //     sorted.map {
-  //       case item if Option(item.sha) =?= intersection.map(_.sha) => {
-  //         val addRefs = item.branches.intersect(RootBranches)
-  //         item.copy(refs = (item.refs ++ addRefs))
-  //       }
-  //       case item => item
-  //     }
-  //   }
-  // }
-
   def getBranchChain(orgId: Int, repoId: Int, branch: String, limit: Int = 20)(implicit context: SpanContext): Future[List[RepoSHA]] = {
     implicit val targeting = GenericGraphTargeting(orgId)
 
-    val A = "A"
-    val B = "B"
-    val C = "C"
-
     for {
-      source <- srcLogQueryService.runQueryGeneric(SrcLogGenericQuery(
-        nodes = List(
-          NodeClause(GenericGraphNodePredicate.GitHead, A, condition = Some(GraphPropertyCondition(
+      (_, source) <- graphQueryService.runQueryGenericGraph(GraphQuery(
+        GraphRoot(GenericGraphNodePredicate.GitHead.filters(
+          Some(GraphPropertyCondition(
             List(GenericGraphProperty("repo_id", repoId.toString()), GenericGraphProperty("head", branch)))))),
-        edges = List(
-          EdgeClause(GenericGraphEdgePredicate.GitHeadCommit, A, B, condition = None, modifier = None),
-          EdgeClause(
-            GenericGraphEdgePredicate.GitCommitParent,
-            B,
-            C,
-            condition = Some(
-              GraphPropertyCondition(
-                GenericGraphProperty("limit", limit.toString()) :: Nil)), modifier = None)),
-        root = None,
-        selected = Nil))
+        List(
+          LinearTraverse(EdgeFollow(EdgeTypeTraverse(GenericGraphEdgeType.GitHeadCommit, None) :: Nil, FollowType.Target) :: Nil),
+          RepeatedEdgeTraverse[GraphTrace[GenericGraphUnit], GenericGraphUnit](
+            EdgeFollow(
+              EdgeTypeTraverse(GenericGraphEdgeType.GitCommitParent, filter = None) :: Nil,
+              FollowType.Target),
+            { trace =>
+              val limitTerminate = (trace.tracesInternal.length + 1) >= limit
+              limitTerminate
+            }))))
       items <- source.runWith(Sinks.ListAccum)
-      results <- getSHAs(repoId, List(B, C), items)
+      results <- getSHAs(repoId, items)
     } yield {
       results
     }
@@ -84,27 +57,22 @@ class RepoIndexDataService @Inject() (
   def getBelowChain(orgId: Int, repoId: Int, sha: String)(implicit context: SpanContext): Future[List[RepoSHA]] = {
     implicit val targeting = GenericGraphTargeting(orgId)
 
-    val A = "A"
-    val B = "B"
-
     val Limit = 100
     for {
-      source <- srcLogQueryService.runQueryGeneric(SrcLogGenericQuery(
-        nodes = List(
-          NodeClause(GenericGraphNodePredicate.GitCommit, A, condition = Some(GraphPropertyCondition(
+      (_, source) <- graphQueryService.runQueryGenericGraph(GraphQuery(
+        GraphRoot(GenericGraphNodePredicate.GitCommit.filters(
+          Some(GraphPropertyCondition(
             List(GenericGraphProperty("repo_id", repoId.toString()), GenericGraphProperty("sha", sha)))))),
-        edges = List(
-          EdgeClause(
-            GenericGraphEdgePredicate.GitCommitParent,
-            A,
-            B,
-            condition = Some(
-              GraphPropertyCondition(
-                GenericGraphProperty("limit", Limit.toString()) :: Nil)), modifier = None)),
-        root = None,
-        selected = Nil))
+        RepeatedEdgeTraverse[GraphTrace[GenericGraphUnit], GenericGraphUnit](
+          EdgeFollow(
+            EdgeTypeTraverse(GenericGraphEdgeType.GitCommitParent, filter = None) :: Nil,
+            FollowType.Target),
+          { trace =>
+            val limitTerminate = (trace.tracesInternal.length + 1) >= Limit
+            limitTerminate
+          }) :: Nil))
       items <- source.runWith(Sinks.ListAccum)
-      results <- getSHAs(repoId, List(B), items)
+      results <- getSHAs(repoId, items)
     } yield {
       results
     }
@@ -113,37 +81,30 @@ class RepoIndexDataService @Inject() (
   def getAboveChain(orgId: Int, repoId: Int, sha: String)(implicit context: SpanContext): Future[List[RepoSHA]] = {
     implicit val targeting = GenericGraphTargeting(orgId)
 
-    val A = "A"
-    val B = "B"
-
     val Limit = 100
     for {
-      source <- srcLogQueryService.runQueryGeneric(SrcLogGenericQuery(
-        nodes = List(
-          NodeClause(GenericGraphNodePredicate.GitCommit, A, condition = Some(GraphPropertyCondition(
+      (_, source) <- graphQueryService.runQueryGenericGraph(GraphQuery(
+        GraphRoot(GenericGraphNodePredicate.GitCommit.filters(
+          Some(GraphPropertyCondition(
             List(GenericGraphProperty("repo_id", repoId.toString()), GenericGraphProperty("sha", sha)))))),
-        edges = List(
-          EdgeClause(
-            GenericGraphEdgePredicate.GitCommitChild,
-            A,
-            B,
-            condition = Some(
-              GraphPropertyCondition(
-                GenericGraphProperty("limit", Limit.toString()) :: Nil)), modifier = None)),
-        root = None,
-        selected = Nil))
+        RepeatedEdgeTraverse[GraphTrace[GenericGraphUnit], GenericGraphUnit](
+          EdgeFollow(
+            EdgeTypeTraverse(GenericGraphEdgeType.GitCommitParent.opposite, filter = None) :: Nil,
+            FollowType.Target),
+          { trace =>
+            val limitTerminate = (trace.tracesInternal.length + 1) >= Limit
+            limitTerminate
+          }) :: Nil))
       items <- source.runWith(Sinks.ListAccum)
-      results <- getSHAs(repoId, List(B), items)
+      results <- getSHAs(repoId, items)
     } yield {
       results
     }
   }
 
-  private def getSHAs(repoId: Int, columns: List[String], items: List[Map[String, GenericGraphNode]]) = {
-    val shas = items.flatMap { i =>
-      columns.map { c =>
-        i.get(c)
-      }.flatten
+  private def getSHAs(repoId: Int, items: List[GraphTrace[GenericGraphNode]]) = {
+    val shas = items.map { i =>
+      i.terminusId
     }.flatMap {
       _.props.filter(_.key =?= "sha")
     }.map(_.value).distinct

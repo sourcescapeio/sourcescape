@@ -19,16 +19,23 @@ export default class RunIndex extends Command {
   }
 
   static args = [{
-    name: 'repo',
+    name: 'directory',
     required: true,
-    description: 'repo to index',
+    description: 'directory to index',
   }];
 
   async run() {  
     const {args, flags} = this.parse(RunIndex);
     const client = graphQLClient(flags.port, flags.debug);
-    const chosen = await getRepo2(args.repo, client);
-    console.warn(chosen.path)
+
+    const directory = resolve(args.directory);
+    console.warn(directory)
+    
+    const running = client.mutate({
+      mutation: gql`mutation RunIndexRepo {
+        indexRepo(directory: "${directory}")
+      }`
+    });
 
     const bar = new MultiBar({
       clearOnComplete: true,
@@ -37,13 +44,7 @@ export default class RunIndex extends Command {
 
     const bar1 = bar.create(100, 0, {filename: 'Cloning'});
     const bar2 = bar.create(100, 0, {filename: 'Indexing'});
-    const bar3 = bar.create(100, 0, {filename: 'Linking'});
-    
-    const running = client.mutate({
-      mutation: gql`mutation RunIndexRepo {
-        indexRepo(id: ${chosen.id})
-      }`
-    });
+    const bar3 = bar.create(100, 0, {filename: 'Linking'});    
 
     const cloneStream = client.subscribe({
       query: gql`

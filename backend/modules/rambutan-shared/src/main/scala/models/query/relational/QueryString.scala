@@ -71,7 +71,7 @@ object QueryString {
   }
 
   private def stringifyTraceQuery(query: TraceQuery) = {
-    (stringifyFromRoot(query.from) :: query.traverses.map(t => stringifyTraverse(t, 0))).mkString("")
+    (stringifyFromRoot(query.from) :: query.traverses.map(t => stringifyTraverse(t, 1))).mkString("\n")
   }
 
   private def stringifyFromRoot(item: FromRoot) = {
@@ -107,29 +107,43 @@ object QueryString {
 
   private def stringifyTraverse(item: Traverse, tabs: Int): String = {
     val spaces = " " * (2 * tabs)
+    val spaces1 = " " * (2 * (tabs + 1))
 
     item match {
       case LinearTraverse(follows) => {
-        ".linear_traverse [\n" + follows.map(i => stringifyFollow(i, tabs + 1)).mkString(",\n") + "\n]"
+        val opener = s"${spaces}.linear_traverse [\n"
+        val inner = follows.map(i => stringifyFollow(i, tabs + 1)).mkString(",\n")
+        val closer = s"\n${spaces}]"
+        opener + inner + closer
       }
       case NodeCheck(filters) => {
-        ".node_check {\n" + filters.map(i => stringifyNodeFilter(i, tabs + 1)).mkString(",\n") + "\n}"
+        s"${spaces}.node_check {\n" + filters.map(i => stringifyNodeFilter(i, tabs + 1)).mkString(",\n") + s"\n${spaces}}"
       }
       case RepeatedLinearTraverse(follows, repeated) => {
-        ".repeated_traverse {\n" +
-          s"${spaces}follow: [" + follows.map(i => stringifyFollow(i, tabs + 1)).mkString(",\n") + "\n]" +
-          s"${spaces}repeat: [" + repeated.map(i => stringifyFollow(i, tabs + 1)).mkString(",\n") + "\n]"
+        val opener = s"${spaces}.repeated_traverse {\n"
+        val inner = List(
+          innerFollowArray("follow", follows, tabs + 1),
+          innerFollowArray("repeat", repeated, tabs + 1)).mkString(",\n")
+        val closer = s"\n${spaces}}"
+
+        opener + inner + closer
       }
       case RepeatedEdgeTraverse(_, _) => {
-        "!not_supported!"
+        s"${spaces}!not_supported!"
       }
     }
+  }
+
+  private def innerFollowArray(name: String, follows: List[EdgeFollow], tabs: Int) = {
+    val spaces = " " * (2 * tabs)
+
+    s"${spaces}${name}: [\n" + follows.map(i => stringifyFollow(i, tabs + 1)).mkString(",\n") + s"\n${spaces}]"
   }
 
   private def stringifyFollow(item: EdgeFollow, tabs: Int) = {
     val spaces = " " * (2 * tabs)
     if (item.traverses.exists(_.filter.isDefined)) {
-      s"${spaces}${item.followType.identifier}[\n" + item.traverses.map(i => stringifyFollowTraverse(i, tabs + 1)).mkString(",\n") + "\n]"
+      s"${spaces}${item.followType.identifier}[\n" + item.traverses.map(i => stringifyFollowTraverse(i, tabs + 1)).mkString(",\n") + s"\n${spaces}]"
     } else {
       s"${spaces}${item.followType.identifier}[" + item.traverses.map(i => stringifyFollowTraverse(i, 0)).mkString(",") + "]"
     }
@@ -137,9 +151,14 @@ object QueryString {
 
   private def stringifyFollowTraverse(item: EdgeTypeTraverse, tabs: Int) = {
     val spaces = " " * (2 * tabs)
+    val spaces2 = " " * (2 * (tabs + 1))
     item.filter match {
       case Some(f) => {
-        s"${spaces}{\n" + s"${spaces}${spaces}type : " + "\"" + stringifyKeyword(item.edgeType.identifier) + "\"\n" + stringifyEdgeFilter(f, tabs + 1) + "}\n"
+        val opener = s"${spaces}{\n"
+        val typeF = s"${spaces2}type : " + stringifyKeyword(item.edgeType.identifier) + ",\n"
+        val edgeF = stringifyEdgeFilter(f, tabs + 1)
+        val closer = s"\n${spaces}}"
+        opener + typeF + edgeF + closer
       }
       case _ => s"${spaces}${stringifyKeyword(item.edgeType.identifier)}"
     }
@@ -158,7 +177,12 @@ object QueryString {
    * Base helpers
    */
   private def stringifyKeywords(items: List[String]) = items.map(i => stringifyKeyword(i)).mkString(",")
-  private def stringifyKeyword(item: String) = "\"" + item + "\""
+  private def stringifyKeyword(item: String) = {
+    item.endsWith(".reverse") match {
+      case true  => "\"" + item.replaceFirst("\\.reverse$", "") + "\".reverse"
+      case false => "\"" + item + "\""
+    }
+  }
 
   private def indent(tabs: Int) = " " * (2 * tabs)
 

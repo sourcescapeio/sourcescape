@@ -178,8 +178,10 @@ class GraphQLController @Inject() (
         .mapConcat { input =>
           val trySubscribe = Json.fromJson[GraphQLWS.FullPayload[GraphQLWS.Subscribe]](input)
           val tryAck = (input \ "type").asOpt[String]
+          println("try", trySubscribe, input)
           (trySubscribe, tryAck) match {
             case (JsSuccess(subscription, _), _) if subscription.`type` =?= "subscribe" => {
+              println("SUBSCRIBED", subscription.payload.query)
               List {
                 GraphQLSubscriptionActor.Subscribe(subscription.id, subscription.payload.query, subscription.payload.operation)
               }

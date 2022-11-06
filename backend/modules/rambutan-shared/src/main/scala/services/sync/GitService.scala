@@ -5,6 +5,7 @@ import scala.concurrent.{ ExecutionContext, Future }
 import akka.stream.scaladsl.Source
 import akka.util.ByteString
 
+// Move this out?
 protected case class GitDiff(added: Set[String], deleted: Set[String], modified: Set[String]) { // + renamed
   def addPaths = added ++ modified
 
@@ -46,20 +47,7 @@ trait GitServiceRepo {
 
   def getRepoBranches: Future[Map[String, String]]
 
+  def scanResult(): Future[GitScanResult]
+
   def close(): Unit
-}
-
-trait GitService {
-
-  def getGitRepo(repo: GenericRepo): Future[GitServiceRepo]
-
-  def withRepo[T](repo: GenericRepo)(f: GitServiceRepo => Future[T])(implicit ec: ExecutionContext) = {
-    for {
-      repo <- getGitRepo(repo)
-      res <- f(repo)
-    } yield {
-      repo.close()
-      res
-    }
-  }
 }

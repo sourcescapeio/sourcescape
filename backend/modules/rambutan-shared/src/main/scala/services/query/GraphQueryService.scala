@@ -412,20 +412,20 @@ class GraphQueryService @Inject() (
             lin.follows,
           )
 
-          println("====================")
+          // println("====================")
 
-          transitions.toList.sortBy(_._1).foreach {
-            case (k, vs) => {
-              println("=========")
-              println(k)
-              println("=========")
-              vs.foreach {
-                case (t, ss) => println("  " + t + ":" + ss)
-              }
-            }
-          }
+          // transitions.toList.sortBy(_._1).foreach {
+          //   case (k, vs) => {
+          //     println("=========")
+          //     println(k)
+          //     println("=========")
+          //     vs.foreach {
+          //       case (t, ss) => println("  " + t + ":" + ss)
+          //     }
+          //   }
+          // }
 
-          println("====================")
+          // println("====================")
 
           Flow[T].map { i =>
             GNFAHop(i, Set(start), forceStop = false)

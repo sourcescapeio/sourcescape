@@ -40,7 +40,7 @@ object GraphQuery {
 
     private def charsList[_: P] = {
       // implicit val whitespace = MultiLineWhitespace.whitespace
-      P("[" ~/ Base.quotedChars ~ ("," ~ Base.quotedChars).rep(1) ~ "]").map {
+      P("[" ~/ Base.quotedChars ~ ("," ~ Base.quotedChars).rep(0) ~ "]").map {
         case (first, rest) => first :: rest.toList
       }
     }
@@ -75,7 +75,7 @@ object GraphQuery {
 
     private def nodeTypeList[_: P] = {
       // implicit val whitespace = MultiLineWhitespace.whitespace
-      P("[" ~/ nodeType ~ ("," ~ nodeType).rep(1) ~ "]").map {
+      P("[" ~/ nodeType ~ ("," ~ nodeType).rep(0) ~ "]").map {
         case (first, rest) => first :: rest.toList
       }
     }
@@ -201,6 +201,10 @@ object GraphQuery {
       case (head, rest) => head :: rest.toList
     }
 
+    private def linearEmpty[_: P] = P("[" ~ "]").map {
+      case _ => List.empty[EdgeFollow]
+    }
+
     private def linearTraverse[_: P] = {
       // implicit val whitespace = MultiLineWhitespace.whitespace
       P("linear_traverse" ~/ linearFollowList) map { follows =>
@@ -217,7 +221,7 @@ object GraphQuery {
     }
 
     private def repeatedTraverse[_: P] = {
-      P("repeated_traverse" ~ "{" ~/ "follow" ~ ":" ~ linearFollowList ~ "," ~ "repeat" ~ ":" ~ linearFollowList ~ "}") map {
+      P("repeated_traverse" ~ "{" ~/ "follow" ~ ":" ~ (linearFollowList | linearEmpty) ~ "," ~ "repeat" ~ ":" ~ linearFollowList ~ "}") map {
         case (follow, repeat) => RepeatedLinearTraverse(follow, repeat)
       }
     }

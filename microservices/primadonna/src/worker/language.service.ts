@@ -114,7 +114,10 @@ export class LanguageService {
       }
     } catch(e) {
       // TODO: need to handle errors
-      throw e
+      console.warn(filename, location);
+      console.warn(JSON.stringify(e.ProgramFiles, null, 2))
+      console.warn(e);
+      throw e;
       // return {
       //   message: e.message,
       //   data: e,
