@@ -78,7 +78,7 @@ export class CompositeFileSystem implements FileSystemHost {
   /** Synchronously reads a file at the specified path. */
   readFileSync(filePath: string, encoding?: string): string {
     return this.doForFile(filePath, (mappedPath, fileSystem) => {
-      console.warn('SYNC', filePath, mappedPath)
+      // console.warn('SYNC', filePath, mappedPath)
       return fileSystem.readFileSync(mappedPath, encoding);
     });
   }

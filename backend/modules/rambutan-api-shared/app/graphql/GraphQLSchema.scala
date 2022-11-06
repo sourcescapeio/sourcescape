@@ -270,7 +270,6 @@ object SchemaDefinition {
       }),
       Field("cloneProgress", OptionType(CloneProgressType), resolve = (c: Context[RambutanContext, Any]) => {
         val msg = c.value.asInstanceOf[EventMessage]
-        println("MSG", msg)
         msg.eventType match {
           case SocketEventType.CloningStarted => Option(
             CloneProgress(

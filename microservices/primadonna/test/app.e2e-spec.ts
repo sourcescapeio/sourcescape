@@ -157,6 +157,7 @@ describe('AppController (e2e)', () => {
         url: '/language-server/1/memory',
         body: {
           'test.ts': PROGRAM,
+          'test2.js': 'function hello() {}',
         },
       },
       (resp, body) => {
@@ -176,6 +177,19 @@ describe('AppController (e2e)', () => {
         console.warn(body);
       },
     );
+
+    await curl(app).post(
+      {
+        url: '/language-server/1/request',
+        body: {
+          filename: 'test2.js',
+          location: 12,
+        },
+      },
+      (resp, body) => {
+        console.warn(body);
+      },
+    );    
 
     await curl(app).delete(
       {
