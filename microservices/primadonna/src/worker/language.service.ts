@@ -57,13 +57,6 @@ export class LanguageService {
 
   async createProjectFromTSConfig(directories: string[]) {
     return this.compileProject(async () => {
-
-      // if (directories.length === 1) {
-      //   return ts.createProject({
-      //     tsConfigFilePath: `${directories[0]}/tsconfig.json`,
-      //   });
-      // } else {
-        // maybe throw a helpful error?
       const fileSystem = new RealFileSystemHost();
       const innerFileSystems = directories.map((d) => {
         return {
