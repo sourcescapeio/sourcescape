@@ -34,12 +34,6 @@ sealed abstract class EdgePredicate(
   /**
    * Legacy feature flags
    */
-  // used for Git (legacy RepeatedTraverse needs to be forward)
-  val forceForward: Boolean = false
-
-  // Used for git stuff
-  val suppressNodeCheck: Boolean = false
-
   def shouldReverseMissing: Boolean = toImplicit.isEmpty || (fromImplicit.isDefined && (reverseCost < forwardCost))
 }
 
@@ -525,94 +519,9 @@ object JavascriptEdgePredicate extends Plenumeration[JavascriptEdgePredicate] {
 
 }
 
-sealed abstract class GenericEdgePredicate(val identifierIn: String) extends EdgePredicate(s"generic::${identifierIn}", forwardCost = 1, reverseCost = 1) {
-  override val suppressNodeCheck = true
-}
-
-sealed class BasicGenericEdgePredicate(from: GenericGraphNodePredicate, to: GenericGraphNodePredicate, edgeType: GenericGraphEdgeType)
-  extends GenericEdgePredicate(edgeType.identifier) {
-  override val fromImplicit = Some(from)
-  override val toImplicit = Some(to)
-
-  def queryTraverse(name: Option[String], index: Option[Int], props: List[GenericGraphProperty]): SrcLogTraverse = {
-    lin(
-      t(EdgeTypeTraverse(edgeType, ifNonEmpty(props) {
-        Option {
-          EdgePropsFilter(props)
-        }
-      })))
-  }
-}
-
-object GenericGraphEdgePredicate extends Plenumeration[GenericEdgePredicate] {
-
-  /**
-   * Gits
-   */
-  case object GitHeadCommit extends BasicGenericEdgePredicate(
-    from = GenericGraphNodePredicate.GitHead,
-    to = GenericGraphNodePredicate.GitCommit,
-    edgeType = GenericGraphEdgeType.GitHeadCommit)
-
-  case object GitCommitIndex extends BasicGenericEdgePredicate(
-    from = GenericGraphNodePredicate.GitCommit,
-    to = GenericGraphNodePredicate.CodeIndex,
-    edgeType = GenericGraphEdgeType.GitCommitIndex)
-
-  // fancy
-  case object GitCommitParent extends GenericEdgePredicate("git-commit-parent") {
-    // we don't want to attach a node clause because we're emitting multiple
-
-    // override val fromImplicit = Some(GenericGraphNodePredicate.GitCommit)
-    // override val toImplicit = Some(GenericGraphNodePredicate.GitCommit)
-
-    // disgusting
-    def queryTraverse(name: Option[String], index: Option[Int], props: List[GenericGraphProperty]): SrcLogTraverse = {
-      val maybeCommit = props.find(_.key =?= "commit").map(_.value)
-      val maybeLimit = props.find(_.key =?= "limit").map(_.value.toInt)
-
-      RepeatedEdgeTraverse[GraphTrace[GenericGraphUnit], GenericGraphUnit](
-        EdgeFollow(
-          EdgeTypeTraverse(GenericGraphEdgeType.GitCommitParent, filter = None) :: Nil,
-          FollowType.Target),
-        { trace =>
-          val limitTerminate = maybeLimit.map((trace.tracesInternal.length + 1) >= _).getOrElse(false)
-          val commitTerminate = maybeCommit.map(trace.terminusId.id =?= _).getOrElse(false)
-          limitTerminate || commitTerminate
-        })
-    }
-
-    override val forceForward = true
-  }
-
-  case object GitCommitChild extends GenericEdgePredicate("git-commit-child") {
-    // we don't want to attach a node clause because we're emitting multiple
-
-    // override val fromImplicit = Some(GenericGraphNodePredicate.GitCommit)
-    // override val toImplicit = Some(GenericGraphNodePredicate.GitCommit)
-
-    def queryTraverse(name: Option[String], index: Option[Int], props: List[GenericGraphProperty]): SrcLogTraverse = {
-      val maybeCommit = props.find(_.key =?= "commit").map(_.value)
-      val maybeLimit = props.find(_.key =?= "limit").map(_.value.toInt)
-
-      RepeatedEdgeTraverse[GraphTrace[GenericGraphUnit], GenericGraphUnit](
-        EdgeFollow(
-          EdgeTypeTraverse(GenericGraphEdgeType.GitCommitParent.opposite, filter = None) :: Nil,
-          FollowType.Target),
-        { trace =>
-          val limitTerminate = maybeLimit.map((trace.tracesInternal.length + 1) >= _).getOrElse(false)
-          val commitTerminate = maybeCommit.map(trace.terminusId.id =?= _).getOrElse(false)
-          limitTerminate || commitTerminate
-        })
-    }
-
-    override val forceForward = true
-  }
-}
-
 // we only use reads here
 object EdgePredicate extends Plenumeration[EdgePredicate] {
   override val all = {
-    GenericGraphEdgePredicate.all ++ IndexType.all.flatMap(_.edgePredicate.all)
+    IndexType.all.flatMap(_.edgePredicate.all)
   }
 }

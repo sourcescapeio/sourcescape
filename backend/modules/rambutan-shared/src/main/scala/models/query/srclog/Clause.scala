@@ -52,9 +52,7 @@ case class EdgeClause(predicate: EdgePredicate, from: String, to: String, condit
     }
 
     val t = withDefined(predicate.toImplicit) { t =>
-      NodeClause(t, to, withFlag(!predicate.suppressNodeCheck) {
-        condition
-      }) :: Nil
+      NodeClause(t, to, condition) :: Nil
     }
 
     f ++ t

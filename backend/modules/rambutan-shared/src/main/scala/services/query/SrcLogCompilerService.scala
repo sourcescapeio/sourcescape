@@ -76,10 +76,6 @@ class SrcLogCompilerService @Inject() (
         // We have a boolean modifier here so we need to left join
         DirectedSrcLogEdge.forward(e, nodeMap) :: Nil
       }
-      case e @ EdgeClause(p, from, to, c, _) if p.forceForward => {
-        // Still need this for Git edges
-        DirectedSrcLogEdge.forward(e, nodeMap) :: Nil
-      }
       case e @ EdgeClause(p, from, to, c, None) => {
         DirectedSrcLogEdge.forward(e, nodeMap) :: DirectedSrcLogEdge.reverse(e, nodeMap) :: Nil
       }
