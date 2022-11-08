@@ -238,6 +238,58 @@ sealed abstract class SrcLogQuerySpec
       }
     }
 
+    // sbt "project rambutanTest" "testOnly test.SrcLogQuerySpecCompose -- -z loop"
+    "loop" in {
+
+      val CurrentIndex = RepoSHAIndex(
+        id = 1,
+        orgId = -1,
+        repoName = "/data/projects",
+        repoId = LocalRepo.repoId,
+        sha = "123",
+        rootIndexId = None,
+        dirtySignature = None,
+        workId = "123",
+        deleted = false,
+        created = new DateTime().getMillis())
+
+      await {
+        runTestIndex(
+          CurrentIndex,
+          IndexType.Javascript)(
+            directory("examples/002_loop"): _*)
+      }
+
+      await {
+        dataForQuery(IndexType.Javascript, QueryTargetingRequest.AllLatest(None)) {
+          """
+            javascript::all_called(FZERO, F).
+            javascript::contains(F, WARNCALL).
+
+            javascript::member(CONSOLE, WARN)[name = "warn"].
+            javascript::call(WARN, WARNCALL).
+          """
+        }
+      }.foreach { d =>
+        val fZero = d.getOrElse("FZERO", throw new Exception("fail"))
+        // println(Json.prettyPrint((fZero \ "terminus" \ "node").as[JsValue]))
+        val path = (fZero \ "terminus" \ "node" \ "path").as[String]
+        val startLine = (fZero \ "terminus" \ "node" \ "range" \ "start" \ "line").as[Int]
+        val endLine = (fZero \ "terminus" \ "node" \ "range" \ "end" \ "line").as[Int]
+        println("===================")
+        println(s"${path}:${startLine}-${endLine}")
+        println("===================")
+        println((fZero \ "terminus" \ "node" \ "extracted").as[String])
+        d.map {
+          case (k, v) => {
+            val vPath = (v \ "terminus" \ "node" \ "path").as[String]
+            val vStr = (v \ "terminus" \ "node" \ "id").as[String]
+            println(s"${k} -> ${vPath}:${vStr}")
+          }
+        }
+      }
+    }
+
   }
 }
 

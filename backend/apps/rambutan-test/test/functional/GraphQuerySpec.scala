@@ -439,6 +439,54 @@ sealed abstract class GraphQuerySpec
         println(s)
       }      
     }
+
+    // sbt "project rambutanTest" "testOnly test.GraphQuerySpecCompose -- -z traverse.loop"
+    "traverse.loop" in {
+      // Should not infinite loop
+      
+      val N = Range(0, 12).toArray.map { idx =>
+        s"n${idx}"
+      }
+
+      val allNodes = N.map { s => Node(s, "class")}
+
+      val allEdges = List(
+        path(N(0), ("class-decorator", N(1)), ("class-decorator", N(2)), ("class-decorator", N(3))),
+        path(N(3), ("class-decorator", N(0))),
+      ).flatten
+
+      allNodes.foreach(println)
+      allEdges.foreach(println)
+
+      await {
+        runGraphIndex(IndexType.Javascript)(
+          allNodes:_*
+        )(
+          allEdges:_*
+        )
+      }
+
+      await {
+        dataForGraphQuery(IndexType.Javascript) {
+          """
+          root {
+            id: "n0"
+          }.linear_traverse [
+            *["javascript::class_decorator"]
+          ]
+          """
+        }
+      }.foreach { trace =>
+        val s = (trace.tracesInternal :+ trace.terminus).flatMap { ti =>
+          (ti.tracesInternal :+ ti.terminus).map(_.id)
+        }.mkString("->")
+
+        println(s)
+      }
+
+
+    }
+
   }
 }
 
