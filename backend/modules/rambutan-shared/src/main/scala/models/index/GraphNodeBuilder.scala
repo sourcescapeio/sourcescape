@@ -51,6 +51,7 @@ trait StandardNodeBuilder[NT <: Identifiable, T <: Identifiable] extends GraphNo
       // keys
       name = names.headOption,
       search_name = names.map(_.take(GraphNode.NameLimit)).toList,
+      props = Nil, // TODO
       tags = tags.map(_.identifier),
       index = index)
   }

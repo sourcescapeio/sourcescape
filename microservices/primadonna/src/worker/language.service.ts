@@ -14,7 +14,7 @@ import { ClientProxyFactory, Transport } from '@nestjs/microservices';
 import * as process from 'process';
 import { firstValueFrom, scan } from 'rxjs';
 import { CompositeFileSystem } from './composite.fs';
-import { RealFileSystemHost } from '@ts-morph/common';
+import { InMemoryFileSystemHost, RealFileSystemHost } from '@ts-morph/common';
 
 export type LanguageError = {
   file: string | null;
@@ -56,14 +56,7 @@ export class LanguageService {
   }
 
   async createProjectFromTSConfig(directories: string[]) {
-    return this.compileProject(() => {
-
-      // if (directories.length === 1) {
-      //   return ts.createProject({
-      //     tsConfigFilePath: `${directories[0]}/tsconfig.json`,
-      //   });
-      // } else {
-        // maybe throw a helpful error?
+    return this.compileProject(async () => {
       const fileSystem = new RealFileSystemHost();
       const innerFileSystems = directories.map((d) => {
         return {
@@ -71,11 +64,30 @@ export class LanguageService {
           fileSystem,
         }
       });
-      const composite = new CompositeFileSystem(innerFileSystems);
+
+      // const tsConfigFS = new InMemoryFileSystemHost();
+      // await tsConfigFS.writeFileSync("tsconfig.prima.json", JSON.stringify({
+      //   extends: "tsconfig.json",
+      //   compilerOptions: {
+      //     allowJs: true
+      //   }
+      // }, null, 2))
+
+        // TODO: this is temp until we have a real solution to this
+      const composite = new CompositeFileSystem([
+        ...innerFileSystems,
+        // {
+        //   root: '/',
+        //   fileSystem: tsConfigFS
+        // } 
+        // last because we only need to access this once. 
+        // take single larger performance penalty vs. need to scroll thru every time
+        // also presumably should not override
+      ]);
 
       return ts.createProject({
         tsConfigFilePath: '/tsconfig.json',
-        fileSystem: composite
+        fileSystem: composite,
       });
     })
   }
@@ -108,13 +120,31 @@ export class LanguageService {
     }
 
     try {
-      return {
-        definition: this.languageServer.getDefinitionAtPosition(filename, location),
-        typeDefinition: this.languageServer.getTypeDefinitionAtPosition(filename, location) || []
+
+      if(filename.endsWith(".js")) {
+        console.warn('skipped')
+        return {
+          definition: [],
+          typeDefinition: [],
+        }
+      }
+      else {
+        const definition = this.languageServer.getDefinitionAtPosition(filename, location);
+        const typeDefinition = this.languageServer.getTypeDefinitionAtPosition(filename, location) || []
+
+        console.warn(filename, location);
+        console.warn(definition);
+        return {
+          definition,
+          typeDefinition
+        }
       }
     } catch(e) {
       // TODO: need to handle errors
-      throw e
+      console.warn(filename, location);
+      console.warn(JSON.stringify(e.ProgramFiles, null, 2))
+      console.warn(e);
+      throw e;
       // return {
       //   message: e.message,
       //   data: e,

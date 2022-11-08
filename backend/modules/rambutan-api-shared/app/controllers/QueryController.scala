@@ -25,10 +25,7 @@ class QueryController @Inject() (
   queryTargetingService:  services.QueryTargetingService,
   graphQueryService:      services.GraphQueryService,
   relationalQueryService: services.RelationalQueryService,
-  srcLogService:          services.SrcLogCompilerService,
-  // experimental
-  graphQueryServiceExperimental:      services.GraphQueryService, // not really changing this
-  relationalQueryServiceExperimental: services.q10.RelationalQueryService)(implicit ec: ExecutionContext, as: ActorSystem) extends API with StreamResults {
+  srcLogService:          services.SrcLogCompilerService)(implicit ec: ExecutionContext, as: ActorSystem) extends API with StreamResults {
 
   def getGrammars() = {
     api { implicit request =>
@@ -216,49 +213,6 @@ class QueryController @Inject() (
     }
   }
 
-  def srcLogGenericQuery(orgId: Int) = {
-    api { implicit request =>
-      authService.authenticatedSuperUser {
-        withForm(QueryForm.form) { form =>
-          telemetryService.withTelemetry { implicit c =>
-            val query = SrcLogGenericQuery.parseOrDie(form.q)
-            query.nodes.foreach(println)
-            query.edges.foreach(println)
-            val targeting = GenericGraphTargeting(orgId)
-            for {
-              builderQuery <- srcLogService.compileQuery(query)(targeting)
-              result <- relationalQueryService.runQueryGenericGraph(
-                builderQuery.copy(limit = None),
-                explain = false,
-                progressUpdates = false)(targeting, c, QueryScroll(None))
-              data <- result.source.runWith {
-                Sinks.ListAccum[Map[String, JsValue]]
-              }
-              tableHeader = Json.obj(
-                "results" -> result.header)
-              progressSource = result.progressSource.map(Left.apply)
-              resultSource = result.source.map(Right.apply)
-              mergedSource = progressSource.merge(resultSource).map {
-                case Left(progress) => {
-                  Json.obj(
-                    "type" -> "progress",
-                    "progress" -> progress)
-                }
-                case Right(dto) => {
-                  Json.obj(
-                    "type" -> "data",
-                    "obj" -> dto)
-                }
-              }
-            } yield {
-              streamQuery(tableHeader, mergedSource)
-            }
-          }
-        }
-      }
-    }
-  }
-
   def relationalQueryGeneric(orgId: Int) = {
     api { implicit request =>
       authService.authenticatedForOrg(orgId, OrgRole.Admin) {
@@ -401,7 +355,7 @@ class QueryController @Inject() (
               targeting <- queryTargetingService.resolveTargeting(orgId, indexType, QueryTargetingRequest.AllLatest(None))
               relationalQuery <- srcLogService.compileQuery(query)(targeting)
               scroll = QueryScroll(None)
-              result <- relationalQueryServiceExperimental.runQuery(
+              result <- relationalQueryService.runQuery(
                 relationalQuery,
                 explain = true,
                 progressUpdates = true)(targeting, context, scroll)
@@ -459,7 +413,7 @@ class QueryController @Inject() (
                     QueryTargetingRequest.AllLatest(None))
                 }
                 scroll = QueryScroll(scrollKey)
-                result <- relationalQueryServiceExperimental.runQuery(
+                result <- relationalQueryService.runQuery(
                   query,
                   explain = true,
                   progressUpdates = true)(targeting, context, scroll)
@@ -523,7 +477,7 @@ class QueryController @Inject() (
                 }
                 scroll = QueryScroll(scrollKey)
                 source <- {
-                  relationalQueryServiceExperimental.runQuery(
+                  relationalQueryService.runQuery(
                     query,
                     explain = false,
                     progressUpdates = false)(targeting, context, scroll)

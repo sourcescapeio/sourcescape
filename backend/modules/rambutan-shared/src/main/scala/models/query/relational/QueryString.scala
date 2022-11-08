@@ -4,7 +4,7 @@ import silvousplay.imports._
 import models.graph.GenericGraphProperty
 
 object QueryString {
-
+  // TODO: wtf is this?
   def stringifyScroll(item: QueryScroll) = {
     item.lastKey match {
       case Some(rk) => {
@@ -24,19 +24,19 @@ object QueryString {
     }
 
     val select = "SELECT " + (item.select match {
-      case RelationalSelect.SelectAll      => "*"
-      case RelationalSelect.CountAll       => "COUNT(*)"
-      case RelationalSelect.Select(c)      => c.mkString(",")
-      case RelationalSelect.Distinct(c, _) => s"DISTINCT ${c.mkString(",")}"
-      case RelationalSelect.GroupedCount(g, t, c) => {
-        s"GROUPED_COUNT_BY(${g}.${t.identifier}, ${c.mkString(", ")})"
-      }
+      case RelationalSelect.SelectAll => "*"
+      // case RelationalSelect.CountAll       => "COUNT(*)"
+      case RelationalSelect.Select(c) => c.mkString(",")
+      // case RelationalSelect.Distinct(c, _) => s"DISTINCT ${c.mkString(",")}"
+      // case RelationalSelect.GroupedCount(g, t, c) => {
+      //   s"GROUPED_COUNT_BY(${g}.${t.identifier}, ${c.mkString(", ")})"
+      // }
     })
 
     val from = "FROM " + stringifyGraphQuery(item.root.query) + " AS " + item.root.key
 
     val traces = item.traces.map { t =>
-      "TRACE\n" + stringifyTraceQuery(t.query) + " AS " + t.key
+      "TRACE " + stringifyTraceQuery(t.query) + " AS " + t.key
     }.mkString("\n")
 
     val having = item.having.map { h =>
@@ -67,11 +67,11 @@ object QueryString {
   }
 
   def stringifyGraphQuery(query: GraphQuery): String = {
-    (stringifyGraphRoot(query.root) :: query.traverses.map(stringifyTraverse)).mkString("\n.")
+    (stringifyGraphRoot(query.root) :: query.traverses.map(t => stringifyTraverse(t, 0))).mkString("")
   }
 
   private def stringifyTraceQuery(query: TraceQuery) = {
-    (stringifyFromRoot(query.from) :: query.traverses.map(stringifyTraverse)).mkString("\n.")
+    (stringifyFromRoot(query.from) :: query.traverses.map(t => stringifyTraverse(t, 1))).mkString("\n")
   }
 
   private def stringifyFromRoot(item: FromRoot) = {
@@ -81,98 +81,109 @@ object QueryString {
     }
   }
 
-  private def stringifyNodeFilter(item: NodeFilter) = {
-    item match {
-      case NodeTypeFilter(typ)       => "  type=" + typ.identifier
-      case NodeNotTypesFilter(types) => "  not_types=(" + types.map(_.identifier).mkString(",") + ")"
-      case NodeNameFilter(name)      => "  name=\"" + name + "\""
-      case NodeIndexFilter(index)    => "  index=\"" + index + "\""
-      case NodeIdFilter(id)          => "  id=" + id
-      case NodePropsFilter(props) => "  props=(" + props.map {
-        case GenericGraphProperty(k, v) => k + "=\"" + v + "\""
-      }.mkString(", ") + ")"
-      case NodeExactNamesFilter(names) => "  exact_names=(" + names.map("\"" + _ + "\"").mkString(", ") + ")"
-    }
-  }
-
   private def stringifyGraphRoot(item: GraphRoot) = {
-    val guts = item.filters.map(stringifyNodeFilter).mkString(",\n")
+    // indent starts with 0
+    val guts = item.filters.map(i => stringifyNodeFilter(i, tabs = 1)).mkString(",\n")
 
-    "root[\n" + guts + "\n]"
+    "root{\n" + guts + "\n}"
   }
 
-  private def stringifyEdgeTypeTraverse(t: EdgeTypeTraverse) = {
-    val baseIndent = " " * 6
-    baseIndent + t.edgeType.identifier + (t.filter match {
-      case Some(EdgeNameFilter(n))     => s"[\n${baseIndent}  name=${"\""}${n}${"\""}\n${baseIndent}]"
-      case Some(EdgeIndexFilter(i))    => s"[\n${baseIndent}  index=${i}\n${baseIndent}]"
-      case Some(MultiEdgeFilter(n, i)) => "" // unused at QS level
-      case Some(EdgePropsFilter(p)) => {
-        val inner = p.map(pp => baseIndent + "    " + pp.key + "=\"" + pp.value + "\"").mkString(",\n")
-        s"[\n${baseIndent}  props=(\n${inner}\n${baseIndent}  )\n${baseIndent}]"
-      }
-      case None => ""
-    })
-  }
+  private def stringifyNodeFilter(item: NodeFilter, tabs: Int) = {
 
-  // MOVE OUT
-  def indent(str: String, number: Int) = {
-    val tab = " " * number
-    str.split("\n").map(tab + _).mkString("\n")
-  }
+    val indent = " " * (2 * tabs)
 
-  private def stringifyTraverse(item: Traverse): String = {
     item match {
-      case EdgeTraverse(follow, target, typeHint) => {
-        val followGuts = follow.traverses.map { t =>
-          stringifyEdgeTypeTraverse(t)
-        }.mkString(",\n")
-        val targetGuts = target.traverses.map { t =>
-          stringifyEdgeTypeTraverse(t)
-        }.mkString(",\n")
-        val followStanza = ifNonEmpty(follow.traverses) {
-          s"  follow=edge_types:(\n" + followGuts + "\n  )" :: Nil
-        }
-        val targetStanza = s"  target=edge_types:(\n" + targetGuts + "\n  )" :: Nil
-        val typeHintStanza = withDefined(typeHint) { h =>
-          s"  type_hint=${h.identifier}" :: Nil
-        }
-        val guts = (followStanza ++ targetStanza ++ typeHintStanza).mkString(",\n")
-        "traverse[\n" + guts + "\n]"
-      }
-      case ReverseTraverse(follow, traverses) => {
-        val followGuts = follow.traverses.map { t =>
-          stringifyEdgeTypeTraverse(t)
-        }.mkString(",\n")
-        val followStanza = ifNonEmpty(follow.traverses) {
-          s"  follow=edge_types:(\n" + followGuts + "\n  )" :: Nil
-        }
-        val traverseGuts = traverses.map(i => indent(stringifyTraverse(i), 4)).mkString(".\n")
-        val traverseStanza = s"  traverses={\n" + traverseGuts + "\n  }"
-        val guts = (followStanza :+ traverseStanza).mkString(",\n")
-        "reverse[\n" + guts + "\n]"
-      }
-      case FilterTraverse(traverses) => {
-        val guts = traverses.map(i => indent(stringifyTraverse(i), 4)).mkString(".\n")
-        "filter{\n" + guts + "\n}"
-      }
-      case NodeTraverse(follow, targets) => {
-        val followGuts = follow.traverses.map { t =>
-          stringifyEdgeTypeTraverse(t)
-        }.mkString(",\n")
-        val followStanza = ifNonEmpty(follow.traverses) {
-          s"  follow=edge_types:(\n" + followGuts + "\n  )" :: Nil
-        }
-        val targetGuts = targets.map(i => indent(stringifyNodeFilter(i), 4)).mkString(",\n")
-        val targetStanza = {
-          "  target=(\n" + targetGuts + "\n  )"
-        }
-        val guts = (followStanza :+ targetStanza).mkString(",\n")
-        "node_traverse[\n" + guts + "\n]"
-      }
-      case RepeatedEdgeTraverse(follow, shouldTerminate) => "repeated[not supported]"
-      case OneHopTraverse(_)                             => throw new Exception("not supported")
+      case NodeTypesFilter(inner)   => s"${indent}type : [" + stringifyKeywords(inner.map(_.identifier)) + "]"
+      case NodeNamesFilter(name)    => s"${indent}name : [" + stringifyKeywords(name) + "]"
+      case NodeIndexesFilter(index) => s"${indent}index : [" + index.mkString(",") + "]"
+      case NodeIdsFilter(id)        => s"${indent}id : [" + stringifyKeywords(id) + "]"
+      case NodePropsFilter(props) => s"${indent}props: {" + props.map {
+        case GenericGraphProperty(k, v) => s"${indent}${indent}" + "\"" + k + "\"" + " : " + "\"" + v + "\""
+      }.mkString(", ") + "\n}"
+      case NodeAllFilter         => s"${indent}all"
+      case NodeNotTypesFilter(_) => "NOT_IMPLEMENTED!!!"
     }
-
   }
+
+  private def stringifyTraverse(item: Traverse, tabs: Int): String = {
+    val spaces = " " * (2 * tabs)
+    val spaces1 = " " * (2 * (tabs + 1))
+
+    item match {
+      case LinearTraverse(follows) => {
+        val opener = s"${spaces}.linear_traverse [\n"
+        val inner = follows.map(i => stringifyFollow(i, tabs + 1)).mkString(",\n")
+        val closer = s"\n${spaces}]"
+        opener + inner + closer
+      }
+      case NodeCheck(filters) => {
+        s"${spaces}.node_check {\n" + filters.map(i => stringifyNodeFilter(i, tabs + 1)).mkString(",\n") + s"\n${spaces}}"
+      }
+      case RepeatedLinearTraverse(follows, repeated) => {
+        val opener = s"${spaces}.repeated_traverse {\n"
+        val inner = List(
+          innerFollowArray("follow", follows, tabs + 1),
+          innerFollowArray("repeat", repeated, tabs + 1)).mkString(",\n")
+        val closer = s"\n${spaces}}"
+
+        opener + inner + closer
+      }
+      case RepeatedEdgeTraverse(_, _) => {
+        s"${spaces}!not_supported!"
+      }
+    }
+  }
+
+  private def innerFollowArray(name: String, follows: List[EdgeFollow], tabs: Int) = {
+    val spaces = " " * (2 * tabs)
+
+    s"${spaces}${name}: [\n" + follows.map(i => stringifyFollow(i, tabs + 1)).mkString(",\n") + s"\n${spaces}]"
+  }
+
+  private def stringifyFollow(item: EdgeFollow, tabs: Int) = {
+    val spaces = " " * (2 * tabs)
+    if (item.traverses.exists(_.filter.isDefined)) {
+      s"${spaces}${item.followType.identifier}[\n" + item.traverses.map(i => stringifyFollowTraverse(i, tabs + 1)).mkString(",\n") + s"\n${spaces}]"
+    } else {
+      s"${spaces}${item.followType.identifier}[" + item.traverses.map(i => stringifyFollowTraverse(i, 0)).mkString(",") + "]"
+    }
+  }
+
+  private def stringifyFollowTraverse(item: EdgeTypeTraverse, tabs: Int) = {
+    val spaces = " " * (2 * tabs)
+    val spaces2 = " " * (2 * (tabs + 1))
+    item.filter match {
+      case Some(f) => {
+        val opener = s"${spaces}{\n"
+        val typeF = s"${spaces2}type : " + stringifyKeyword(item.edgeType.identifier) + ",\n"
+        val edgeF = stringifyEdgeFilter(f, tabs + 1)
+        val closer = s"\n${spaces}}"
+        opener + typeF + edgeF + closer
+      }
+      case _ => s"${spaces}${stringifyKeyword(item.edgeType.identifier)}"
+    }
+  }
+
+  private def stringifyEdgeFilter(item: EdgeFilter, tabs: Int) = {
+    val spaces = " " * (2 * tabs)
+
+    item match {
+      case EdgeNamesFilter(names)   => s"${spaces}name : [" + stringifyKeywords(names) + "]"
+      case EdgeIndexesFilter(idxes) => s"${spaces}index : [" + idxes.mkString(", ") + "]"
+    }
+  }
+
+  /**
+   * Base helpers
+   */
+  private def stringifyKeywords(items: List[String]) = items.map(i => stringifyKeyword(i)).mkString(",")
+  private def stringifyKeyword(item: String) = {
+    item.endsWith(".reverse") match {
+      case true  => "\"" + item.replaceFirst("\\.reverse$", "") + "\".reverse"
+      case false => "\"" + item + "\""
+    }
+  }
+
+  private def indent(tabs: Int) = " " * (2 * tabs)
+
 }

@@ -41,6 +41,8 @@ case class GraphQLWebSocket(
 
   def pushG(query: Document) = {
     val item = Json.obj(
+      "type" -> "subscribe",
+      "id" -> silvousplay.Hashing.uuid(),
       "payload" -> Json.obj(
         "query" -> query.renderCompact)
     // "operation" ->

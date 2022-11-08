@@ -23,7 +23,7 @@ object TraceQuery {
   private def innerJoin[_: P] = P("join[" ~ Lexical.keywordChars ~ "]").map(k => FromRoot(k, false))
   private def join[_: P] = P(leftJoin | innerJoin)
 
-  def query[_: P] = P(join ~ ("." ~ GraphQuery.traverse).rep(0)) map {
+  def query[_: P] = P(join ~ ("." ~ GraphQuery.Traverse.traverses).rep(0)) map {
     case (join, traverses) => TraceQuery(join, traverses.toList)
   }
 }

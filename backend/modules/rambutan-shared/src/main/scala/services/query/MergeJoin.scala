@@ -1,4 +1,4 @@
-package services.q10
+package services
 
 import silvousplay.imports._
 import silvousplay.api._

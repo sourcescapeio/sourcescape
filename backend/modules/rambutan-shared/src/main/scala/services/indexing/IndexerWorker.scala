@@ -118,6 +118,7 @@ class IndexerWorker @Inject() (
               }
             }
           }.mapConcat(i => i).runWith(Sinks.ListAccum[GraphEdge])
+          _ = defEdges.foreach(println)
           typeDefEdges <- Source(typeDefs).mapAsync(1) { symbolLookup =>
             withDefined(fromLookup.typeDefinitionLink) { typeDefinitionLink =>
               for {
@@ -370,7 +371,7 @@ class IndexerWorker @Inject() (
             }
           }
         }
-
+        
         ifNonEmpty(graphNodes) {
           context.event(s"Indexing nodes for ${tree.file}/${indexType.identifier}. Total: ${graphNodes.length}.")
         }

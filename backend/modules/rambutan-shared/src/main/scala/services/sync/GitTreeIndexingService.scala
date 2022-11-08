@@ -18,16 +18,16 @@ import silvousplay.api.SpanContext
 @Singleton
 class GitTreeIndexingService @Inject() (
   configuration:        play.api.Configuration,
-  gitService:           GitService,
+  gitService:           LocalGitService,
   indexerService:       IndexerService,
   repoDataService:      RepoDataService,
   repoIndexDataService: RepoIndexDataService)(implicit ec: ExecutionContext, mat: akka.stream.Materializer) {
 
   // def indexRepo(repo: GenericRepo)
 
-  def updateGitTreeToSha(repo: GenericRepo, sha: String)(implicit context: SpanContext): Future[Unit] = {
+  def updateGitTreeToSha(repo: LocalRepoConfig, sha: String)(implicit context: SpanContext): Future[Unit] = {
     for {
-      repoObj <- gitService.getGitRepo(repo)
+      repoObj <- gitService.getGitRepo(repo.localPath)
       _ <- repoObj.getCommitChain(sha).groupedWithin(100, 1.second).mapAsync(1) { commits =>
         // filter out existing commits
         val keys = commits.map(repo.repoId -> _.sha)
@@ -59,9 +59,9 @@ class GitTreeIndexingService @Inject() (
   }
 
   // update branch data
-  def updateBranchData(repo: GenericRepo)(implicit context: SpanContext): Future[List[String]] = {
+  def updateBranchData(repo: LocalRepoConfig)(implicit context: SpanContext): Future[List[String]] = {
     for {
-      repoObj <- gitService.getGitRepo(repo)
+      repoObj <- gitService.getGitRepo(repo.localPath)
       branchMap <- repoObj.getRepoBranches
       branches = branchMap.keySet.toList
       // legacy

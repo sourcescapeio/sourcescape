@@ -36,74 +36,20 @@ import akka.http.scaladsl.model.ws._
 import org.joda.time.DateTime
 import akka.stream.Materializer
 
-abstract class QuerySpec
+sealed abstract class SrcLogQuerySpec
   extends RambutanSpec
   with IndexHelpers
   with QueryHelpers {
   // to override. not using val cuz we want to force laziness for testcontainers
   def config(): Map[String, Any]
 
-  val TSCONFIG = """
-{
-  "compilerOptions": {
-    "module": "commonjs",
-    "declaration": true,
-    "removeComments": true,
-    "emitDecoratorMetadata": true,
-    "experimentalDecorators": true,
-    "target": "es2017",
-    "sourceMap": true,
-    "outDir": "./dist",
-    "baseUrl": "./",
-    "incremental": true,
-    "resolveJsonModule": true,
-    "esModuleInterop": true,
-    "lib": ["ESNext.String", "es2015"]
-  },
-  "exclude": ["node_modules", "dist"]
-}
-  """
+  import FileHelpers._
 
-  val PROGRAM = """
-import { Controller, Post} from '@nestjs/common'
-@Controller('app')
-class Hello {
-
-  @Post('/test')
-  async doSomething() {
-    return true;
-  }
-}
-  """
-
-  val PROGRAM2 = """
-class TestService {
-	start() {
-		console.warn('test');
-	}
-}
-
-
-class Test {
-	constructor(private testService: TestService) {
-	}
-
-	test2({a: number, b: string}) {
-	
-	}
-
-	test() {
-		this.testService.start()
-	}
-}  
-  """
+  val LocalRepo = LocalRepoConfig(-1, "/data/projects", 1, "/data/projects", "remote", RemoteType.GitHub, Nil)
 
   override def fakeApplication() = {
     val mockFileService = mock[FileService]
     val mockGitService = mock[LocalGitService]
-    when(mockGitService.scanGitDirectory(any)).thenReturn(Source(
-      List(
-        GitScanResult("/data/projects/project1", true, Set("git@github.com:org/project1.git")))))
 
     val renderedConfig = config().toSeq
 
@@ -121,6 +67,7 @@ class Test {
   override def beforeEach() = {
     // clear all indexed data sync
     val indexUpgradeService = app.injector.instanceOf[IndexUpgradeService]
+    val repoDataService = app.injector.instanceOf[LocalRepoDataService]
 
     val redisService = app.injector.instanceOf[RedisService]
 
@@ -128,6 +75,7 @@ class Test {
       _ <- indexUpgradeService.deleteAllIndexesSync()
       _ <- wipeElasticSearch()
       _ <- redisService.redisClient.flushall()
+      _ <- repoDataService.upsertRepo(LocalRepo)
     } yield {
       ()
     }
@@ -135,38 +83,16 @@ class Test {
   }
 
   "Scanning directories" should {
-    "work" taggedAs (Tag("single")) in {
-      curl.graphql(graphql"""
-        mutation addScan {
-          path1: createScan(path: "/data/projects") {
-            id
-            path
-          }
-        }
-      """) { res =>
-        println(res)
-      }
 
-      val repoId = curl.graphql(graphql"""
-        {
-          repos {
-            id
-            path
-          }
-        }
-      """) { res =>
-        (res \ "data" \ "repos" \\ "id").map(_.as[Int])(0)
-      }
-
-      println("BEFORE INDEX")
-
+    // sbt "project rambutanTest" "testOnly test.SrcLogQuerySpecCompose -- -z basic"
+    "basic" in {
       await {
         runTestIndex(
           RepoSHAIndex(
             id = 1,
             orgId = -1,
             repoName = "/data/projects",
-            repoId = repoId,
+            repoId = LocalRepo.repoId,
             sha = "123",
             rootIndexId = None,
             dirtySignature = None,
@@ -174,9 +100,7 @@ class Test {
             deleted = false,
             created = new DateTime().getMillis()),
           IndexType.Javascript)(
-            "tsconfig.json" -> TSCONFIG,
-            "test.ts" -> PROGRAM,
-            "test2.ts" -> PROGRAM2)
+            directory("examples/001_basic"): _*)
       }
 
       val data = await {
@@ -236,60 +160,141 @@ class Test {
       //   }
       // }
     }
+
+    // sbt "project rambutanTest" "testOnly test.SrcLogQuerySpecCompose -- -z all.calls"
+    "all.calls" in {
+      val CurrentIndex = RepoSHAIndex(
+        id = 1,
+        orgId = -1,
+        repoName = "/data/projects",
+        repoId = LocalRepo.repoId,
+        sha = "123",
+        rootIndexId = None,
+        dirtySignature = None,
+        workId = "123",
+        deleted = false,
+        created = new DateTime().getMillis())
+
+      await {
+        runTestIndex(
+          CurrentIndex,
+          IndexType.Javascript)(
+            directory("examples/001_basic"): _*)
+      }
+
+      await {
+        // should omit initials
+        dataForGraphQuery(IndexType.Javascript, index = CurrentIndex) {
+          """
+          root{
+            type : ["member"],
+            name : ["warn"]
+          }.linear_traverse [
+            *["javascript::declared_as","javascript::assigned_as","javascript::reference_of"],
+            t["javascript::call_of"]
+          ].node_check {
+            type: "call"
+          }.linear_traverse [
+            t["javascript::function_contains".reverse],
+            ?["javascript::method_function".reverse]
+          ]
+          """
+        }
+      }.foreach { trace =>
+        val s = (trace.tracesInternal :+ trace.terminus).flatMap { ti =>
+          (ti.tracesInternal :+ ti.terminus).map(i => s"${i.path}:${i.id}:${i.edgeType.getOrElse("")}")
+        }.mkString("->")
+
+        println(s)
+      }
+
+      val data = await {
+        dataForQuery(IndexType.Javascript, QueryTargetingRequest.AllLatest(None)) {
+          """
+            javascript::all_called(FZERO, F).
+            javascript::contains(F, WARNCALL).
+
+            javascript::member(CONSOLE, WARN)[name = "warn"].
+            javascript::call(WARN, WARNCALL).
+          """
+        }
+      }.foreach { d =>
+        val fZero = d.getOrElse("FZERO", throw new Exception("fail"))
+        // println(Json.prettyPrint((fZero \ "terminus" \ "node").as[JsValue]))
+        val path = (fZero \ "terminus" \ "node" \ "path").as[String]
+        val startLine = (fZero \ "terminus" \ "node" \ "range" \ "start" \ "line").as[Int]
+        val endLine = (fZero \ "terminus" \ "node" \ "range" \ "end" \ "line").as[Int]
+        println("===================")
+        println(s"${path}:${startLine}-${endLine}")
+        println("===================")
+        println((fZero \ "terminus" \ "node" \ "extracted").as[String])
+        d.map {
+          case (k, v) => {
+            val vPath = (v \ "terminus" \ "node" \ "path").as[String]
+            val vStr = (v \ "terminus" \ "node" \ "id").as[String]
+            println(s"${k} -> ${vPath}:${vStr}")
+          }
+        }
+      }
+    }
+
+    // sbt "project rambutanTest" "testOnly test.SrcLogQuerySpecCompose -- -z loop"
+    "loop" in {
+
+      val CurrentIndex = RepoSHAIndex(
+        id = 1,
+        orgId = -1,
+        repoName = "/data/projects",
+        repoId = LocalRepo.repoId,
+        sha = "123",
+        rootIndexId = None,
+        dirtySignature = None,
+        workId = "123",
+        deleted = false,
+        created = new DateTime().getMillis())
+
+      await {
+        runTestIndex(
+          CurrentIndex,
+          IndexType.Javascript)(
+            directory("examples/002_loop"): _*)
+      }
+
+      await {
+        dataForQuery(IndexType.Javascript, QueryTargetingRequest.AllLatest(None)) {
+          """
+            javascript::all_called(FZERO, F).
+            javascript::contains(F, WARNCALL).
+
+            javascript::member(CONSOLE, WARN)[name = "warn"].
+            javascript::call(WARN, WARNCALL).
+          """
+        }
+      }.foreach { d =>
+        val fZero = d.getOrElse("FZERO", throw new Exception("fail"))
+        // println(Json.prettyPrint((fZero \ "terminus" \ "node").as[JsValue]))
+        val path = (fZero \ "terminus" \ "node" \ "path").as[String]
+        val startLine = (fZero \ "terminus" \ "node" \ "range" \ "start" \ "line").as[Int]
+        val endLine = (fZero \ "terminus" \ "node" \ "range" \ "end" \ "line").as[Int]
+        println("===================")
+        println(s"${path}:${startLine}-${endLine}")
+        println("===================")
+        println((fZero \ "terminus" \ "node" \ "extracted").as[String])
+        d.map {
+          case (k, v) => {
+            val vPath = (v \ "terminus" \ "node" \ "path").as[String]
+            val vStr = (v \ "terminus" \ "node" \ "id").as[String]
+            println(s"${k} -> ${vPath}:${vStr}")
+          }
+        }
+      }
+    }
+
   }
 }
 
-// sbt "project rambutanTest" "testOnly test.QuerySpecContainers"
-class QuerySpecContainers
-  extends QuerySpec
-  with ForAllTestContainer {
-
-  private val elasticsearch = ElasticsearchContainer(
-    DockerImageName.parse("docker.elastic.co/elasticsearch/elasticsearch:7.10.2"))
-
-  private val postgres = PostgreSQLContainer(
-    DockerImageName.parse("postgres:12.4"),
-    databaseName = "sourcescape",
-    username = "sourcescape",
-    password = "sourcescape")
-
-  private val redis = GenericContainer(
-    "redis:5.0.10",
-    exposedPorts = Seq(6379))
-
-  private val primadonna = GenericContainer(
-    "gcr.io/lychee-ai/sourcescape-cli-primadonna:0.2",
-    waitStrategy = Wait.forLogMessage(".*node ./bin/www.*", 1),
-    exposedPorts = Seq(3001))
-
-  private val dorothy = GenericContainer(
-    "gcr.io/lychee-ai/sourcescape-cli-dorothy:0.2",
-    waitStrategy = Wait.forLogMessage(".*WEBrick::HTTPServer#start.*", 1),
-    exposedPorts = Seq(3004))
-
-  def config() = {
-    Map(
-      "primadonna.server" -> s"http://localhost:${primadonna.mappedPort(3001)}",
-      "dorothy.server" -> s"http://localhost:${dorothy.mappedPort(3004)}",
-      "redis.port" -> s"${redis.mappedPort(6379)}",
-      "elasticsearch.port" -> s"${elasticsearch.mappedPort(9200)}",
-      "slick.dbs.default.profile" -> "silvousplay.data.PostgresDriver$",
-      "slick.dbs.default.db.url" -> s"jdbc:postgresql://localhost:${postgres.mappedPort(5432)}/sourcescape?characterEncoding=UTF-8",
-      "slick.dbs.default.db.user" -> "sourcescape",
-      "slick.dbs.default.db.password" -> "sourcescape")
-  }
-
-  override val container = MultipleContainers(
-    postgres,
-    elasticsearch,
-    redis,
-    primadonna,
-    dorothy)
-}
-
-// sbt "project rambutanTest" "testOnly test.QuerySpecCompose"
-class QuerySpecCompose
-  extends QuerySpec {
+class SrcLogQuerySpecCompose
+  extends SrcLogQuerySpec {
 
   def config() = {
     Map(

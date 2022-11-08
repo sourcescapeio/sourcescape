@@ -6,7 +6,7 @@ import org.scalatestplus.play._
 import models.query._
 import akka.stream.scaladsl._
 import silvousplay.api._
-import services.q10
+import services._
 import play.api.libs.json._
 import models.Sinks
 import akka.stream.Materializer
@@ -22,7 +22,7 @@ class MergeJoinSpec extends PlaySpec {
     Source.fromGraph(GraphDSL.create() { implicit builder =>
       import GraphDSL.Implicits._
       val context = NoopSpanContext
-      val joiner = builder.add(new q10.MergeJoin[K, V1, V2](context, doExplain = true, leftOuter, rightOuter = rightOuter))
+      val joiner = builder.add(new MergeJoin[K, V1, V2](context, doExplain = true, leftOuter, rightOuter = rightOuter))
 
       source1 ~> joiner.in0
       source2 ~> joiner.in1

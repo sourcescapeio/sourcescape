@@ -2,14 +2,16 @@ package test
 
 import services._
 import models.query._
+import models.query.QueryTracing._
 import models.{ Sinks, IndexType }
 import models.graph._
 import org.scalatestplus.play.guice._
 import scala.concurrent.ExecutionContext
 import play.api.libs.json._
+import models.RepoSHAIndex
 
 trait QueryHelpers {
-  self: RambutanSpec =>
+  self: RambutanSpec with IndexHelpers =>
 
   protected def mapAssert(item: Map[String, JsValue], key: String)(f: JsValue => Unit) = {
     f(item.getOrElse(key, throw new Exception(s"${key} not found")))
@@ -30,6 +32,26 @@ trait QueryHelpers {
         progressUpdates = true)(targeting, silvousplay.api.NoopSpanContext, QueryScroll(None))
       data <- result.source.runWith {
         Sinks.ListAccum[Map[String, JsValue]]
+      }
+    } yield {
+      data
+    }
+  }
+
+  protected def dataForGraphQuery(indexType: IndexType, index: RepoSHAIndex = Index)(q: String)(implicit ec: ExecutionContext) = {
+    val graphQueryService = app.injector.instanceOf[GraphQueryService]
+
+    val (_, query) = GraphQuery.parseOrDie(q)
+
+    println(QueryString.stringifyGraphQuery(query))
+
+    val queryTracing = QueryTracing.Basic
+    val targeting = KeysQueryTargeting(IndexType.Javascript, List(index), Map(), None)
+
+    for {
+      (count, _, source) <- graphQueryService.executeUnit(query, false, None)(targeting, silvousplay.api.NoopSpanContext, QueryTracing.Basic)
+      data <- source.runWith {
+        Sinks.ListAccum[GraphTrace[TraceUnit]]
       }
     } yield {
       data

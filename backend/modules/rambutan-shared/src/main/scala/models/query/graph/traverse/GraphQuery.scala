@@ -17,184 +17,233 @@ case class GraphQuery(root: GraphRoot, traverses: List[Traverse]) {
 }
 
 object GraphQuery {
-  private def edgeTypeInner[_: P] = P(Lexical.keywordChars).map { str =>
-    val trimmed = str.trim
-    trimmed.split("::") match {
-      case Array(v) => GenericGraphEdgeType.withNameUnsafe(trimmed)
-      case Array(idx, v) => IndexType.withNameUnsafe(idx) match {
-        case IndexType.Javascript => JavascriptGraphEdgeType.withNameUnsafe(trimmed)
-        case IndexType.Ruby       => RubyGraphEdgeType.withNameUnsafe(trimmed)
+  object Base {
+    def quotedKeyword[_: P] = {
+      implicit val whitespace = NoWhitespace.noWhitespaceImplicit
+      P("\"" ~/ Lexical.keywordChars ~ "\"")
+    }
+
+    private def keywordList[_: P] = {
+      // implicit val whitespace = MultiLineWhitespace.whitespace
+      P("[" ~/ Base.quotedKeyword ~ ("," ~ Base.quotedKeyword).rep(1) ~ "]").map {
+        case (first, rest) => first :: rest.toList
+      }
+    }
+
+    def keywordArg[_: P] = P(quotedKeyword).map(id => id :: Nil) | keywordList
+
+    //
+    def quotedChars[_: P] = {
+      implicit val whitespace = NoWhitespace.noWhitespaceImplicit
+      P("\"" ~/ Lexical.quotedChars ~ "\"")
+    }
+
+    private def charsList[_: P] = {
+      // implicit val whitespace = MultiLineWhitespace.whitespace
+      P("[" ~/ Base.quotedChars ~ ("," ~ Base.quotedChars).rep(0) ~ "]").map {
+        case (first, rest) => first :: rest.toList
+      }
+    }
+
+    def charsArg[_: P] = P(quotedChars).map(id => id :: Nil) | charsList
+
+    private def numList[_: P] = {
+      // implicit val whitespace = MultiLineWhitespace.whitespace
+      P("[" ~/ Lexical.numChars ~ ("," ~ Lexical.numChars).rep(1) ~ "]").map {
+        case (first, rest) => first.toInt :: rest.toList.map(_.toInt)
+      }
+    }
+
+    def numsArg[_: P] = P(Lexical.numChars).map(id => id.toInt :: Nil) | numList
+  }
+
+  object NodeId {
+    private def nodeIdFilter[_: P] = {
+      implicit val whitespace = SingleLineWhitespace.whitespace
+      P("id" ~ ":" ~/ Base.keywordArg) map (ids => NodeIdsFilter(ids))
+    }
+
+    def targetSetting[_: P] = P(nodeIdFilter) map (_ :: Nil)
+  }
+
+  object NodeType {
+    // Type
+    case class QueryNodeType(val identifier: String) extends models.index.NodeType
+    private def nodeType[_: P] = P(Base.quotedKeyword).map { str =>
+      QueryNodeType(str.trim)
+    }
+
+    private def nodeTypeList[_: P] = {
+      // implicit val whitespace = MultiLineWhitespace.whitespace
+      P("[" ~/ nodeType ~ ("," ~ nodeType).rep(0) ~ "]").map {
+        case (first, rest) => first :: rest.toList
+      }
+    }
+
+    private def nodeTypeArg[_: P] = P(nodeType).map(nt => nt :: Nil) | nodeTypeList
+
+    private def nodeProp[_: P] = {
+      implicit val whitespace = SingleLineWhitespace.whitespace
+      P(Base.quotedKeyword ~ ":" ~ Base.quotedKeyword) map {
+        case (k, v) => GenericGraphProperty(k, v)
+      }
+    }
+
+    // Type
+    private def nodeTypeFilter[_: P] = {
+      implicit val whitespace = SingleLineWhitespace.whitespace
+      P("type" ~ ":" ~/ nodeTypeArg) map (typ => NodeTypesFilter(typ))
+    }
+
+    // Names
+    private def nodeNameFilter[_: P] = {
+      implicit val whitespace = SingleLineWhitespace.whitespace
+      P("name" ~ ":" ~/ Base.charsArg) map (names => NodeNamesFilter(names))
+    }
+
+    // Index
+    private def nodeIndexFilter[_: P] = {
+      implicit val whitespace = SingleLineWhitespace.whitespace
+      P("index" ~ ":" ~/ Base.numsArg) map (idx => NodeIndexesFilter(idx))
+    }
+
+    // Props
+    private def nodePropsFilter[_: P] = {
+      // implicit val whitespace = MultiLineWhitespace.whitespace
+      P("props" ~ ":" ~/ "{" ~/ nodeProp ~ ("," ~ nodeProp).rep(0) ~ "}") map {
+        case (head, rest) => NodePropsFilter(head :: rest.toList)
+      }
+    }
+
+    def targetSetting[_: P] = {
+      // implicit val whitespace = MultiLineWhitespace.whitespace
+      P(nodeTypeFilter ~ ("," ~ (nodeNameFilter | nodeIndexFilter | nodePropsFilter)).?) map {
+        case (a, b) => a :: b.toList
       }
     }
   }
-  private def edgeType[_: P] = P(edgeTypeInner ~ ("." ~ reverseSetting).?) map {
-    case (edgeT, Some(_)) => edgeT.opposite
-    case (edgeT, _)       => edgeT
+
+  object NodeAll {
+    def targetSetting[_: P] = {
+      implicit val whitespace = NoWhitespace.noWhitespaceImplicit
+      P("all") map { _ =>
+        NodeAllFilter :: Nil
+      }
+    }
   }
 
-  /**
-   * Edges
-   */
-  private def edgeIndexFilter[_: P] = P("index=" ~/ Lexical.numChars) map (idx => EdgeIndexFilter(idx.toInt))
-  private def edgeNameFilter[_: P] = P("name=\"" ~/ Lexical.quotedChars ~ "\"") map (name => EdgeNameFilter(name.trim))
-  private def edgePropsFilter[_: P] = P("props=(" ~/ nodeProp ~ ("," ~ nodeProp).rep(0) ~ ")") map {
-    case (head, rest) => EdgePropsFilter(head :: rest.toList)
+  object Traverse {
+    private def reverseSetting[_: P] = P("reverse") map (_ => true)
+
+    private def edgeType[_: P] = {
+      P(Base.quotedChars).map { str =>
+        val trimmed = str.trim
+        trimmed.split("::") match {
+          case Array(v) => GenericGraphEdgeType.withNameUnsafe(trimmed)
+          case Array(idx, v) => IndexType.withNameUnsafe(idx) match {
+            case IndexType.Javascript => JavascriptGraphEdgeType.withNameUnsafe(trimmed)
+            case IndexType.Ruby       => RubyGraphEdgeType.withNameUnsafe(trimmed)
+          }
+        }
+      }
+    }
+
+    private def basicEdgeType[_: P] = {
+      implicit val whitespace = NoWhitespace.noWhitespaceImplicit
+
+      P(edgeType ~ ("." ~/ reverseSetting).?).map {
+        case (edgeT, Some(_)) => edgeT.opposite
+        case (edgeT, _)       => edgeT
+      }.map { item =>
+        EdgeTypeTraverse(item, None)
+      }
+    }
+
+    // edge type filter
+
+    private def edgeIndexFilter[_: P] = {
+      implicit val whitespace = SingleLineWhitespace.whitespace
+      P("index" ~ ":" ~/ Base.numsArg) map (idx => EdgeIndexesFilter(idx.map(_.toInt)))
+    }
+    private def edgeNameFilter[_: P] = {
+      implicit val whitespace = SingleLineWhitespace.whitespace
+      P("name" ~ ":" ~/ Base.charsArg) map (names => EdgeNamesFilter(names))
+    }
+
+    private def edgeFilter[_: P] = P(edgeIndexFilter | edgeNameFilter)
+
+    private def expandedEdgeType[_: P] = {
+      // implicit val whitespace = MultiLineWhitespace.whitespace
+      P("{" ~/ "type" ~ ":" ~ basicEdgeType ~ ("," ~ edgeFilter).? ~ "}").map {
+        case (ty, filt) => ty.copy(filter = filt)
+      }
+    }
+
+    private def edgeTypeStanza[_: P] = {
+      // implicit val whitespace = MultiLineWhitespace.whitespace
+      P(expandedEdgeType | basicEdgeType)
+    }
+
+    // *
+    private def follow[_: P](followType: FollowType) = {
+      // implicit val whitespace = MultiLineWhitespace.whitespace
+      P(s"${followType.identifier}[" ~/ edgeTypeStanza ~ ("," ~ edgeTypeStanza).rep(0) ~ "]").map {
+        case (head, rest) => {
+          val all = head :: rest.toList
+          EdgeFollow(all, followType)
+        }
+      }
+    }
+
+    private def linearFollow[_: P] = P(follow(FollowType.Optional) | follow(FollowType.Star) | follow(FollowType.Target))
+
+    private def linearFollowList[_: P] = P("[" ~ linearFollow ~ ("," ~ linearFollow).rep(0) ~ "]").map {
+      case (head, rest) => head :: rest.toList
+    }
+
+    private def linearEmpty[_: P] = P("[" ~ "]").map {
+      case _ => List.empty[EdgeFollow]
+    }
+
+    private def linearTraverse[_: P] = {
+      // implicit val whitespace = MultiLineWhitespace.whitespace
+      P("linear_traverse" ~/ linearFollowList) map { follows =>
+        LinearTraverse(
+          follows)
+      }
+    }
+
+    private def nodeCheck[_: P] = {
+      // implicit val whitespace = MultiLineWhitespace.whitespace
+      P("node_check" ~ "{" ~/ (NodeId.targetSetting | NodeType.targetSetting | NodeAll.targetSetting) ~ "}") map {
+        case nodeFilters => NodeCheck(nodeFilters)
+      }
+    }
+
+    private def repeatedTraverse[_: P] = {
+      P("repeated_traverse" ~ "{" ~/ "follow" ~ ":" ~ (linearFollowList | linearEmpty) ~ "," ~ "repeat" ~ ":" ~ linearFollowList ~ "}") map {
+        case (follow, repeat) => RepeatedLinearTraverse(follow, repeat)
+      }
+    }
+
+    def traverses[_: P] = P(linearTraverse | nodeCheck | repeatedTraverse)
   }
 
-  private def edgeFilter[_: P] = P(edgeIndexFilter | edgeNameFilter | edgePropsFilter)
-
-  private def reverseSetting[_: P] = P("reverse") map (_ => true)
-  private def edgeTypeStanza[_: P] = P(edgeType ~ ("[" ~ edgeFilter ~ "]").?) map {
-    case (edgeT, edgeFilter) => EdgeTypeTraverse(edgeT, edgeFilter)
+  private def root[_: P] = {
+    // implicit val whitespace = MultiLineWhitespace.whitespace
+    P("root" ~ "{" ~/ (NodeId.targetSetting | NodeType.targetSetting | NodeAll.targetSetting) ~ "}") map {
+      case nodeFilters => GraphRoot(nodeFilters)
+    }
   }
 
-  private def edgeTypeTargetType[_: P] = P("edge_types:(" ~/ edgeTypeStanza ~ ("," ~ edgeTypeStanza).rep(0) ~ ")") map {
-    case (item, rest) => EdgeTypeTarget(item :: rest.toList)
-  }
-  private def noneTargetType[_: P] = P("none") map (_ => EdgeTypeTarget.empty)
-  private def targetType[_: P] = P(edgeTypeTargetType | noneTargetType)
-
-  private def edgeTypeFollowType[_: P] = P("edge_types:(" ~/ edgeTypeStanza ~ ("," ~ edgeTypeStanza).rep(0) ~ ")") map {
-    case (head, rest) => EdgeTypeFollow(head :: rest.toList)
-  }
-  private def followType[_: P] = P(edgeTypeFollowType)
-
-  private def followSetting[_: P] = P("follow=" ~/ followType)
-  private def targetSetting[_: P] = P("target=" ~ targetType)
-
-  private def trueSetting[_: P] = P("true") map (_ => true)
-  private def falseSetting[_: P] = P("false") map (_ => false)
-  private def typeHintSetting[_: P] = P("type_hint=" ~/ nodeType)
-
-  private def edgeTraverse[_: P] = P("traverse[" ~/ (followSetting ~ ",").? ~ targetSetting ~ ("," ~ typeHintSetting).? ~ "]") map {
-    case (follow, target, typeHint) => EdgeTraverse(
-      follow.getOrElse(EdgeTypeFollow.empty),
-      target,
-      typeHint)
+  def query[_: P] = {
+    P(root ~ ("." ~ Traverse.traverses).rep(0)) map {
+      case (root, traverses) => GraphQuery(root, traverses.toList)
+    }
   }
 
-  private def onehopTraverse[_: P] = P("one_hop[" ~/ followSetting.? ~ "]") map {
-    case follow => OneHopTraverse(
-      follow.map(_.traverses).getOrElse(EdgeTypeFollow.all))
-  }
-
-  private def onehopReverse[_: P] = P("one_hop_reverse[]") map {
-    case follow => OneHopTraverse(EdgeTypeFollow.all.map(_.reverse))
-  }
-
-  // private def repeatedTraverse[_:P] = P("traverse_repeated[" ~/ (followSetting ~ ",").? ~ targetSetting ~ ("," ~ followExportsSEtting).? ~ "]") map {
-  //   case (follow, target, followExports) => EdgeTraverseRepeated(
-  //     follow.getOrElse(EdgeTypeFollow.empty),
-  //     target,
-  //     followExports.getOrElse(false))
-  // }
-
-  /**
-   * Nodes
-   */
-  case class TempNodeType(val identifier: String) extends models.index.NodeType
-  private def nodeType[_: P] = P(Lexical.keywordChars).map { str =>
-    TempNodeType(str.trim)
-  }
-
-  private def nodeTypeFilter[_: P] = P("type=" ~/ nodeType) map (typ => NodeTypeFilter(typ))
-  private def nodeNotTypesFilter[_: P] = P("not_types=(" ~/ nodeType ~ ("," ~ nodeType).rep(0) ~ ")") map {
-    case (head, rest) => NodeNotTypesFilter(head :: rest.toList)
-  }
-  private def nodeNameFilter[_: P] = P("name=\"" ~/ Lexical.quotedChars ~ "\"") map (name => NodeNameFilter(name.trim))
-  private def nodeIndexFilter[_: P] = P("index=\"" ~/ Lexical.numChars ~ "\"") map (idx => NodeIndexFilter(idx.toInt))
-
-  private def nodeProp[_: P] = P(Lexical.keywordChars ~ "=\"" ~ Lexical.quotedChars ~ "\"") map {
-    case (k, v) => GenericGraphProperty(k, v)
-  }
-  private def nodePropsFilter[_: P] = P("props=(" ~/ nodeProp ~ ("," ~ nodeProp).rep(0) ~ ")") map {
-    case (head, rest) => NodePropsFilter(head :: rest.toList)
-  }
-
-  private def nodeIdFilter[_: P] = P("id=" ~/ Lexical.keywordChars) map (id => NodeIdFilter(id.trim))
-  // private def nodeFilter[_: P] = P(nodeTypeFilter | nodeNameFilter | nodeIdFilter)
-
-  private def nodeIdTargetSetting[_: P] = P(nodeIdFilter) map (_ :: Nil)
-  private def nodeNotTypesTargetSetting[_: P] = P(nodeNotTypesFilter) map (_ :: Nil)
-  private def nodeTypeTargetSetting[_: P] = P(nodeTypeFilter ~ ("," ~ (nodeIndexFilter | nodeNameFilter | nodePropsFilter)).?) map {
-    case (a, b) => a :: b.toList
-  }
-  private def nodeTargetSetting[_: P] = P("target=(" ~ (nodeIdTargetSetting | nodeNotTypesTargetSetting | nodeTypeTargetSetting) ~ ")")
-
-  private def nodeTraverse[_: P] = P("node_traverse[" ~/ (followSetting ~ ",").? ~ nodeTargetSetting ~ "]") map {
-    case (follow, target) => NodeTraverse(follow.getOrElse(EdgeTypeFollow.empty), target)
-  }
-
-  /**
-   * Exports
-   */
-  private def edgeTypeList[_: P] = P("[" ~ edgeType ~ ("," ~ edgeType).rep(0) ~ "]") map {
-    case (head, tail) => head :: tail.toList
-  }
-  private def emptyEdgeTypeList[_: P] = P("[" ~ "]") map (_ => List.empty[GraphEdgeType])
-  private def statefulMappingTuple[_: P] = P(edgeType ~ "->" ~ (edgeTypeList | emptyEdgeTypeList))
-  private def statefulMapping[_: P] = P("mapping={" ~/ statefulMappingTuple ~ ("," ~ statefulMappingTuple).rep(0) ~ "}") map {
-    case (headA, headB, tail) => ((headA, headB) :: tail.toList).map {
-      case (k, v) => k -> v.toList
-    }.toMap
-  }
-  // private def statefulFollowSetting[_: P] = P("follow=" ~/ (edgeTypeList | emptyEdgeTypeList))
-  // private def statefulTargetSetting[_: P] = P("target=" ~/ edgeTypeList)
-  // private def teleportFrom[_: P] = P("teleport_from=" ~/ nodeType)
-  // private def teleportTo[_: P] = P("teleport_to=" ~/ nodeType)
-  // private def statefulTraverse[_: P] = P("stateful_traverse[" ~ teleportFrom ~ "," ~ teleportTo ~ "," ~ statefulMapping ~ "," ~ statefulFollowSetting ~ "," ~ statefulTargetSetting ~ "]") map {
-  //   case (from, to, mapping, follow, target) => StatefulTraverse(from, to, mapping, follow.toList, target.toList)
-  // }
-
-  /**
-   * Subqueries
-   */
-  // private def subquerySetting[_: P]: P[GraphQuery] = P("subquery={" ~ query ~ "}")
-
-  // private def subqueryTraverse[_: P] = P("traverse_subquery[" ~/ (followSetting ~ ",").? ~ subquerySetting ~ "]").map {
-  //   case (follow, subquery) => {
-  //     SubqueryTraverse(follow.getOrElse(EdgeTypeFollow.empty), subquery)
-  //   }
-  // }
-
-  private def traverseSetting[_: P]: P[List[Traverse]] = P("traverses={" ~ traverse ~ ("." ~ traverse).rep(0) ~ "}") map {
-    case (head, rest) => head :: rest.toList
-  }
-  private def reverseTraverse[_: P]: P[ReverseTraverse] = P("reverse[" ~/ (followSetting ~ ",").? ~ traverseSetting ~ "]") map {
-    case (follow, traverses) => ReverseTraverse(follow.getOrElse(EdgeTypeFollow.empty), traverses)
-  }
-
-  /**
-   * Filters
-   */
-  private def filterTraverse[_: P]: P[FilterTraverse] = P("filter" ~ "{" ~/ traverse ~ ("." ~ traverse).rep(0) ~ "}") map {
-    case (head, rest) => FilterTraverse(head :: rest.toList)
-  }
-
-  // private def filterNotTraverse[_: P]: P[FilterNotTraverse] = P("filter_not" ~/ "{" ~/ traverse ~ ("." ~ traverse).rep(0) ~ "}") map {
-  //   case (head, rest) => FilterNotTraverse(head :: rest.toList)
-  // }
-
-  /**
-   * Targeting
-   */
-  private def repoSetting[_: P] = P("repo=\"" ~/ Lexical.quotedChars ~ "\"")
-
+  // should we be able to specify targeting in graph query?
   private def fileSetting[_: P] = P("file=\"" ~/ Lexical.quotedChars ~ "\"")
-
-  private def indexType[_: P] = P(Lexical.keywordChars).map { str =>
-    IndexType.withNameUnsafe(str.trim)
-  }
-  private def indexTypeFilter[_: P] = P("index=" ~/ indexType)
-
-  /**
-   * Global
-   */
-  private def root[_: P] = P("root[" ~/ (nodeIdTargetSetting | nodeTypeTargetSetting) ~ "]") map {
-    case nodeFilters => GraphRoot(nodeFilters)
-  }
-
-  def traverse[_: P] = P(edgeTraverse | nodeTraverse | onehopTraverse | onehopReverse | filterTraverse | reverseTraverse) // cannot do statefulTraverse
 
   private def targeting[_: P] = P("%targeting(" ~ fileSetting ~ ")").map {
     case file => QueryTargetingRequest.AllLatest(Some(file))
@@ -202,9 +251,15 @@ object GraphQuery {
 
   def fullQuery[_: P] = P(Start ~ targeting.? ~ query ~ End)
 
-  def query[_: P] = P(root ~ ("." ~ traverse).rep(0)) map {
-    case (root, traverses) => {
-      GraphQuery(root, traverses.toList)
+  def parseOrDie(q: String): (Option[QueryTargetingRequest], GraphQuery) = {
+    fastparse.parse(q, fullQuery(_)) match {
+      case fastparse.Parsed.Success((maybeTargeting, query), _) => {
+        (maybeTargeting, query)
+      }
+      case f: fastparse.Parsed.Failure => {
+        println(f)
+        throw new Exception("Invalid query")
+      }
     }
   }
 }

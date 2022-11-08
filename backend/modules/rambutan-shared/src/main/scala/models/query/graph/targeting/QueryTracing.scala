@@ -61,12 +61,6 @@ case class MapTracing[T, TU](inner: QueryTracing[T, TU], fromKey: String, toKey:
     }
   }
 
-  def dropHead(trace: Map[String, T]): Map[String, T] = {
-    operateOnTo(trace) { toTrace =>
-      inner.dropHead(toTrace)
-    }
-  }
-
   def injectNew(trace: Map[String, T], unit: TU): Map[String, T] = {
     operateOnTo(trace) { toTrace =>
       inner.injectNew(toTrace, unit)
@@ -78,7 +72,7 @@ case class MapTracing[T, TU](inner: QueryTracing[T, TU], fromKey: String, toKey:
       toKey -> inner.newTrace(unit))
   }
 
-  def sortKey(trace: Map[String, T]): List[String] = {
+  def sortKey(trace: Map[String, T]): Vector[String] = {
     inner.sortKey(getToTrace(trace))
   }
 
@@ -86,6 +80,13 @@ case class MapTracing[T, TU](inner: QueryTracing[T, TU], fromKey: String, toKey:
     Ordering.by { a: Map[String, T] =>
       inner.sortKey(getToTrace(a)).mkString("|")
     }
+  }
+
+  /**
+   * Debug
+   */
+  def iterateAll(trace: Map[String, T]): Vector[TU] = {
+    inner.iterateAll(getToTrace(trace))
   }
 
 }
@@ -98,7 +99,11 @@ trait QueryTracingBasic[TU] {
   def getKey(unit: TU): String
 }
 
-trait QueryTracing[T, TU] extends QueryTracingBasic[TU] {
+trait QueryTracingReduced[T, TU] extends QueryTracingBasic[TU] {
+  def getTerminus(trace: T): TU
+}
+
+trait QueryTracing[T, TU] extends QueryTracingReduced[T, TU] {
   self =>
 
   def traceHop(unit: T, edgeType: GraphEdgeType, edgeJs: JsObject, initial: Boolean): T
@@ -106,13 +111,11 @@ trait QueryTracing[T, TU] extends QueryTracingBasic[TU] {
   /**
    * Inherited
    */
-  def getTerminus(trace: T): TU
-
   def pushExternalKey(trace: T): T
 
   def pushCopy(trace: T): T
 
-  def dropHead(trace: T): T
+  // def dropHead(trace: T): T
 
   def injectNew(trace: T, unit: TU): T
 
@@ -123,13 +126,18 @@ trait QueryTracing[T, TU] extends QueryTracingBasic[TU] {
   /**
    * Sorting stuff
    */
-  def sortKey(trace: T): List[String]
+  def sortKey(trace: T): Vector[String]
 
-  final def joinKey(trace: T): List[String] = sortKey(trace) :+ headKey(trace)
+  final def joinKey(trace: T): Vector[String] = sortKey(trace) :+ headKey(trace)
 
   private def headKey(trace: T): String = getKey(getTerminus(trace))
 
   def ordering: Ordering[T]
+
+  /**
+   * Debug stuff
+   */
+  def iterateAll(trace: T): Vector[TU]
 
 }
 
@@ -161,7 +169,7 @@ object QueryTracing {
     }
 
     def newTrace(unit: GenericGraphUnit) = {
-      GraphTrace(Nil, Nil, SubTrace(Nil, unit))
+      GraphTrace(Vector(), Vector(), SubTrace(Vector(), unit))
     }
 
     def getTerminus(trace: GraphTrace[GenericGraphUnit]): GenericGraphUnit = {
@@ -172,10 +180,6 @@ object QueryTracing {
       trace.pushCopy
     }
 
-    def dropHead(trace: GraphTrace[GenericGraphUnit]): GraphTrace[GenericGraphUnit] = {
-      trace.dropHead
-    }
-
     def replaceHeadNode(trace: GraphTrace[GenericGraphUnit], id: String, unit: GenericGraphUnit): GraphTrace[GenericGraphUnit] = {
       // do nothing. this doesn't apply to generic graph
       trace
@@ -183,7 +187,7 @@ object QueryTracing {
 
     def pushExternalKey(trace: GraphTrace[GenericGraphUnit]) = trace.copy(
       externalKeys = trace.externalKeys :+ getKey(trace.root),
-      tracesInternal = Nil,
+      tracesInternal = Vector(),
       terminus = trace.terminus.wipe)
 
     def traceHop(trace: GraphTrace[GenericGraphUnit], edgeType: GraphEdgeType, edgeJs: JsObject, initial: Boolean): GraphTrace[GenericGraphUnit] = {
@@ -208,7 +212,7 @@ object QueryTracing {
       trace.injectHead(unit)
     }
 
-    def sortKey(trace: GraphTrace[GenericGraphUnit]): List[String] = {
+    def sortKey(trace: GraphTrace[GenericGraphUnit]): Vector[String] = {
       trace.externalKeys :+ getKey(trace.root)
     }
 
@@ -217,6 +221,14 @@ object QueryTracing {
         sortKey(a).mkString("|")
       }
     }
+
+    /**
+     * Debug
+     */
+    def iterateAll(trace: GraphTrace[GenericGraphUnit]): Vector[GenericGraphUnit] = {
+      trace.allKeys
+    }
+
   }
 
   case object Basic extends QueryTracing[GraphTrace[TraceUnit], TraceUnit] {
@@ -253,10 +265,6 @@ object QueryTracing {
       trace.pushCopy
     }
 
-    def dropHead(trace: GraphTrace[TraceUnit]): GraphTrace[TraceUnit] = {
-      trace.dropHead
-    }
-
     def injectNew(trace: GraphTrace[TraceUnit], unit: TraceUnit) = {
       trace.injectNew(unit)
     }
@@ -266,7 +274,7 @@ object QueryTracing {
     }
 
     def newTrace(unit: TraceUnit) = {
-      GraphTrace(Nil, Nil, SubTrace(Nil, unit))
+      GraphTrace(Vector(), Vector(), SubTrace(Vector(), unit))
     }
 
     def replaceHeadNode(trace: GraphTrace[TraceUnit], id: String, unit: TraceUnit): GraphTrace[TraceUnit] = {
@@ -278,7 +286,7 @@ object QueryTracing {
 
     def pushExternalKey(trace: GraphTrace[TraceUnit]) = trace.copy(
       externalKeys = trace.externalKeys :+ getKey(trace.root),
-      tracesInternal = Nil,
+      tracesInternal = Vector(),
       terminus = trace.terminus.wipe)
 
     def traceHop(trace: GraphTrace[TraceUnit], edgeType: GraphEdgeType, edgeJs: JsObject, initial: Boolean) = {
@@ -297,7 +305,7 @@ object QueryTracing {
       }
     }
 
-    def sortKey(trace: GraphTrace[TraceUnit]): List[String] = {
+    def sortKey(trace: GraphTrace[TraceUnit]): Vector[String] = {
       trace.externalKeys :+ getKey(trace.root)
     }
 
@@ -305,6 +313,13 @@ object QueryTracing {
       Ordering.by { a: GraphTrace[TraceUnit] =>
         sortKey(a).mkString("|")
       }
+    }
+
+    /**
+     * Debug
+     */
+    def iterateAll(trace: GraphTrace[TraceUnit]): Vector[TraceUnit] = {
+      trace.allKeys
     }
   }
 }
