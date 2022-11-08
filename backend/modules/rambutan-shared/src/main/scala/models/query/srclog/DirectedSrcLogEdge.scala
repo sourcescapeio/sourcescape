@@ -66,10 +66,10 @@ case class DirectedSrcLogEdge(
     if (reverse) {
       baseEdge match {
         case LinearTraverse(follows) => {
-          val reversedFollows = follows.dropWhile(_.followType =/= FollowType.Target).map(_.reverse).reverse
           if (predicate.repeated) {
-            RepeatedLinearTraverse(injectBefore, reversedFollows) :: Nil
+            RepeatedLinearTraverse(injectBefore, follows.map(_.reverse).reverse) :: Nil
           } else {
+            val reversedFollows = follows.dropWhile(_.followType =/= FollowType.Target).map(_.reverse).reverse
             LinearTraverse(injectBefore ++ reversedFollows) :: Nil
           }
         }
