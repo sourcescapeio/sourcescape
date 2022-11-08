@@ -22,7 +22,14 @@ sealed abstract class SimpleNodePredicate(identifierIn: String, val nodeType: No
   }
 
   protected def typeFilter: NodeFilter = {
-    NodeTypeFilter(nodeType)
+    NodeTypesFilter(List(nodeType))
+  }
+}
+
+// hopefully identifier not used
+case class OrNodePredicate(in: List[SimpleNodePredicate]) extends NodePredicate(in.map(_.identifier).mkString(" or ")) {
+  def filters(conditions: Option[Condition]) = {
+    NodeTypesFilter(in.map(_.nodeType)) :: conditions.map(_.filter).toList
   }
 }
 
@@ -85,7 +92,7 @@ object JavascriptNodePredicate extends Plenumeration[JavascriptNodePredicate] {
     // override name filter
     override def filters(conditions: Option[Condition]) = {
       val maybeName = conditions match {
-        case Some(NameCondition(n)) => NodeNameFilter("\"" + n + "\"") :: Nil
+        case Some(NameCondition(n)) => NodeNamesFilter(List("\"" + n + "\"")) :: Nil
         case _                      => Nil
       }
 
@@ -167,5 +174,9 @@ object UniversalNodePredicate extends Plenumeration[NodePredicate] {
 object NodePredicate extends Plenumeration[NodePredicate] {
   override val all = {
     UniversalNodePredicate.all ++ GenericGraphNodePredicate.all ++ IndexType.all.flatMap(_.nodePredicate.all)
+  }
+
+  def or(inner: SimpleNodePredicate*) = {
+    OrNodePredicate(inner.toList)
   }
 }

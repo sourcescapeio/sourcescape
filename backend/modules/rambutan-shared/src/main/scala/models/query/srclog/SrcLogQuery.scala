@@ -5,6 +5,7 @@ import play.api.libs.json._
 import fastparse._
 import MultiLineWhitespace._
 import models.graph.GenericGraphProperty
+import models.index.ruby.OrNode
 
 trait SrcLogQuery {
 
@@ -14,26 +15,6 @@ trait SrcLogQuery {
   val root: Option[String]
   val selected: List[String]
 
-  // strips out all edges pointing in wrong direction
-  lazy val baseTraversableEdges: List[DirectedSrcLogEdge] = {
-    //
-
-    edges.flatMap {
-      case e @ EdgeClause(p, from, to, c, Some(_)) => {
-        DirectedSrcLogEdge.forward(e) :: Nil
-      }
-      case e @ EdgeClause(p, from, to, c, _) if p.forceForwardDirection => {
-        DirectedSrcLogEdge.forward(e) :: Nil
-      }
-      case e @ EdgeClause(p, from, to, c, None) if p.singleDirection => {
-        DirectedSrcLogEdge.reverse(e) :: Nil
-      }
-      case e @ EdgeClause(p, from, to, c, None) => {
-        DirectedSrcLogEdge.forward(e) :: DirectedSrcLogEdge.reverse(e) :: Nil
-      }
-    }
-  }
-
   lazy val vertexes: Set[String] = {
     (nodes.map(_.variable) ++ edges.flatMap {
       case e @ EdgeClause(_, from, to, _, _) => {
@@ -41,15 +22,6 @@ trait SrcLogQuery {
       }
     }).toSet
   }
-
-  // lazy val leftJoinVertexes: Set[String] = {
-  //   edges.flatMap {
-  //     case e @ EdgeClause(_, _, to, _, Some(_)) => {
-  //       to :: Nil
-  //     }
-  //     case _ => Nil
-  //   }.toSet
-  // }
 
   lazy val edgeMap: Map[String, List[String]] = {
     edges.flatMap {
@@ -61,22 +33,79 @@ trait SrcLogQuery {
     }
   }
 
+  // We do assume all variable ids are the same in NodeClause
+  private def findMostSpecific(variable: String, nodes: List[NodeClause]): NodeClause = {
+    def nextSpecific(a: NodeClause, b: NodeClause) = {
+      // strongest condition
+      val bestCondition = (a.condition, b.condition) match {
+        case (Some(ac), Some(bc)) => {
+          if (ac =?= bc) {
+            Some(bc)
+          } else {
+            throw new Exception(s"condition conflict ${a.condition} ${b.condition}")
+          }
+        }
+        case (Some(ac), None) => Some(ac)
+        case (None, Some(bc)) => Some(bc)
+        case _                => None
+      }
+
+      val bestPredicate = (a.predicate, b.predicate) match {
+        case (aPred: SimpleNodePredicate, bPred: SimpleNodePredicate) => {
+          if (aPred.nodeType =?= bPred.nodeType) {
+            aPred // and condition
+          } else {
+            throw new Exception(s"predicate conflict ${aPred} ${bPred}")
+          }
+        }
+        case (aPred: SimpleNodePredicate, bPred: OrNodePredicate) => {
+          if (bPred.in.contains(a.predicate)) {
+            aPred
+          } else {
+            throw new Exception(s"predicate conflict ${aPred} ${bPred}")
+          }
+        }
+        case (aPred: OrNodePredicate, bPred: SimpleNodePredicate) => {
+          if (aPred.in.contains(bPred)) {
+            bPred
+          } else {
+            throw new Exception(s"predicate conflict ${aPred} ${bPred}")
+          }
+        }
+        case (aPred: OrNodePredicate, bPred: OrNodePredicate) => {
+          val inter = aPred.in.intersect(bPred.in)
+          if (inter.length > 0) {
+            OrNodePredicate(inter)
+          } else {
+            throw new Exception(s"predicate conflict ${aPred} ${bPred}")
+          }
+        }
+        case _ => throw new Exception("unimplemented")
+      }
+
+      NodeClause(bestPredicate, variable, bestCondition)
+    }
+
+    nodes match {
+      case Nil         => throw new Exception("should never happen. empty nodes list.")
+      case head :: Nil => head
+      case head :: rest => {
+        rest.foldLeft(head) {
+          case (acc, next) => nextSpecific(acc, next)
+        }
+      }
+    }
+  }
+
   lazy val allNodes = {
     (nodes ++ edges.flatMap(_.implicitNodes)).groupBy(_.variable).map {
-      case (k, vs) => {
-        // dedupe nodes
-        if (vs.map(_.predicate).distinct.length > 1) {
-          throw new Exception(s"invalid nodes. multiple predicate types: ${k} ${vs.map(_.predicate)}")
-        }
-        vs.maxBy { v =>
-          v.condition match {
-            case Some(_) => 1
-            case _       => 0
-          }
-        } // assume predicate is unique
-      }
+      case (k, vs) => findMostSpecific(k, vs)
     }.toList
   }
+
+  lazy val nodeMap = allNodes.map {
+    case n => n.variable -> n
+  }.toMap // unique by variable
 
   def subset(sub: Set[String]): SrcLogQuery
 
@@ -103,7 +132,10 @@ object SrcLogQuery {
   // Right now can't name a property index or name for Generic
   private def indexCondition[_: P] = P("index" ~ "=" ~ Lexical.numChars) map (idx => IndexCondition(idx.toInt))
   private def nameCondition[_: P] = P("name" ~ "=" ~ "\"" ~ quotedChars ~ "\"") map (name => NameCondition(name))
-  private def conditionsBlock[_: P] = P("[" ~/ (indexCondition | nameCondition) ~ "]")
+  private def namesCondition[_: P] = P("names" ~ "={" ~ ("\"" ~ quotedChars ~ "\"") ~ ("," ~ "\"" ~ quotedChars ~ "\"").rep(0) ~ "}") map {
+    case (head, rest) => MultiNameCondition(head :: rest.toList)
+  }
+  private def conditionsBlock[_: P] = P("[" ~/ (indexCondition | nameCondition | namesCondition) ~ "]")
 
   private def propConditionsBlock[_: P] = P("{" ~ propCondition ~ ("," ~ propCondition).rep(0) ~ "}") map {
     case (head, rest) => GraphPropertyCondition(head :: rest.toList)

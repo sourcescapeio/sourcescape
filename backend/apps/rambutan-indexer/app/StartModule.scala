@@ -25,7 +25,6 @@ class ApplicationStart @Inject() (
 class StartModule extends AbstractModule {
   override def configure() = {
     bind(classOf[RepoDataService]).to(classOf[LocalRepoDataService])
-    bind(classOf[GitService]).to(classOf[LocalGitService])
     bind(classOf[FileService]).to(classOf[LocalFileService])
 
     bind(classOf[ApplicationStart])

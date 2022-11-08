@@ -122,7 +122,11 @@ case object NoopSpanContext extends SpanContext {
   def withSpanS[T](name: String, attrib: (String, String)*)(f: SpanContext => Source[T, _])(implicit ec: ExecutionContext): Source[T, _] = f(this)
   def withSpanF[T1, T2](name: String, attrib: (String, String)*)(f: SpanContext => Flow[T1, T2, _])(implicit ec: ExecutionContext): Flow[T1, T2, _] = f(this)
 
-  def event(name: String, attrib: (String, String)*): Unit = {}
+  def event(name: String, attrib: (String, String)*): Unit = {
+    // println(name, attrib.map {
+    //   case (k, v) => s"${k}[${v}]"
+    // }.mkString(" "))
+  }
 }
 
 @Singleton

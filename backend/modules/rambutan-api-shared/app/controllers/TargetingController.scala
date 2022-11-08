@@ -16,8 +16,7 @@ import play.api.libs.json._
 class TargetingController @Inject() (
   configuration:    play.api.Configuration,
   telemetryService: TelemetryService,
-  authService:      services.AuthService,
-  targetingService: services.TargetingService)(implicit ec: ExecutionContext, as: ActorSystem) extends API {
+  authService:      services.AuthService)(implicit ec: ExecutionContext, as: ActorSystem) extends API {
 
   def checkTargeting(orgId: Int) = {
     api(parse.tolerantJson) { implicit request =>

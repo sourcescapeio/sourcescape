@@ -12,7 +12,6 @@ class LocalDataAccessLayer @Inject() (
   extends DataAccessLayer
   // Repos
   with LocalRepoConfigTableComponent
-  with LocalScanDirectoryTableComponent
   // Users and Projects
   with OrganizationTableComponent
   with LocalOrgSettingsTableComponent {

@@ -17,7 +17,6 @@ class RepoController @Inject() (
   configuration:        play.api.Configuration,
   telemetryService:     TelemetryService,
   authService:          services.AuthService,
-  scanService:          services.LocalScanService,
   repoService:          services.RepoService,
   repoDataService:      services.RepoDataService,
   repoIndexDataService: services.RepoIndexDataService,
@@ -54,13 +53,4 @@ class RepoController @Inject() (
       }
     }
   }
-
-  // def scanRepos(orgId: Int) = {
-  //   api { implicit request =>
-  //     // can move to repoData
-  //     authService.authenticatedForOrg(orgId, OrgRole.Admin) {
-  //       scanService.initialScan(orgId)
-  //     }
-  //   }
-  // }
 }

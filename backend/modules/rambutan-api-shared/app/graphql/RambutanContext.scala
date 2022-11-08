@@ -14,7 +14,6 @@ class RambutanContext @Inject() (
   val repoIndexDataService: RepoIndexDataService,
   val socketService:        SocketService,
   val repoIndexingService:  RepoIndexingService,
-  val localScanService:     LocalScanService,
   val repoService:          RepoService)(implicit val ec: ExecutionContext, val mat: Materializer) {
 
 }

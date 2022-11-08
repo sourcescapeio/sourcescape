@@ -28,7 +28,10 @@ object APIBuild {
     Misc.scalaz,
     // Misc.jwt,
     Misc.bouncyCastleProv,
-    // Misc.bouncyCastleKix,
+    // These are needed to run Play 2.8.x on Java 17
+    // https://github.com/playframework/playframework/releases/tag/2.8.15
+    Core.guice,
+    Core.guiceAssistedInject
   )
 
   val rambutanDependencies = Seq(
@@ -77,9 +80,13 @@ object APIBuild {
     //"-Xfatal-warnings", 
     scalacOptions ++= Seq("-deprecation", "-unchecked", "-feature", "-encoding", "utf8"),
     javaOptions in (Test, run) ++= defaultArgs,
-    javaOptions in Test ++= Seq("-Dlogger.resource=logback-test.xml")
-    //External repos
-//    resolvers += "Typesafe repository" at "http://repo.typesafe.com/typesafe/releases/"
+    javaOptions in Test ++= Seq("-Dlogger.resource=logback-test.xml"),
+    // Needed to run Play 2.8.x on Java 17
+    // https://github.com/playframework/playframework/releases/tag/2.8.15
+    Test / javaOptions ++= Seq(
+      "--add-exports=java.base/sun.security.x509=ALL-UNNAMED",
+      "--add-opens=java.base/sun.security.ssl=ALL-UNNAMED"
+    )
   ) ++ pluginSettings
 
   val rambutanSettings = baseSettings ++ Seq(

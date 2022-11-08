@@ -26,10 +26,10 @@ import silvousplay.api.SpanContext
 @Singleton
 class ClonerService @Inject() (
   configuration:        play.api.Configuration,
-  repoDataService:      RepoDataService,
+  repoDataService:      LocalRepoDataService,
   repoIndexDataService: RepoIndexDataService,
   indexerQueueService:  IndexerQueueService,
-  gitService:           GitService,
+  gitService:           LocalGitService,
   socketService:        SocketService,
   fileService:          FileService)(implicit actorSystem: akka.actor.ActorSystem, ec: ExecutionContext) {
 
@@ -50,7 +50,7 @@ class ClonerService @Inject() (
       // get index
       repoName = dbConfig.repoName
       runCloneContext = context.decoupledSpan("Running clone")
-      gitRepo <- gitService.getGitRepo(dbConfig)
+      gitRepo <- gitService.getGitRepo(dbConfig.localPath)
       maybeDiff <- withDefined(index.rootIndexId) { rootIndexId =>
         for {
           rootIndex <- repoIndexDataService.getIndexId(rootIndexId) map {

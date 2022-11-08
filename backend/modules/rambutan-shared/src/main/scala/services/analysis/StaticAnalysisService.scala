@@ -93,7 +93,7 @@ class StaticAnalysisService @Inject() (
         "filename" -> filename,
         "location" -> location))
       res = if (response.status =/= 200) {
-        throw new Exception("Error stopping language server")
+        throw new Exception("Language server request error")
       }
     } yield {
       val json = response.json \ "response"
