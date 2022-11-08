@@ -50,7 +50,7 @@ case class DirectedSrcLogEdge(
   }
 
   lazy val reversedPropagatedFollows = {
-    withFlag(reverse) {
+    withFlag(reverse && !predicate.repeated) {
       val props = baseEdge match {
         case LinearTraverse(follows) => {
           follows.takeWhile(_.followType =/= FollowType.Target)
