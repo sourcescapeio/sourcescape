@@ -183,42 +183,56 @@ sealed abstract class SrcLogQuerySpec
       }
 
       await {
+        // should omit initials
         dataForGraphQuery(IndexType.Javascript, index = CurrentIndex) {
           """
-          root {
-            all
-          }.linear_traverse[
-            t["javascript::call_link"]
+          root{
+            type : ["member"],
+            name : ["warn"]
+          }.linear_traverse [
+            *["javascript::declared_as","javascript::assigned_as","javascript::reference_of"],
+            t["javascript::call_of"]
+          ].node_check {
+            type: "call"
+          }.linear_traverse [
+            t["javascript::function_contains".reverse],
+            ?["javascript::method_function".reverse]
           ]
           """
         }
       }.foreach { trace =>
         val s = (trace.tracesInternal :+ trace.terminus).flatMap { ti =>
-          (ti.tracesInternal :+ ti.terminus).map(_.id)
+          (ti.tracesInternal :+ ti.terminus).map(i => s"${i.path}:${i.id}:${i.edgeType.getOrElse("")}")
         }.mkString("->")
 
         println(s)
       }
 
       val data = await {
-        dataForQuery(IndexType.Javascript, QueryTargetingRequest.AllLatest(None))(
+        dataForQuery(IndexType.Javascript, QueryTargetingRequest.AllLatest(None)) {
           """
             javascript::all_called(FZERO, F).
             javascript::contains(F, WARNCALL).
 
             javascript::member(CONSOLE, WARN)[name = "warn"].
             javascript::call(WARN, WARNCALL).
-          """)
+          """
+        }
       }.foreach { d =>
-        println("====================")
-        println("RESULT")
-        println("====================")
+        val fZero = d.getOrElse("FZERO", throw new Exception("fail"))
+        // println(Json.prettyPrint((fZero \ "terminus" \ "node").as[JsValue]))
+        val path = (fZero \ "terminus" \ "node" \ "path").as[String]
+        val startLine = (fZero \ "terminus" \ "node" \ "range" \ "start" \ "line").as[Int]
+        val endLine = (fZero \ "terminus" \ "node" \ "range" \ "end" \ "line").as[Int]
+        println("===================")
+        println(s"${path}:${startLine}-${endLine}")
+        println("===================")
+        println((fZero \ "terminus" \ "node" \ "extracted").as[String])
         d.map {
           case (k, v) => {
-            println(k)
-            println(Json.prettyPrint((v \ "terminus" \ "node").as[JsValue]))
-            println((v \ "terminus" \ "node" \ "extracted").as[String])
-            println((v \ "terminus" \ "node" \ "nearby" \ "code").as[String])
+            val vPath = (v \ "terminus" \ "node" \ "path").as[String]
+            val vStr = (v \ "terminus" \ "node" \ "id").as[String]
+            println(s"${k} -> ${vPath}:${vStr}")
           }
         }
       }

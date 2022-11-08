@@ -594,16 +594,12 @@ class GraphQueryService @Inject() (
     } // id is unique so this is okay-ish
     val keys = traces.map(tracing.getTerminus).distinct
 
-    // println("TRACEMAP")
-    // traceMap.foreach(println)
-
     for {
       source <- ifNonEmpty(traverses) {
         context.withSpan(
           "query.graph.elasticsearch.initialize",
           "query.graph.recursion" -> recursion.toString(),
           "query.graph.count.input" -> keys.size.toString()) { cc =>
-            // println(targeting.edgeQuery(traverses, keys, nodeHint))
             for {
               (cnt, src) <- elasticSearchService.source(
                 edgeIndex,
@@ -625,7 +621,6 @@ class GraphQueryService @Inject() (
       }
     } yield {
       source.mapConcat { item =>
-        // println(item)
         val edgeType = (item \ "_source" \ "type").as[String]
         // should never happen
         val directedEdge = typeMap.getOrElse(edgeType, throw Errors.streamError("invalid type")).edgeType
@@ -659,28 +654,16 @@ class GraphQueryService @Inject() (
           (item \ "_source" \ "id").as[String] -> item
         }.toMap
       } yield {
-        traces.map { item =>
+        traces.flatMap { item =>
           val id = tracing.getId(tracing.getTerminus(item))
-          val graphNode = sourceMap.get(id)
-          val newItem = graphNode match {
-            case Some(gn) => {
-              val newGraphNode = tracing.unitFromJs(gn)
-
-              tracing.replaceHeadNode(item, id, newGraphNode)
-            }
-            case _ => item
+          sourceMap.get(id).map { graphNode =>
+            val nextTraceUnit = tracing.unitFromJs(graphNode)
+            tracing.replaceHeadNode(item, id, nextTraceUnit)
           }
-
-          // We can do a replace on item
-          (
-            (newItem, (graphNode.map(gn => (gn \ "_source").as[JsObject]))),
-            graphNode.isDefined)
         }
       }
     }.mapConcat {
       s => s
-    }.map {
-      case ((a, _), _) => a
     }
   }
 
@@ -771,9 +754,10 @@ class GraphQueryService @Inject() (
 
             // Recalculate state for GNFA
             val currentState = gnfaTrace.state
-
+            // println(currentState, directedEdge)
+            
             val newState = currentState.toList.flatMap { s =>
-              val innerMap = transitionMap.getOrElse(s, throw new Exception(s"invalid state ${s}"))
+              val innerMap = transitionMap.getOrElse(s, Map())
 
               // TODO: we should check name and index and stuff as well
               // discard instead of erroring out

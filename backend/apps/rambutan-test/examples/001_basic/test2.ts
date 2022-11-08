@@ -5,7 +5,7 @@ class TestService {
 }
 
 
-class Test {
+export class Test {
 	constructor(private testService: TestService) {
 	}
 
@@ -16,4 +16,9 @@ class Test {
 	test() {
 		this.testService.start()
 	}
+}
+
+
+function Test2() {
+	new TestService().start();
 }

@@ -397,7 +397,7 @@ sealed abstract class GraphQuerySpec
         dataForGraphQuery(IndexType.Javascript) {
           """
           root {
-            all
+            type: "class"
           }.repeated_traverse {
             follow : [
               ?["javascript::class_property"]
@@ -415,6 +415,29 @@ sealed abstract class GraphQuerySpec
 
         println(s)
       }
+
+      println("=========")
+      println("TRAVERSE3")
+      println("=========")
+
+      await {
+        dataForGraphQuery(IndexType.Javascript) {
+          """
+          root {
+            type: "class"
+          }.linear_traverse [
+            t["javascript::class_decorator"],
+            ?["javascript::class_property"]
+          ]
+          """
+        }
+      }.foreach { trace =>
+        val s = (trace.tracesInternal :+ trace.terminus).flatMap { ti =>
+          (ti.tracesInternal :+ ti.terminus).map(_.id)
+        }.mkString("->")
+
+        println(s)
+      }      
     }
   }
 }
