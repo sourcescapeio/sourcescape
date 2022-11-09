@@ -49,7 +49,7 @@ object GraphQuery {
 
     private def numList[_: P] = {
       // implicit val whitespace = MultiLineWhitespace.whitespace
-      P("[" ~/ Lexical.numChars ~ ("," ~ Lexical.numChars).rep(1) ~ "]").map {
+      P("[" ~/ Lexical.numChars ~ ("," ~ Lexical.numChars).rep(0) ~ "]").map {
         case (first, rest) => first.toInt :: rest.toList.map(_.toInt)
       }
     }

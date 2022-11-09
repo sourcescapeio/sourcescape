@@ -24,7 +24,7 @@ trait QueryHelpers {
 
     val query = SrcLogCodeQuery.parseOrDie(q.mkString("\n"), indexType)
     for {
-      targeting <- queryTargetingService.resolveTargeting(-1, query.language, targetingRequest)
+      targeting <- queryTargetingService.resolveTargeting(-1, indexType, targetingRequest)
       builderQuery <- srcLogService.compileQuery(query)(targeting)
       result <- relationalQueryService.runQuery(
         builderQuery,
@@ -52,6 +52,25 @@ trait QueryHelpers {
       (count, _, source) <- graphQueryService.executeUnit(query, false, None)(targeting, silvousplay.api.NoopSpanContext, QueryTracing.Basic)
       data <- source.runWith {
         Sinks.ListAccum[GraphTrace[TraceUnit]]
+      }
+    } yield {
+      data
+    }
+  }
+
+  protected def dataForRelationalQuery(indexType: IndexType, targetingRequest: QueryTargetingRequest)(q: String)(implicit ec: ExecutionContext) = {
+    val relationalQueryService = app.injector.instanceOf[RelationalQueryService]
+    val queryTargetingService = app.injector.instanceOf[QueryTargetingService]
+
+    val query = RelationalQuery.parseOrDie(q)
+
+    val queryTracing = QueryTracing.Basic
+
+    for {
+      targeting <- queryTargetingService.resolveTargeting(-1, indexType, targetingRequest)
+      result <- relationalQueryService.runQuery(query, explain = false, progressUpdates = false)(targeting, silvousplay.api.NoopSpanContext, QueryScroll(None))
+      data <- result.source.runWith {
+        Sinks.ListAccum[Map[String, JsValue]]
       }
     } yield {
       data

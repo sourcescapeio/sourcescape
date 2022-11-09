@@ -290,6 +290,103 @@ sealed abstract class SrcLogQuerySpec
       }
     }
 
+    // sbt "project rambutanTest" "testOnly test.SrcLogQuerySpecCompose -- -z grouped"
+    "grouped" in {
+
+      val CurrentIndex = RepoSHAIndex(
+        id = 1,
+        orgId = -1,
+        repoName = "/data/projects",
+        repoId = LocalRepo.repoId,
+        sha = "123",
+        rootIndexId = None,
+        dirtySignature = None,
+        workId = "123",
+        deleted = false,
+        created = new DateTime().getMillis())
+
+      await {
+        runTestIndex(
+          CurrentIndex,
+          IndexType.Javascript)(
+            directory("examples/003_grouped"): _*)
+      }
+
+      // javascript::contains(FF, FINDCALL)?.
+      // javascript::type(ANYMODEL, ???).
+      // javascript::member(ANYMODEL, FINDMEM).
+      // javascript::call(FINDMEM, FINDCALL).
+
+      /**
+        * Map
+        *
+        */
+      // %SELECT(
+      //   CAT(CLASSPATH.name, '/', METHODPATH.name)
+      // ).      
+      
+      /**
+        * With count
+        *
+        */
+      // %SELECT(
+      //   CAT(CLASSPATH.name, '/', METHODPATH.name),
+      //   COUNT()
+      // ).
+
+      /**
+        * Final
+        *
+        */
+      // %SELECT(
+      //   CLASSPATH.name,
+      //   METHODPATH.name,
+      //   TRACE(THROW)
+      // ).
+
+      await {
+        dataForQuery(IndexType.Javascript, QueryTargetingRequest.AllLatest(None)) {
+          """
+            javascript::require(NEST)[name="@nestjs/common"].
+            javascript::member(NEST, NESTCONTROLLER)[name="Controller"].
+
+            javascript::class_decorator(CONTROLLERCLASS, CLASSDECORATOR).
+            javascript::call(NESTCONTROLLER, CLASSDECORATOR).
+            javascript::call_arg(CLASSDECORATOR, CLASSPATH)[index=1]?.
+
+            javascript::class_method(CONTROLLERCLASS, CLASSMETHOD).
+
+            javascript::method_decorator(CLASSMETHOD, METHODDECORATOR).
+            javascript::member(NEST, NESTMETHOD)[names={"Get", "Post", "Delete", "Put"}].
+            javascript::call(NESTMETHOD, METHODDECORATOR).
+            javascript::call_arg(METHODDECORATOR, METHODPATH)[index=1]?.
+
+            javascript::all_called(CLASSMETHOD, FF).
+
+            javascript::contains(FF, THROW).
+            javascript::throw(THROW, EXP).
+          """
+        }
+      }.foreach { d =>
+        val classMethod = d.getOrElse("CLASSMETHOD", throw new Exception("fail"))
+        // println(Json.prettyPrint((fZero \ "terminus" \ "node").as[JsValue]))
+        val path = (classMethod \ "terminus" \ "node" \ "path").as[String]
+        val startLine = (classMethod \ "terminus" \ "node" \ "range" \ "start" \ "line").as[Int]
+        val endLine = (classMethod \ "terminus" \ "node" \ "range" \ "end" \ "line").as[Int]
+        println("===================")
+        println(s"${path}:${startLine}-${endLine}")
+        println("===================")
+        println((classMethod \ "terminus" \ "node" \ "extracted").as[String])
+        d.map {
+          case (k, v) => {
+            val vPath = (v \ "terminus" \ "node" \ "path").as[String]
+            val vStr = (v \ "terminus" \ "node" \ "id").as[String]
+            println(s"${k} -> ${vPath}:${vStr}")
+          }
+        }
+      }
+    }
+
   }
 }
 
