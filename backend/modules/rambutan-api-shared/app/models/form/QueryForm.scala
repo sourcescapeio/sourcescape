@@ -1,6 +1,6 @@
 package models
 
-import models.query.{ SrcLogCodeQueryDTO, GroupingType, RelationalKey }
+import models.query.{ SrcLogCodeQueryDTO, RelationalKey }
 import play.api.libs.json._
 import silvousplay.imports._
 import play.api.data._
@@ -26,17 +26,6 @@ case class BuilderQueryForm(
 
 object BuilderQueryForm {
   implicit val format = Json.format[BuilderQueryForm]
-}
-
-case class GroupedQueryForm(
-  query:    SrcLogCodeQueryDTO,
-  grip:     String,
-  grouping: GroupingType,
-  selected: List[String],
-  repos:    Option[List[String]])
-
-object GroupedQueryForm {
-  implicit val format = Json.format[GroupedQueryForm]
 }
 
 case class SnapshotQueryForm(

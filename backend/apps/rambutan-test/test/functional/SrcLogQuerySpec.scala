@@ -82,7 +82,7 @@ sealed abstract class SrcLogQuerySpec
     await(work)
   }
 
-  "Scanning directories" should {
+  "SrcLog queries" should {
 
     // sbt "project rambutanTest" "testOnly test.SrcLogQuerySpecCompose -- -z basic"
     "basic" in {
@@ -318,26 +318,26 @@ sealed abstract class SrcLogQuerySpec
       // javascript::call(FINDMEM, FINDCALL).
 
       /**
-        * Map
-        *
-        */
+       * Map
+       *
+       */
       // %SELECT(
       //   CAT(CLASSPATH.name, '/', METHODPATH.name)
-      // ).      
-      
+      // ).
+
       /**
-        * With count
-        *
-        */
+       * With count
+       *
+       */
       // %SELECT(
       //   CAT(CLASSPATH.name, '/', METHODPATH.name),
       //   COUNT()
       // ).
 
       /**
-        * Final
-        *
-        */
+       * Final
+       *
+       */
       // %SELECT(
       //   CLASSPATH.name,
       //   METHODPATH.name,

@@ -23,8 +23,6 @@ case class KeysQueryTargeting(
   diffMap:    Map[Int, List[String]],
   fileFilter: Option[List[String]]) extends QueryTargeting[TraceUnit] {
 
-  val resultType = QueryResultType.GraphTrace
-
   val nodeIndexName = indexType.nodeIndexName
   val edgeIndexName = indexType.edgeIndexName
 

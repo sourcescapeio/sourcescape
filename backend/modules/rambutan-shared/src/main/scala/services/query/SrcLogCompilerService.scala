@@ -167,7 +167,7 @@ class SrcLogCompilerService @Inject() (
     }
 
     RelationalQuery(
-      RelationalSelect.Select(selects),
+      selects.map(s => RelationalSelect.Column(s)),
       KeyedQuery(
         root.variable,
         root.getQuery),

@@ -41,8 +41,6 @@ trait QueryTargeting[T] {
         must = inner) :: Nil)
   }
 
-  val resultType: QueryResultType
-
   /**
    * Graph
    */

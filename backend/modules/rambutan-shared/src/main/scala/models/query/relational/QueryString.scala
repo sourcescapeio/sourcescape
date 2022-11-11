@@ -17,21 +17,23 @@ object QueryString {
     }
   }
 
+  private def stringifySelect(select: RelationalSelect): String = {
+    select match {
+      case RelationalSelect.Column(c)          => c
+      case RelationalSelect.Member(name, c, m) => c.id + "." + m.identifier + name.map(" AS " + _).getOrElse("")
+      case RelationalSelect.Operation(name, op, members) => {
+        op.identifier + "(" + members.map(stringifySelect).mkString(", ") + ")" + name.map(" AS " + _).getOrElse("")
+      }
+    }
+  }
+
   def stringify(item: RelationalQuery) = {
     val ordering = item.forceOrdering match {
       case Some(o) => "%ordering(" + o.mkString(",") + ")"
       case _       => ""
     }
 
-    val select = "SELECT " + (item.select match {
-      case RelationalSelect.SelectAll => "*"
-      // case RelationalSelect.CountAll       => "COUNT(*)"
-      case RelationalSelect.Select(c) => c.mkString(",")
-      // case RelationalSelect.Distinct(c, _) => s"DISTINCT ${c.mkString(",")}"
-      // case RelationalSelect.GroupedCount(g, t, c) => {
-      //   s"GROUPED_COUNT_BY(${g}.${t.identifier}, ${c.mkString(", ")})"
-      // }
-    })
+    val select = "SELECT " + item.select.map(stringifySelect).mkString(", ")
 
     val from = "FROM " + stringifyGraphQuery(item.root.query) + " AS " + item.root.key
 

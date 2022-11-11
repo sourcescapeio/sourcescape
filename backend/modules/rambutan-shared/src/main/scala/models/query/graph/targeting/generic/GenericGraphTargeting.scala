@@ -8,8 +8,6 @@ import models.graph._
 
 case class GenericGraphTargeting(orgId: Int) extends QueryTargeting[GenericGraphUnit] {
 
-  val resultType = QueryResultType.GenericGraphTrace
-
   val nodeIndexName = GenericGraphNode.globalIndex
   val edgeIndexName = GenericGraphEdge.globalIndex
 

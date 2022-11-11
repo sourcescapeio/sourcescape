@@ -16,14 +16,12 @@ import silvousplay.api.SpanContext
 
 @Singleton
 class RepoIndexDataService @Inject() (
-  dao:                   dal.SharedDataAccessLayer,
-  repoDataService:       RepoDataService,
-  srcLogQueryService:    SrcLogQueryService,
-  srcLogCompilerService: SrcLogCompilerService,
-  graphQueryService:     GraphQueryService,
-  nodeHydrationService:  NodeHydrationService,
-  indexerService:        IndexerService,
-  configuration:         play.api.Configuration)(implicit ec: ExecutionContext, mat: akka.stream.Materializer) {
+  dao:                  dal.SharedDataAccessLayer,
+  repoDataService:      RepoDataService,
+  graphQueryService:    GraphQueryService,
+  nodeHydrationService: NodeHydrationService,
+  indexerService:       IndexerService,
+  configuration:        play.api.Configuration)(implicit ec: ExecutionContext, mat: akka.stream.Materializer) {
 
   /**
    *
