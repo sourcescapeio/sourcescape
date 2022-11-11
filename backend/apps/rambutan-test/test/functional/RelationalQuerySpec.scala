@@ -83,7 +83,6 @@ sealed abstract class RelationalQuerySpec
   }
 
   "Relational Queries" should {
-    // sbt "project rambutanTest" "testOnly test.RelationalQuerySpecCompose -- -z SELECT"
     "SELECT" in {
 
       val CurrentIndex = RepoSHAIndex(
@@ -131,22 +130,94 @@ sealed abstract class RelationalQuerySpec
         val b = d.getOrElse("RR", throw new Exception("fail"))
 
         println(s"${a.as[String]}||${b.as[String]}")
+      }
+    }
 
-        // println(Json.prettyPrint((fZero \ "terminus" \ "node").as[JsValue]))
-        // val path = (classMethod \ "terminus" \ "node" \ "path").as[String]
-        // val startLine = (classMethod \ "terminus" \ "node" \ "range" \ "start" \ "line").as[Int]
-        // val endLine = (classMethod \ "terminus" \ "node" \ "range" \ "end" \ "line").as[Int]
-        // println("===================")
-        // println(s"${path}:${startLine}-${endLine}")
-        // println("===================")
-        // println((classMethod \ "terminus" \ "node" \ "extracted").as[String])
-        // d.map {
-        //   case (k, v) => {
-        //     val vPath = (v \ "terminus" \ "node" \ "path").as[String]
-        //     val vStr = (v \ "terminus" \ "node" \ "id").as[String]
-        //     println(s"${k} -> ${vPath}:${vStr}")
-        //   }
-        // }
+    // sbt "project rambutanTest" "testOnly test.RelationalQuerySpecCompose -- -z groupby"
+    "groupby" in {
+
+      val CurrentIndex = RepoSHAIndex(
+        id = 1,
+        orgId = -1,
+        repoName = "/data/projects",
+        repoId = LocalRepo.repoId,
+        sha = "123",
+        rootIndexId = None,
+        dirtySignature = None,
+        workId = "123",
+        deleted = false,
+        created = new DateTime().getMillis())
+
+      await {
+        runTestIndex(
+          CurrentIndex,
+          IndexType.Javascript)(
+            directory("examples/003_grouped"): _*)
+      }
+
+      {
+        val (results, columns) = await {
+          dataForRelationalQuery(IndexType.Javascript, QueryTargetingRequest.AllLatest(None)) {
+            // should be able to group by both id and name
+            """
+              SELECT
+                COUNT(Method.name) AS Method_Count,
+                COUNT(Method.name) AS Method_Count_Again
+              FROM
+                root {
+                  type: "class"
+                } AS Class
+              TRACE join[Class]
+                .linear_traverse [
+                  t["javascript::class_method"]
+                ] AS Method
+            """
+          }
+        }
+
+        columns.foreach(i => println(Json.toJson(i)))
+
+        results.foreach { d =>
+          val a = d.getOrElse("Method_Count", throw new Exception("fail"))
+          val b = d.getOrElse("Method_Count_Again", throw new Exception("fail"))
+
+          println(s"${a.as[Int]}||${b.as[Int]}")
+        }
+      }
+
+      {
+        val (results, columns) = await {
+          dataForRelationalQuery(IndexType.Javascript, QueryTargetingRequest.AllLatest(None)) {
+            // should be able to group by both id and name
+            """
+              SELECT
+                Class,
+                Class.name AS Class_Name,
+                COUNT(Method.name) AS Method_Count,
+                COUNT(Method.name) AS Method_Count_2
+              FROM
+                root {
+                  type: "class"
+                } AS Class
+              TRACE join[Class]
+                .linear_traverse [
+                  t["javascript::class_method"]
+                ] AS Method
+            """
+          }
+        }
+
+        columns.foreach(i => println(Json.toJson(i)))
+
+        results.foreach { d =>
+          val aa = d.getOrElse("Class", throw new Exception("fail"))
+          val a = d.getOrElse("Class_Name", throw new Exception("fail"))
+          val b = d.getOrElse("Method_Count", throw new Exception("fail"))
+          val c = d.getOrElse("Method_Count_2", throw new Exception("fail"))
+
+          println(s"${a.as[String]}||${b.as[Int]}||${c.as[Int]}")
+          println((aa \ "terminus" \ "node" \ "extracted").as[String].take(100))
+        }
       }
     }
   }

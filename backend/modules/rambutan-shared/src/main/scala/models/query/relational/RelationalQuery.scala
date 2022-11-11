@@ -124,11 +124,11 @@ object RelationalQuery {
 
     private def column[_: P] = columnChars.map {
       case t => RelationalSelect.Column(t)
-    }
+    }.opaque("<column>")
 
     private def memberType[_: P] = {
       implicit val whitespace = NoWhitespace.noWhitespaceImplicit
-      P(CharIn("a-z").rep(1).!).map(i => MemberType.withNameUnsafe(i))
+      P(StringIn("name", "id").!).map(i => MemberType.withNameUnsafe(i))
     }
 
     private def member[_: P] = {
@@ -142,29 +142,30 @@ object RelationalQuery {
       implicit val whitespace = SingleLineWhitespace.whitespace
       P(member ~ ("AS" ~/ columnChars).?).map {
         case (mem, name) => mem.copy(name = name)
-      }
+      }.opaque("<member>")
     }
 
     private def operationType[_: P] = {
       implicit val whitespace = NoWhitespace.noWhitespaceImplicit
-      P(CharIn("A-Z").rep(1).!).map(i => OperationType.withNameUnsafe(i))
+      // Unfortunately need to write these manually
+      P(StringIn("COUNT", "CAT").!).map(i => OperationType.withNameUnsafe(i))
     }
 
     private def operationField[_: P] = {
       implicit val whitespace = SingleLineWhitespace.whitespace
-      P(member | operation | column)
+      P(member | operation)
     }
 
     private def operation[_: P]: P[RelationalSelect.Operation] = {
       implicit val whitespace = SingleLineWhitespace.whitespace
-      P(operationType ~ "(" ~/ operationField ~ ("," ~/ operationField).rep(0) ~ ")" ~ ("AS" ~/ columnChars).?).map {
+      P(operationType ~ "(" ~ operationField ~ ("," ~ operationField).rep(0) ~ ")" ~ ("AS" ~/ columnChars).?).map {
         case (o, head, rest, n) => RelationalSelect.Operation(n, o, head :: rest.toList)
       }
     }
 
     private def selectField[_: P] = {
       implicit val whitespace = SingleLineWhitespace.whitespace
-      P(memberField | operation | column)
+      P(operation | memberField | column)
     }
 
     def setting[_: P] = {
@@ -193,7 +194,7 @@ object RelationalQuery {
       scrollDirective.? ~/
       orderingDirective.? ~/
       // maybe directives
-      "SELECT " ~/ Select.setting ~/
+      "SELECT" ~/ Select.setting ~/
       "FROM" ~/ keyedGraph ~/
       ("TRACE" ~/ keyedTrace).rep(0) ~/
       // these we can compress as a where?

@@ -17,7 +17,7 @@ object QueryString {
     }
   }
 
-  private def stringifySelect(select: RelationalSelect): String = {
+  def stringifySelect(select: RelationalSelect): String = {
     select match {
       case RelationalSelect.Column(c)          => c
       case RelationalSelect.Member(name, c, m) => c.id + "." + m.identifier + name.map(" AS " + _).getOrElse("")

@@ -11,8 +11,7 @@ object Dependencies {
     // TODO: some issues in upgrading due to Jackson dependencies
     val PostgresSlick = "0.19.7"
 
-    // TODO: 2.6.19 once we upgrade Play
-    val Akka = "2.5.31"
+    val Akka = "2.6.20"
     val AkkaHttp = "10.1.15"
     // val Alpakka = "2.0.2"
 
