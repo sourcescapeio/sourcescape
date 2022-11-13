@@ -49,6 +49,14 @@ object QueryString {
       "INTERSECT " + i.mkString(", ")
     }.mkString("\n")
 
+    val orderBy = item.orderBy match {
+      case Nil => ""
+      case some => some.map {
+        case RelationalOrder(k, true) => s"${k} DESC"
+        case RelationalOrder(k, _)    => k
+      }.mkString(", ")
+    }
+
     val offset = item.offset.map { i =>
       "OFFSET " + i
     }.getOrElse("")
@@ -64,6 +72,7 @@ object QueryString {
       traces,
       having,
       intersect,
+      orderBy,
       offset,
       limit).mkString("\n")
   }

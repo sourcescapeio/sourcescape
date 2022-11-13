@@ -155,6 +155,7 @@ sealed abstract class RelationalQuerySpec
             directory("examples/003_grouped"): _*)
       }
 
+      // Group all
       {
         val (results, columns) = await {
           dataForRelationalQuery(IndexType.Javascript, QueryTargetingRequest.AllLatest(None)) {
@@ -185,10 +186,10 @@ sealed abstract class RelationalQuerySpec
         }
       }
 
+      // Group by key
       {
         val (results, columns) = await {
           dataForRelationalQuery(IndexType.Javascript, QueryTargetingRequest.AllLatest(None)) {
-            // should be able to group by both id and name
             """
               SELECT
                 Class,
@@ -217,6 +218,38 @@ sealed abstract class RelationalQuerySpec
 
           println(s"${a.as[String]}||${b.as[Int]}||${c.as[Int]}")
           println((aa \ "terminus" \ "node" \ "extracted").as[String].take(100))
+        }
+      }
+
+      // Ordering
+      {
+        val (results, columns) = await {
+          dataForRelationalQuery(IndexType.Javascript, QueryTargetingRequest.AllLatest(None)) {
+            // should be able to group by both id and name
+            """
+              SELECT
+                Method.name AS Method_Name,
+                COUNT(Method.name) AS Method_Count
+              FROM
+                root {
+                  type: "class"
+                } AS Class
+              TRACE join[Class]
+                .linear_traverse [
+                  t["javascript::class_method"]
+                ] AS Method
+              ORDER BY Method_Count DESC, Method_Name
+            """
+          }
+        }
+
+        columns.foreach(i => println(Json.toJson(i)))
+
+        results.foreach { d =>
+          val a = d.getOrElse("Method_Name", throw new Exception("fail"))
+          val b = d.getOrElse("Method_Count", throw new Exception("fail"))
+
+          println(s"${a.as[String]}||${b.as[Int]}")
         }
       }
     }

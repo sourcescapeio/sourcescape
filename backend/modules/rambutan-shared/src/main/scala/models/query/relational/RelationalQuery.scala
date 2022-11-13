@@ -21,6 +21,8 @@ object HavingFilter extends Plenumeration[HavingFilter] {
 
 }
 
+case class RelationalOrder(key: String, isDesc: Boolean)
+
 case class RelationalQuery(
   select:        List[RelationalSelect],
   root:          KeyedQuery[GraphQuery],
@@ -28,6 +30,7 @@ case class RelationalQuery(
   having:        Map[String, HavingFilter],
   havingOr:      Map[String, HavingFilter],
   intersect:     List[List[String]],
+  orderBy:       List[RelationalOrder],
   offset:        Option[Int],
   limit:         Option[Int],
   forceOrdering: Option[List[String]]) {
@@ -67,7 +70,13 @@ case class RelationalQuery(
     val columns = select.flatMap(_.columns)
     columns.foreach { s =>
       if (!keySet.contains(s)) {
-        throw Errors.badRequest("invalid.select", s"Invalid key ${s} in select")
+        throw Errors.badRequest("invalid.select", s"Invalid key ${s} in SELECT")
+      }
+    }
+
+    orderBy.foreach { o =>
+      if (!select.map(_.key).contains(o.key)) {
+        throw Errors.badRequest("invalid.orderby", s"Invalid key ${o.key} in ORDER BY")
       }
     }
 
@@ -122,7 +131,7 @@ object RelationalQuery {
       P(CharIn("A-Za-z0-9_").rep(1).!) //
     }
 
-    private def column[_: P] = columnChars.map {
+    def column[_: P] = columnChars.map {
       case t => RelationalSelect.Column(t)
     }.opaque("<column>")
 
@@ -131,7 +140,7 @@ object RelationalQuery {
       P(StringIn("name", "id").!).map(i => MemberType.withNameUnsafe(i))
     }
 
-    private def member[_: P] = {
+    def member[_: P] = {
       implicit val whitespace = NoWhitespace.noWhitespaceImplicit
       P(column ~ "." ~/ memberType).map {
         case (c, m) => RelationalSelect.Member(name = None, c, m)
@@ -163,17 +172,45 @@ object RelationalQuery {
       }
     }
 
-    private def selectField[_: P] = {
+    def selectField[_: P] = {
       implicit val whitespace = SingleLineWhitespace.whitespace
       P(operation | memberField | column)
     }
 
-    def setting[_: P] = {
+    def stanza[_: P] = {
       // implicit val whitespace = MultiLineWhitespace.whitespace
       P(selectField ~ ("," ~/ selectField).rep(0)).map {
         case (first, rest) => first :: rest.toList
       }
     }
+  }
+
+  object OrderBy {
+    private def orderingField[_: P] = {
+      implicit val whitespace = NoWhitespace.noWhitespaceImplicit
+      // Select.member additional support?
+      P(Select.column)
+    }
+
+    private def maybeDesc[_: P] = {
+      implicit val whitespace = NoWhitespace.noWhitespaceImplicit
+      P("DESC").map(_ => true)
+    }
+
+    private def orderingSegment[_: P] = {
+      implicit val whitespace = NoWhitespace.noWhitespaceImplicit
+      P(orderingField ~ (" ".rep(1) ~ maybeDesc).?).map {
+        case (field, isDesc) => RelationalOrder(field.key, isDesc.getOrElse(false))
+      }
+    }
+
+    def stanza[_: P] = {
+      implicit val whitespace = SingleLineWhitespace.whitespace
+      P(orderingSegment ~ ("," ~/ orderingSegment).rep(0)).map {
+        case (head, rest) => head :: rest.toList
+      }
+    }
+
   }
 
   // directives
@@ -194,18 +231,19 @@ object RelationalQuery {
       scrollDirective.? ~/
       orderingDirective.? ~/
       // maybe directives
-      "SELECT" ~/ Select.setting ~/
+      "SELECT" ~/ Select.stanza ~/
       "FROM" ~/ keyedGraph ~/
       ("TRACE" ~/ keyedTrace).rep(0) ~/
       // these we can compress as a where?
       ("HAVING " ~/ havingStanza).rep(0) ~/
       ("HAVING_OR " ~/ havingStanza).rep(0) ~/
       ("INTERSECT" ~/ intersectStanza).rep(0) ~/
+      ("ORDER BY" ~/ OrderBy.stanza).? ~/
       //
       ("OFFSET" ~/ Lexical.numChars).? ~/
       ("LIMIT" ~/ Lexical.numChars).? ~/
       End).map {
-      case (scrollKey, ordering, select, root, traces, having, havingOr, intersect, offset, limit) => {
+      case (scrollKey, ordering, select, root, traces, having, havingOr, intersect, orderBy, offset, limit) => {
         (
           scrollKey,
           RelationalQuery(
@@ -215,6 +253,7 @@ object RelationalQuery {
             having.toMap,
             havingOr.toMap,
             intersect.toList,
+            orderBy.getOrElse(Nil),
             offset.map(_.toInt),
             limit.map(_.toInt),
             ordering))

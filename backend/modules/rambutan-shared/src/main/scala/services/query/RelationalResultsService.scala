@@ -82,7 +82,7 @@ class RelationalResultsService @Inject() (
         }
 
         aggregate match {
-          case Nil => Future.successful {
+          case Nil if query.orderBy.isEmpty => Future.successful {
             hydrated.map { mm =>
               query.select.map { s =>
                 s.key -> s.applySelect(mm)
@@ -93,7 +93,7 @@ class RelationalResultsService @Inject() (
             runGroupedAll(hydrated, aggregators)
           }
           case aggregators => {
-            runGrouped(hydrated, notAggregate, aggregators)
+            runGrouped(hydrated, notAggregate, aggregators, query.orderBy)
           }
         }
       }
@@ -215,7 +215,8 @@ class RelationalResultsService @Inject() (
   private def runGrouped(
     in:         Source[Map[String, JsValue], Any],
     groupBy:    List[RelationalSelect],
-    aggregates: List[RelationalSelect.GroupedOperation]): Future[Source[Map[String, JsValue], Any]] = {
+    aggregates: List[RelationalSelect.GroupedOperation],
+    orderBy:    List[RelationalOrder]): Future[Source[Map[String, JsValue], Any]] = {
 
     // Coerce string
     val groupers = groupBy map {
@@ -250,7 +251,6 @@ class RelationalResultsService @Inject() (
     }
 
     // All grouping is in memory
-
     type GroupMapValue = (List[(String, JsValue)], Map[String, JsValue])
     val groupingFlow = Sink.fold[Map[String, GroupMapValue], GroupedIn](Map()) {
       case (acc, next) => {
@@ -287,23 +287,31 @@ class RelationalResultsService @Inject() (
 
     for {
       hydrationTable <- hydrationTableF
-      groupedData <- groupedDataF
+      groupedData <- groupedDataF.map(_.toList.map {
+        case (_, (k, v)) => k.toMap ++ v
+      })
+      // do sort here
+      sorted = orderBy match {
+        case Nil => groupedData
+        case some => {
+          val ordering = createOrdering(orderBy)
+          groupedData.sorted(ordering)
+        }
+      }
     } yield {
-      Source(groupedData).mapAsync(4) {
-        case (_, (keys, values)) => {
-          for {
-            keysMapped <- Source(keys).mapAsync(20) {
-              case (k, v) if hydrationLookupSet.contains(k) => {
-                val id = v.as[String]
-                hydrationTable.getOrError((k, id)).map { vv =>
-                  (k, vv)
-                }
+      Source(sorted).mapAsync(4) { vv =>
+        for {
+          keysMapped <- Source(vv).mapAsync(20) {
+            case (k, v) if hydrationLookupSet.contains(k) => {
+              val id = v.as[String]
+              hydrationTable.getOrError((k, id)).map { vv =>
+                (k, vv)
               }
-              case o => Future.successful(o)
-            }.runWith(Sinks.ListAccum)
-          } yield {
-            values ++ keysMapped.toMap
-          }
+            }
+            case o => Future.successful(o)
+          }.runWith(Sinks.ListAccum)
+        } yield {
+          keysMapped.toMap
         }
       }
     }
@@ -321,32 +329,30 @@ class RelationalResultsService @Inject() (
     })
   }
 
-  //   // approach >> we could stream into multiple groups assuming that number of groups is small
-  //   // groups
+  private def createOrdering(in: List[RelationalOrder]) = {
+    new Ordering[Map[String, JsValue]] {
+      def compare(x: Map[String, JsValue], y: Map[String, JsValue]): Int = {
+        in.foreach { ro =>
+          (x.get(ro.key), y.get(ro.key)) match {
+            case (Some(xV), Some(yV)) => {
+              // ro.isDesc
+              val compared = Json.stringify(xV).compareTo(Json.stringify(yV))
+              if (compared =/= 0) {
+                if (ro.isDesc) {
+                  return -compared
+                } else {
+                  return compared
+                }
+              }
 
-  //   // create a grouper per groupBy
+              ()
+            }
+            case _ => ()
+          }
+        }
 
-  //   // if there's more than one we need to join and align
-  //   val combined = Sink.combine(aggregators)(Broadcast[Map[String, JsValue]](_))
-
-  //   for {
-  //     v <- Future.sequence(in.runWith(combined))
-  //   } yield {
-  //     ()
-  //   }
-
-  //   // join groupers by
-
-  //   // stream source into them
-
-  //   Future.successful {
-
-  //     in
-  //     // in.map { mm =>
-  //     //   query.select.map { s =>
-  //     //     s.key -> s.applySelect(mm)
-  //     //   }.toMap
-  //     // }
-  //   }
-  // }
+        0
+      }
+    }
+  }
 }

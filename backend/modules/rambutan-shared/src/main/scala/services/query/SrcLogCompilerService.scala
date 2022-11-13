@@ -177,6 +177,7 @@ class SrcLogCompilerService @Inject() (
       intersections.map {
         case (a, b) => a :: b :: Nil
       },
+      orderBy = Nil,
       offset = None,
       limit = None,
       forceOrdering = None)
