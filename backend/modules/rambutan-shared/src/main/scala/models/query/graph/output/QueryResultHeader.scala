@@ -14,7 +14,6 @@ object QueryResultType extends Plenumeration[QueryResultType] {
 
   // relational layer. set at targeting level?
   case object GraphTrace extends QueryResultType("graph_trace")
-  // case object GenericGraphTrace extends QueryResultType("generic_graph_trace")
   case object GraphTraceList extends QueryResultType("graph_trace_list")
 
   // members

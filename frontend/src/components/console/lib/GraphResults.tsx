@@ -5,9 +5,14 @@ import { Link } from 'react-router-dom';
 import {
   Button,
   HTMLTable,
+  Toaster,
 } from '@blueprintjs/core';
 import Container from 'react-bootstrap/Container';
 import { getComponentForType } from './ComponentMap'
+
+import copy from 'copy-to-clipboard';
+
+const toaster = Toaster.create();
 
 export function GraphResultsComponent(props: {
   columns: any[],
@@ -29,7 +34,7 @@ export function GraphResultsComponent(props: {
     {c.name}
   </th>));
 
-  let dataFlat = []
+  let dataFlat: any[] = []
 
   if (isDiff) {
     const diffData = props.diffData || {};
@@ -50,10 +55,37 @@ export function GraphResultsComponent(props: {
 
   const total = isDiff ? Object.keys(props.diffData).length : props.data.length;
 
+
+  async function copy() {
+    if (navigator.clipboard) {
+      const vals = dataFlat.map((d: any) => {
+        const joined = columns.map((c) => (d[c.name])).join('\t');
+        return `${joined}\n`;
+      });
+
+      await navigator.clipboard.write([
+        new ClipboardItem({'text/plain': new Blob(vals, {type: 'text/plain'})})
+      ]);
+
+      toaster.show({
+        message: `Copied ${dataFlat.length} values to clipboard`,
+        intent: "success",
+        timeout: 3000
+      })
+    } else {
+      toaster.show({
+        message: "Failed to copy",
+        intent: "danger",
+        timeout: 3000
+      })
+    }
+  }
+
   return <Container>
     { props.returnTime && <pre>Returned in {props.returnTime} ms</pre> }
     { props.finishTime && <pre>Finished in {props.finishTime} ms</pre> }
     <pre>{Math.min(props.size, total)} of {total}</pre>
+    <Button icon="clipboard" onClick={copy}/>
     <HTMLTable>
       <thead>
         <tr>{columnsRendered}</tr>

@@ -29,10 +29,16 @@ const GraphTraceResultComponent = (props: any) => {
   </div>
 };
 
-const GenericGraphTraceResultComponent = (props: any) => {
-  return <div style={{display: 'flex'}}>
-    <GenericNodeResultComponent displayEdge={false} terminal={true} {...props.terminus.node}/>
-  </div>
+const GraphTraceListComponent = (props: any[]) => {
+  return <Container>
+    {props.map((p) => {
+      return <Row>
+        <Col>
+          <NodeResultComponent displayEdge={false} terminal={true} {...p.terminus.node}/>
+        </Col>
+      </Row>
+    })}
+  </Container>
 };
 
 
@@ -144,13 +150,13 @@ const DefaultComponent = (props: any) => {
   return <pre>{JSON.stringify(props, null, 2)}</pre>
 };
 
-type ComponentType = 'node_trace' | 'graph_trace' | 'generic_graph_trace' | 'number' | 'string';
+type ComponentType = 'node_trace' | 'graph_trace' | 'graph_trace_list' | 'number' | 'string';
 
 const COMPONENT_MAP = {
   //
   node_trace: NodeTraceResultComponent,
   graph_trace: GraphTraceResultComponent,
-  generic_graph_trace: GenericGraphTraceResultComponent,
+  graph_trace_list: GraphTraceListComponent,
   // 
   string: RawTextComponent,
   number: RawTextComponent,
