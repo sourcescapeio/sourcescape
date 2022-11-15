@@ -15,6 +15,7 @@ import play.api.libs.json._
 import org.mockito.MockitoSugar
 import silvousplay.api.NoopSpanContext
 import silvousplay.Hashing
+import models.ESQuery
 
 trait IndexHelpers {
   self: RambutanSpec =>
@@ -95,9 +96,18 @@ trait IndexHelpers {
       _ <- elasticSearchService.refresh(javascriptSymbolIndex)
       _ <- elasticSearchService.refresh(javascriptLookupIndex)
       _ = println("FINISHED INDEXING")
-
       _ <- indexerWorker.runLinker(queueItem, data.toMap)(NoopSpanContext)
       // force refresh to get data to propagate
+      nodeCount <- elasticSearchService.count(IndexType.Javascript.nodeIndexName, ESQuery.matchAll)
+      edgeCount <- elasticSearchService.count(IndexType.Javascript.edgeIndexName, ESQuery.matchAll)
+      symbolCount <- elasticSearchService.count(IndexType.Javascript.symbolIndexName(indexId), ESQuery.matchAll)
+      lookupCount <- elasticSearchService.count(IndexType.Javascript.lookupIndexName(indexId), ESQuery.matchAll)
+      _ = {
+        println("NODE", nodeCount)
+        println("EDGE", edgeCount)
+        println("SYMBOL", symbolCount)
+        println("LOOKUP", lookupCount)
+      }
       _ <- elasticSearchService.dropIndex(javascriptSymbolIndex)
       _ <- elasticSearchService.dropIndex(javascriptLookupIndex)
       _ <- elasticSearchService.refresh(indexType.nodeIndexName)

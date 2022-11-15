@@ -318,32 +318,9 @@ sealed abstract class SrcLogQuerySpec
       // javascript::call(FINDMEM, FINDCALL).
 
       /**
-       * Map
-       *
-       */
-      // %SELECT(
-      //   CAT(CLASSPATH.name, '/', METHODPATH.name)
-      // ).
-
-      /**
-       * With count
-       *
-       */
-      // %SELECT(
-      //   CAT(CLASSPATH.name, '/', METHODPATH.name),
-      //   COUNT()
-      // ).
-
-      /**
        * Final
        *
        */
-      // %SELECT(
-      //   CLASSPATH.name,
-      //   METHODPATH.name,
-      //   TRACE(THROW)
-      // ).
-
       await {
         dataForQuery(IndexType.Javascript, QueryTargetingRequest.AllLatest(None)) {
           """
@@ -352,6 +329,7 @@ sealed abstract class SrcLogQuerySpec
 
             javascript::class_decorator(CONTROLLERCLASS, CLASSDECORATOR).
             javascript::call(NESTCONTROLLER, CLASSDECORATOR).
+
             javascript::call_arg(CLASSDECORATOR, CLASSPATH)[index=1]?.
 
             javascript::class_method(CONTROLLERCLASS, CLASSMETHOD).
@@ -365,28 +343,85 @@ sealed abstract class SrcLogQuerySpec
 
             javascript::contains(FF, THROW).
             javascript::throw(THROW, EXP).
+
+            %SELECT(
+              NESTMETHOD.name,
+              CLASSPATH.name,
+              METHODPATH.name AS MethodName,
+              COLLECT(THROW) AS Throws
+            ).
           """
         }
       }.foreach { d =>
-        val classMethod = d.getOrElse("CLASSMETHOD", throw new Exception("fail"))
+        val methodName = d.getOrElse("MethodName", throw new Exception("fail"))
+        val throws = d.getOrElse("Throws", throw new Exception("fail"))
+        println(methodName, throws.as[List[JsValue]].length)
         // println(Json.prettyPrint((fZero \ "terminus" \ "node").as[JsValue]))
-        val path = (classMethod \ "terminus" \ "node" \ "path").as[String]
-        val startLine = (classMethod \ "terminus" \ "node" \ "range" \ "start" \ "line").as[Int]
-        val endLine = (classMethod \ "terminus" \ "node" \ "range" \ "end" \ "line").as[Int]
-        println("===================")
-        println(s"${path}:${startLine}-${endLine}")
-        println("===================")
-        println((classMethod \ "terminus" \ "node" \ "extracted").as[String])
-        d.map {
-          case (k, v) => {
-            val vPath = (v \ "terminus" \ "node" \ "path").as[String]
-            val vStr = (v \ "terminus" \ "node" \ "id").as[String]
-            println(s"${k} -> ${vPath}:${vStr}")
-          }
-        }
+        // val path = (classMethod \ "terminus" \ "node" \ "path").as[String]
+        // val startLine = (classMethod \ "terminus" \ "node" \ "range" \ "start" \ "line").as[Int]
+        // val endLine = (classMethod \ "terminus" \ "node" \ "range" \ "end" \ "line").as[Int]
+        // println("===================")
+        // println(s"${path}:${startLine}-${endLine}")
+        // println("===================")
+        // println((classMethod \ "terminus" \ "node" \ "extracted").as[String])
+        // d.map {
+        //   case (k, v) => {
+        //     val vPath = (v \ "terminus" \ "node" \ "path").as[String]
+        //     val vStr = (v \ "terminus" \ "node" \ "id").as[String]
+        //     println(s"${k} -> ${vPath}:${vStr}")
+        //   }
+        // }
       }
-    }
 
+      // {
+      //   val (results, columns) = await {
+      //     dataForRelationalQuery(IndexType.Javascript, QueryTargetingRequest.AllLatest(None)) {
+      //       """
+      //         SELECT NESTCONTROLLER
+      //         FROM root{
+      //           type : ["member"],
+      //           name : ["Controller"]
+      //         } AS NESTCONTROLLER
+      //         TRACE join[NESTCONTROLLER]
+      //           .linear_traverse [
+      //             t[
+      //               {
+      //                 type : "javascript::member_of".reverse,
+      //                 name : ["Controller"]
+      //               }
+      //             ]
+      //           ]
+      //           .linear_traverse [
+      //             *["javascript::declared_as".reverse,"javascript::assigned_as".reverse,"javascript::reference_of".reverse]
+      //           ]
+      //           .node_check {
+      //             type : ["require"],
+      //             name : ["@nestjs/common"]
+      //           } AS NEST
+      //         TRACE join[NESTCONTROLLER]
+      //           .linear_traverse [
+      //             *["javascript::declared_as","javascript::assigned_as","javascript::reference_of"],
+      //             t["javascript::call_of"]
+      //           ]
+      //           .node_check {
+      //             type : ["call"]
+      //           } AS CLASSDECORATOR
+      //         TRACE join[CLASSDECORATOR]
+      //           .linear_traverse [
+      //             t["javascript::class_decorator".reverse]
+      //           ]
+      //           .node_check {
+      //             type : ["class"]
+      //           } AS CONTROLLERCLASS
+      //       """
+      //     }
+      //   }
+
+      //   results.foreach { d =>
+      //     println(d)
+      //   }
+      // }
+    }
   }
 }
 

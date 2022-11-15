@@ -137,7 +137,7 @@ object RelationalQuery {
 
     private def memberType[_: P] = {
       implicit val whitespace = NoWhitespace.noWhitespaceImplicit
-      P(StringIn("name", "id").!).map(i => MemberType.withNameUnsafe(i))
+      P(StringIn("name", "id", "extracted", "path", "repo").!).map(i => MemberType.withNameUnsafe(i))
     }
 
     def member[_: P] = {
@@ -157,12 +157,7 @@ object RelationalQuery {
     private def operationType[_: P] = {
       implicit val whitespace = NoWhitespace.noWhitespaceImplicit
       // Unfortunately need to write these manually
-      P(StringIn("COUNT", "CAT").!).map(i => OperationType.withNameUnsafe(i))
-    }
-
-    private def operationField[_: P] = {
-      implicit val whitespace = SingleLineWhitespace.whitespace
-      P(member | operation)
+      P(StringIn("CAT", "PATHCAT").!).map(i => OperationType.withNameUnsafe(i)).opaque("<operation>")
     }
 
     private def operation[_: P]: P[RelationalSelect.Operation] = {
@@ -172,9 +167,26 @@ object RelationalQuery {
       }
     }
 
-    def selectField[_: P] = {
+    def operationField[_: P] = {
       implicit val whitespace = SingleLineWhitespace.whitespace
       P(operation | memberField | column)
+    }
+
+    private def groupedOperationType[_: P] = {
+      implicit val whitespace = NoWhitespace.noWhitespaceImplicit
+      P(StringIn("COUNT", "COLLECT").!).map(i => GroupedOperationType.withNameUnsafe(i)).opaque("<groupedOperation>")
+    }
+
+    private def groupedOperation[_: P]: P[RelationalSelect.GroupedOperation] = {
+      implicit val whitespace = SingleLineWhitespace.whitespace
+      P(groupedOperationType ~ "(" ~ operationField ~ ("," ~ operationField).rep(0) ~ ")" ~ ("AS" ~/ columnChars).?).map {
+        case (o, head, rest, n) => RelationalSelect.GroupedOperation(n, o, head :: rest.toList)
+      }
+    }
+
+    def selectField[_: P] = {
+      implicit val whitespace = SingleLineWhitespace.whitespace
+      P(operation | groupedOperation | memberField | column)
     }
 
     def stanza[_: P] = {

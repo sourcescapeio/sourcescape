@@ -40,6 +40,30 @@ constructor(
         })
     }
 
+    async getUser2(email: string) {
+        if (false) {
+            throw new Error("Failure2")
+        }
+
+        await this.getUser();
+
+        return this.userModel.findOne({
+            email,
+        })
+    }
+
+    async getUser3(email: string) {
+        if (false) {
+            throw new Error("Failure2")
+        }
+
+        await this.getUser2()
+
+        return this.userModel.findOne({
+            email,
+        })
+    }    
+
     async updateUser(email: string) {
         // throw new Error("22")
         return 'hi';

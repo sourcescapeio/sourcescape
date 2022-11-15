@@ -161,13 +161,11 @@ class SrcLogCompilerService @Inject() (
       calculateTraceQuery(edge, edgeMap.get(edge.from))
     }
 
-    val selects = query.selected match {
-      case Nil => query.vertexes.toList
-      case s   => s
-    }
-
     RelationalQuery(
-      selects.map(s => RelationalSelect.Column(s)),
+      query.selected match {
+        case Nil      => query.vertexes.toList.map(s => RelationalSelect.Column(s))
+        case nonEmpty => nonEmpty
+      },
       KeyedQuery(
         root.variable,
         root.getQuery),

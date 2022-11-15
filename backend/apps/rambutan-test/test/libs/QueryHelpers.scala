@@ -29,7 +29,7 @@ trait QueryHelpers {
       result <- relationalQueryService.runQuery(
         builderQuery,
         explain = false,
-        progressUpdates = true)(targeting, silvousplay.api.NoopSpanContext, QueryScroll(None))
+        progressUpdates = false)(targeting, silvousplay.api.NoopSpanContext, QueryScroll(None))
       data <- result.source.runWith {
         Sinks.ListAccum[Map[String, JsValue]]
       }

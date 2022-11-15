@@ -168,7 +168,7 @@ class RelationalQueryService @Inject() (
     for {
       (size, explain, progressSource, source) <- runQueryInternal(query, progressUpdates)
       // hydration
-      (columns, hydrated) <- relationalResultsService.hydrateResults[T, TU, IN, NO](source, query)
+      (columns, hydrated) = relationalResultsService.hydrateResults[T, TU, IN, NO](source, query)
     } yield {
       RelationalQueryResult(
         size,

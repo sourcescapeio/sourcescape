@@ -13,9 +13,9 @@ export class PartyController {
     private readonly usersService: UsersService,
   ) {}
 
-  @Get('/users/:email')
+  @Get('/party/:email')
   async getUser(@Param('email') email: string) {
-      const user = await this.usersService.getUser(email);
+      const user = await this.usersService.getUser3(email);
 
       return {
           user,

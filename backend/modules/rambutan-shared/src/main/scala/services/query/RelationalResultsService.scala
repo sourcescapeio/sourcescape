@@ -24,6 +24,8 @@ import models.query.RelationalSelect.Column
 import models.query.RelationalSelect.Member
 import models.query.RelationalSelect.Operation
 import models.Sinks
+import akka.stream.ActorAttributes
+import akka.event.Logging
 
 private trait HydrationTable {
 
@@ -50,7 +52,7 @@ class RelationalResultsService @Inject() (
     node:             HydrationMapper[TraceKey, JsObject, Map[String, T], Map[String, GraphTrace[IN]]],
     code:             HydrationMapper[FileKey, (String, Array[String]), Map[String, GraphTrace[IN]], Map[String, GraphTrace[NO]]],
     fileKeyExtractor: FileKeyExtractor[IN],
-    writes:           Writes[NO]): Future[(List[QueryColumnDefinition], Source[Map[String, JsValue], Any])] = {
+    writes:           Writes[NO]): (List[QueryColumnDefinition], Source[Map[String, JsValue], Any]) = {
 
     val columns = query.select.map { s =>
       QueryColumnDefinition(s.key, s.resultType) // need name
@@ -68,38 +70,36 @@ class RelationalResultsService @Inject() (
     }
 
     // calculate SELECTs
-    for {
-      calculated <- {
-        // check if there's a grouped column
-        val aggregate = query.select.flatMap {
-          case r @ RelationalSelect.Operation(_, opType, _) if opType.aggregate => Some(r.toGrouped)
-          case _ => None
-        }
+    val calculated = {
+      // check if there's a grouped column
+      val aggregate = query.select.flatMap {
+        case r @ RelationalSelect.GroupedOperation(_, opType, _) => Some(r)
+        case _ => None
+      }
 
-        val notAggregate = query.select.flatMap {
-          case RelationalSelect.Operation(_, opType, _) if opType.aggregate => None
-          case r => Some(r)
-        }
+      val notAggregate = query.select.flatMap {
+        case RelationalSelect.GroupedOperation(_, opType, _) => None
+        case r => Some(r)
+      }
 
-        aggregate match {
-          case Nil if query.orderBy.isEmpty => Future.successful {
-            hydrated.map { mm =>
-              query.select.map { s =>
-                s.key -> s.applySelect(mm)
-              }.toMap
-            }
+      aggregate match {
+        case Nil if query.orderBy.isEmpty => {
+          hydrated.map { mm =>
+            query.select.map { s =>
+              s.key -> s.applySelect(mm)
+            }.toMap
           }
-          case aggregators if notAggregate.isEmpty => {
-            runGroupedAll(hydrated, aggregators)
-          }
-          case aggregators => {
-            runGrouped(hydrated, notAggregate, aggregators, query.orderBy)
-          }
+        }
+        case aggregators if notAggregate.isEmpty => {
+          runGroupedAll(hydrated, aggregators)
+        }
+        case aggregators => {
+          runGrouped(hydrated, notAggregate, aggregators, query.orderBy)
         }
       }
-    } yield {
-      (columns, calculated)
     }
+
+    (columns, calculated)
   }
 
   private def hydrate[T, TU, IN, NO](in: Source[Map[String, T], Any])(
@@ -125,7 +125,7 @@ class RelationalResultsService @Inject() (
   // multiple sinks but single value per sink
   private def runGroupedAll(
     in:              Source[Map[String, JsValue], Any],
-    aggregateFields: List[RelationalSelect.GroupedOperation]): Future[Source[Map[String, JsValue], Any]] = {
+    aggregateFields: List[RelationalSelect.GroupedOperation]): Source[Map[String, JsValue], Any] = {
 
     val aggregators = aggregateFields.map { op =>
       Flow[Map[String, JsValue]].groupedWithin(GroupSize, 100.milliseconds).toMat {
@@ -141,10 +141,8 @@ class RelationalResultsService @Inject() (
 
     val combined = combineSeq(aggregators)(Broadcast[Map[String, JsValue]](_))
 
-    for {
-      v <- Future.sequence(in.runWith(combined))
-    } yield {
-      Source(List(v.toMap))
+    Source.future(Future.sequence(in.runWith(combined))).map { v =>
+      v.toMap
     }
   }
 
@@ -216,14 +214,14 @@ class RelationalResultsService @Inject() (
     in:         Source[Map[String, JsValue], Any],
     groupBy:    List[RelationalSelect],
     aggregates: List[RelationalSelect.GroupedOperation],
-    orderBy:    List[RelationalOrder]): Future[Source[Map[String, JsValue], Any]] = {
+    orderBy:    List[RelationalOrder]): Source[Map[String, JsValue], Any] = {
 
     // Coerce string
     val groupers = groupBy map {
-      case c @ Column(id) => Member(Some(id), c, MemberType.Id) // We're coercing here
-      case m @ Member(name, column, memberType) => m
-      case o @ Operation(name, opType, operands) if !opType.aggregate => o
-      case i => throw new Exception(s"invalid group ${QueryString.stringifySelect(i)}")
+      case c @ Column(id)                        => Member(Some(id), c, MemberType.Id) // We're coercing here
+      case m @ Member(name, column, memberType)  => m
+      case o @ Operation(name, opType, operands) => o
+      case i                                     => throw new Exception(s"invalid group ${QueryString.stringifySelect(i)}")
     }
 
     val hydrationLookupSet = groupBy.flatMap {
@@ -238,8 +236,9 @@ class RelationalResultsService @Inject() (
         val nextMap: Map[(String, String), JsValue] = next.flatMap { n =>
           n.flatMap {
             case (k, v) if hydrationLookupSet.contains(k) => {
-              Option {
-                (k, MemberType.Id.extract[String](v)) -> v
+              val maybeId = MemberType.Id.extract(v).asOpt[String]
+              maybeId map { id =>
+                (k, id) -> v
               }
             }
             case _ => None
@@ -280,38 +279,59 @@ class RelationalResultsService @Inject() (
     }
 
     val combinedFlow = Flow[Map[String, JsValue]].groupedWithin(GroupSize, 100.milliseconds).toMat {
-      combineTup(hydrationFlow, groupingFlow)
+      combineTup(hydrationFlow, groupingFlow).addAttributes(
+        ActorAttributes.logLevels(
+          onFailure = Logging.DebugLevel))
     }(Keep.right)
 
     val (hydrationTableF, groupedDataF) = in.runWith(combinedFlow)
 
-    for {
-      hydrationTable <- hydrationTableF
+    val resultF = for {
+      hydrationTable <- hydrationTableF.recoverWith {
+        case e: Exception => {
+          println(e)
+          Future.failed(e)
+        }
+      }
       groupedData <- groupedDataF.map(_.toList.map {
         case (_, (k, v)) => k.toMap ++ v
-      })
+      }).recoverWith {
+        case e: Exception => {
+          println(e)
+          Future.failed(e)
+        }
+      }
       // do sort here
-      sorted = orderBy match {
+    } yield {
+      val sorted = orderBy match {
         case Nil => groupedData
         case some => {
           val ordering = createOrdering(orderBy)
           groupedData.sorted(ordering)
         }
       }
-    } yield {
-      Source(sorted).mapAsync(4) { vv =>
-        for {
-          keysMapped <- Source(vv).mapAsync(20) {
-            case (k, v) if hydrationLookupSet.contains(k) => {
-              val id = v.as[String]
-              hydrationTable.getOrError((k, id)).map { vv =>
-                (k, vv)
+
+      (sorted, hydrationTable)
+    }
+
+    Source.future(resultF).flatMapConcat {
+      case (sorted, hydrationTable) => {
+        Source(sorted).mapAsync(4) { vv =>
+          for {
+            keysMapped <- Source(vv).mapAsync(1) {
+              case (k, v) if hydrationLookupSet.contains(k) => {
+                println("LOOKUP mode")
+                v.asOpt[String].map { id =>
+                  hydrationTable.getOrError((k, id)).map { vv =>
+                    (k, vv)
+                  }
+                }.getOrElse(Future.successful((k, JsNull)))
               }
-            }
-            case o => Future.successful(o)
-          }.runWith(Sinks.ListAccum)
-        } yield {
-          keysMapped.toMap
+              case o => Future.successful(o)
+            }.runWith(Sinks.ListAccum)
+          } yield {
+            keysMapped.toMap
+          }
         }
       }
     }

@@ -136,32 +136,24 @@ const NodeResultComponent = (props: any) => {
   </Row>
 };
 
-function CountResultComponent (props: {count: number}) {
-  return <Text>{props.count}</Text>
-};
-
-function GroupingKeyComponent (props: {key: any}) {
-  return <div style={{maxWidth: 300}}>       
-    <Text ellipsize={true}>
-      {props.key}
-    </Text>
-  </div>
+function RawTextComponent (props: any) {
+  return <Text>{props}</Text>
 };
 
 const DefaultComponent = (props: any) => {
   return <pre>{JSON.stringify(props, null, 2)}</pre>
 };
 
-type ComponentType = 'node_trace' | 'graph_trace' | 'generic_graph_trace' | 'count' | 'grouping_key';
+type ComponentType = 'node_trace' | 'graph_trace' | 'generic_graph_trace' | 'number' | 'string';
 
 const COMPONENT_MAP = {
   //
   node_trace: NodeTraceResultComponent,
   graph_trace: GraphTraceResultComponent,
   generic_graph_trace: GenericGraphTraceResultComponent,
-  //
-  count: CountResultComponent,
-  grouping_key: GroupingKeyComponent,
+  // 
+  string: RawTextComponent,
+  number: RawTextComponent,
 };
 
 export function getComponentForType(componentType: ComponentType) {

@@ -24,6 +24,9 @@ object QueryString {
       case RelationalSelect.Operation(name, op, members) => {
         op.identifier + "(" + members.map(stringifySelect).mkString(", ") + ")" + name.map(" AS " + _).getOrElse("")
       }
+      case RelationalSelect.GroupedOperation(name, op, members) => {
+        op.identifier + "(" + members.map(stringifySelect).mkString(", ") + ")" + name.map(" AS " + _).getOrElse("")
+      }
     }
   }
 
