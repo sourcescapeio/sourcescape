@@ -443,7 +443,7 @@ sealed abstract class GraphQuerySpec
     // sbt "project rambutanTest" "testOnly test.GraphQuerySpecCompose -- -z traverse.loop"
     "traverse.loop" in {
       // Should not infinite loop
-      
+
       val N = Range(0, 12).toArray.map { idx =>
         s"n${idx}"
       }
@@ -483,8 +483,6 @@ sealed abstract class GraphQuerySpec
 
         println(s)
       }
-
-
     }
 
   }

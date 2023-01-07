@@ -84,15 +84,9 @@ object HydrationMapper {
     }
   }
 
-  // No op
+  // No op << deprecate this eventually
   implicit val flatGenericCodeHydration = new HydrationMapper[FileKey, (String, Array[String]), GraphTrace[GenericGraphNode], GraphTrace[GenericGraphNode]] {
     override def hydrate(trace: GraphTrace[GenericGraphNode], codeMap: Map[FileKey, (String, Array[String])]): GraphTrace[GenericGraphNode] = {
-      trace
-    }
-  }
-
-  implicit val mapGenericCodeHydration = new HydrationMapper[FileKey, (String, Array[String]), Map[String, GraphTrace[GenericGraphNode]], Map[String, GraphTrace[GenericGraphNode]]] {
-    override def hydrate(trace: Map[String, GraphTrace[GenericGraphNode]], codeMap: Map[FileKey, (String, Array[String])]): Map[String, GraphTrace[GenericGraphNode]] = {
       trace
     }
   }

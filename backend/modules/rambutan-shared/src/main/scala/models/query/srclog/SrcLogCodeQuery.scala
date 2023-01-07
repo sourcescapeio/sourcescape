@@ -33,11 +33,7 @@ case class SrcLogCodeQuery(
   edges:    List[EdgeClause],
   aliases:  Map[String, String],
   root:     Option[String],
-  selected: List[String]) extends SrcLogQuery {
-
-  def withSelected(ids: List[String]) = {
-    this.copy(selected = ids)
-  }
+  selected: List[RelationalSelect]) extends SrcLogQuery {
 
   def subset(sub: Set[String]) = {
     SrcLogCodeQuery(
@@ -89,9 +85,11 @@ object SrcLogCodeQuery {
   }
   private def aliasDirective[_: P] = P("%alias(" ~ SrcLogQuery.varChars ~ "=" ~ Lexical.keywordChars ~ ")" ~ ".")
   private def rootDirective[_: P] = P("%root(" ~ SrcLogQuery.varChars ~ ")" ~ ".")
-  private def selectDirective[_: P] = P("%select(" ~ SrcLogQuery.varChars ~ ("," ~ SrcLogQuery.varChars).rep(0) ~ ")" ~ ".") map {
-    case (a, bs) => a :: bs.toList
-  }
+  private def selectDirective[_: P] = P("%SELECT(" ~/ RelationalQuery.Select.stanza ~ ").")
+
+  //  SrcLogQuery.varChars ~ ("," ~ SrcLogQuery.varChars).rep(0) ~ ")" ~ ".") map {
+  //   case (a, bs) => a :: bs.toList
+  // }
 
   private def query[_: P](indexType: IndexType) = {
     for {

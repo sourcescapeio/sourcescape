@@ -21,71 +21,16 @@ object HavingFilter extends Plenumeration[HavingFilter] {
 
 }
 
-sealed abstract class GroupingType(val identifier: String) extends Identifiable {
-  val identifiers: List[String]
-}
-
-object GroupingType extends Plenumeration[GroupingType] {
-  case object None extends GroupingType("none") {
-    val identifiers = Nil
-  }
-  case object Repo extends GroupingType("repo") {
-    val identifiers = List("repo")
-  }
-  case object RepoFile extends GroupingType("repo_file") {
-    val identifiers = List("repo", "file")
-  }
-}
-
-sealed abstract class RelationalSelect(val identifier: String) extends Identifiable {
-  val isDiff: Boolean = false
-}
-
-object RelationalSelect {
-  case class Distinct(columns: List[String], named: List[String]) extends RelationalSelect("distinct") {
-    override val isDiff = false
-  }
-
-  case class GroupedCount(grip: String, grouping: GroupingType, columns: List[String]) extends RelationalSelect("grouped") {
-    override val isDiff = true
-
-    def displayKeys(in: Map[String, GraphTrace[GraphNode]]): List[(String, String)] = {
-      val initial = grouping match {
-        case GroupingType.None => {
-          Nil
-        }
-        case GroupingType.Repo => {
-          in.get(grip).map(i => "repo" -> i.terminusId.repo).toList
-        }
-        case GroupingType.RepoFile => {
-          in.get(grip).toList.flatMap { i =>
-            ("repo", i.terminusId.repo) :: ("file" -> i.terminusId.path) :: Nil
-          }
-        }
-      }
-
-      val keys = columns.flatMap { i =>
-        in.get(i).map(ii => i -> ii.terminusId.name.getOrElse("NULL")) // ewww
-      }
-
-      (initial ++ keys)
-    }
-  }
-  case object CountAll extends RelationalSelect("count") {
-    override val isDiff = true
-  }
-
-  case object SelectAll extends RelationalSelect("star")
-  case class Select(columns: List[String]) extends RelationalSelect("select")
-}
+case class RelationalOrder(key: String, isDesc: Boolean)
 
 case class RelationalQuery(
-  select:        RelationalSelect,
+  select:        List[RelationalSelect],
   root:          KeyedQuery[GraphQuery],
   traces:        List[KeyedQuery[TraceQuery]],
   having:        Map[String, HavingFilter],
   havingOr:      Map[String, HavingFilter],
   intersect:     List[List[String]],
+  orderBy:       List[RelationalOrder],
   offset:        Option[Int],
   limit:         Option[Int],
   forceOrdering: Option[List[String]]) {
@@ -113,8 +58,6 @@ case class RelationalQuery(
     }
   }
 
-  val isDiff = select.isDiff
-
   def allKeys = root.key :: traces.map(_.key)
 
   def shouldOuterJoin(id: String) = {
@@ -122,16 +65,18 @@ case class RelationalQuery(
     having.get(id) =/= Some(HavingFilter.IS_NOT_NULL)
   }
 
-  def validate = {
+  def validate() = {
     val keySet = allKeys.toSet
-    val columns = select match {
-      case RelationalSelect.Select(c)             => c
-      case RelationalSelect.GroupedCount(g, _, c) => g :: c
-      case _                                      => Nil
-    }
+    val columns = select.flatMap(_.columns)
     columns.foreach { s =>
       if (!keySet.contains(s)) {
-        throw Errors.badRequest("invalid.select", s"Invalid key ${s} in select")
+        throw Errors.badRequest("invalid.select", s"Invalid key ${s} in SELECT")
+      }
+    }
+
+    orderBy.foreach { o =>
+      if (!select.map(_.key).contains(o.key)) {
+        throw Errors.badRequest("invalid.orderby", s"Invalid key ${o.key} in ORDER BY")
       }
     }
 
@@ -153,20 +98,6 @@ case class RelationalQuery(
       }
     }
   }
-
-  // transforms
-  def applyGrouping(grip: String, grouping: GroupingType, selected: List[String]) = {
-    this.copy(
-      limit = None,
-      select = RelationalSelect.GroupedCount(grip, grouping, selected))
-  }
-
-  def applyDistinct(selected: List[String], named: List[String]) = {
-    this.copy(
-      limit = None,
-      select = RelationalSelect.Distinct(selected, named))
-  }
-
 }
 
 object RelationalQuery {
@@ -187,25 +118,112 @@ object RelationalQuery {
     case (q, k) => KeyedQuery(k, q)
   }
 
-  private def groupingType[_: P] = P(Lexical.keywordChars).map { str =>
-    GroupingType.withNameUnsafe(str.trim)
+  /**
+   * SELECT
+   *
+   * @return
+   */
+
+  object Select {
+    // column chars?
+    private def columnChars[_: P] = {
+      implicit val whitespace = NoWhitespace.noWhitespaceImplicit
+      P(CharIn("A-Za-z0-9_").rep(1).!) //
+    }
+
+    def column[_: P] = columnChars.map {
+      case t => RelationalSelect.Column(t)
+    }.opaque("<column>")
+
+    private def memberType[_: P] = {
+      implicit val whitespace = NoWhitespace.noWhitespaceImplicit
+      P(StringIn("name", "id", "extracted", "path", "repo").!).map(i => MemberType.withNameUnsafe(i))
+    }
+
+    def member[_: P] = {
+      implicit val whitespace = NoWhitespace.noWhitespaceImplicit
+      P(column ~ "." ~/ memberType).map {
+        case (c, m) => RelationalSelect.Member(name = None, c, m)
+      }
+    }
+
+    private def memberField[_: P] = {
+      implicit val whitespace = SingleLineWhitespace.whitespace
+      P(member ~ ("AS" ~/ columnChars).?).map {
+        case (mem, name) => mem.copy(name = name)
+      }.opaque("<member>")
+    }
+
+    private def operationType[_: P] = {
+      implicit val whitespace = NoWhitespace.noWhitespaceImplicit
+      // Unfortunately need to write these manually
+      P(StringIn("CAT", "PATHCAT").!).map(i => OperationType.withNameUnsafe(i)).opaque("<operation>")
+    }
+
+    private def operation[_: P]: P[RelationalSelect.Operation] = {
+      implicit val whitespace = SingleLineWhitespace.whitespace
+      P(operationType ~ "(" ~ operationField ~ ("," ~ operationField).rep(0) ~ ")" ~ ("AS" ~/ columnChars).?).map {
+        case (o, head, rest, n) => RelationalSelect.Operation(n, o, head :: rest.toList)
+      }
+    }
+
+    def operationField[_: P] = {
+      implicit val whitespace = SingleLineWhitespace.whitespace
+      P(operation | memberField | column)
+    }
+
+    private def groupedOperationType[_: P] = {
+      implicit val whitespace = NoWhitespace.noWhitespaceImplicit
+      P(StringIn("COUNT", "COLLECT").!).map(i => GroupedOperationType.withNameUnsafe(i)).opaque("<groupedOperation>")
+    }
+
+    private def groupedOperation[_: P]: P[RelationalSelect.GroupedOperation] = {
+      implicit val whitespace = SingleLineWhitespace.whitespace
+      P(groupedOperationType ~ "(" ~ operationField ~ ("," ~ operationField).rep(0) ~ ")" ~ ("AS" ~/ columnChars).?).map {
+        case (o, head, rest, n) => RelationalSelect.GroupedOperation(n, o, head :: rest.toList)
+      }
+    }
+
+    def selectField[_: P] = {
+      implicit val whitespace = SingleLineWhitespace.whitespace
+      P(operation | groupedOperation | memberField | column)
+    }
+
+    def stanza[_: P] = {
+      // implicit val whitespace = MultiLineWhitespace.whitespace
+      P(selectField ~ ("," ~/ selectField).rep(0)).map {
+        case (first, rest) => first :: rest.toList
+      }
+    }
   }
 
-  private def countStar[_: P] = P("COUNT(*)").map {
-    case _ => RelationalSelect.CountAll
-  }
-  private def groupedCount[_: P] = P("GROUPED_COUNT_BY(" ~ Lexical.keywordChars ~ "." ~ groupingType ~ ("," ~ Lexical.keywordChars).rep(0) ~ ")").map {
-    case (grip, grouping, columns) => RelationalSelect.GroupedCount(grip, grouping, columns.toList)
-  }
-  private def star[_: P] = P("*").map {
-    case _ => RelationalSelect.SelectAll
-  }
+  object OrderBy {
+    private def orderingField[_: P] = {
+      implicit val whitespace = NoWhitespace.noWhitespaceImplicit
+      // Select.member additional support?
+      P(Select.column)
+    }
 
-  private def columns[_: P] = (Lexical.keywordChars ~ ("," ~ Lexical.keywordChars).rep(0)).map {
-    case (first, rest) => RelationalSelect.Select(first :: rest.toList)
-  }
+    private def maybeDesc[_: P] = {
+      implicit val whitespace = NoWhitespace.noWhitespaceImplicit
+      P("DESC").map(_ => true)
+    }
 
-  private def select[_: P] = P(groupedCount | star | countStar | columns)
+    private def orderingSegment[_: P] = {
+      implicit val whitespace = NoWhitespace.noWhitespaceImplicit
+      P(orderingField ~ (" ".rep(1) ~ maybeDesc).?).map {
+        case (field, isDesc) => RelationalOrder(field.key, isDesc.getOrElse(false))
+      }
+    }
+
+    def stanza[_: P] = {
+      implicit val whitespace = SingleLineWhitespace.whitespace
+      P(orderingSegment ~ ("," ~/ orderingSegment).rep(0)).map {
+        case (head, rest) => head :: rest.toList
+      }
+    }
+
+  }
 
   // directives
   private def orderingDirective[_: P] = P("%ordering(" ~ Lexical.keywordChars ~ ("," ~ Lexical.quotedChars).rep(0) ~ ")").map {
@@ -225,18 +243,19 @@ object RelationalQuery {
       scrollDirective.? ~/
       orderingDirective.? ~/
       // maybe directives
-      "SELECT " ~/ select ~/
+      "SELECT" ~/ Select.stanza ~/
       "FROM" ~/ keyedGraph ~/
       ("TRACE" ~/ keyedTrace).rep(0) ~/
       // these we can compress as a where?
       ("HAVING " ~/ havingStanza).rep(0) ~/
       ("HAVING_OR " ~/ havingStanza).rep(0) ~/
       ("INTERSECT" ~/ intersectStanza).rep(0) ~/
+      ("ORDER BY" ~/ OrderBy.stanza).? ~/
       //
       ("OFFSET" ~/ Lexical.numChars).? ~/
       ("LIMIT" ~/ Lexical.numChars).? ~/
       End).map {
-      case (scrollKey, ordering, select, root, traces, having, havingOr, intersect, offset, limit) => {
+      case (scrollKey, ordering, select, root, traces, having, havingOr, intersect, orderBy, offset, limit) => {
         (
           scrollKey,
           RelationalQuery(
@@ -246,6 +265,7 @@ object RelationalQuery {
             having.toMap,
             havingOr.toMap,
             intersect.toList,
+            orderBy.getOrElse(Nil),
             offset.map(_.toInt),
             limit.map(_.toInt),
             ordering))

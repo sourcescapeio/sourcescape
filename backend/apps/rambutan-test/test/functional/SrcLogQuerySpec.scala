@@ -82,7 +82,7 @@ sealed abstract class SrcLogQuerySpec
     await(work)
   }
 
-  "Scanning directories" should {
+  "SrcLog queries" should {
 
     // sbt "project rambutanTest" "testOnly test.SrcLogQuerySpecCompose -- -z basic"
     "basic" in {
@@ -290,6 +290,138 @@ sealed abstract class SrcLogQuerySpec
       }
     }
 
+    // sbt "project rambutanTest" "testOnly test.SrcLogQuerySpecCompose -- -z grouped"
+    "grouped" in {
+
+      val CurrentIndex = RepoSHAIndex(
+        id = 1,
+        orgId = -1,
+        repoName = "/data/projects",
+        repoId = LocalRepo.repoId,
+        sha = "123",
+        rootIndexId = None,
+        dirtySignature = None,
+        workId = "123",
+        deleted = false,
+        created = new DateTime().getMillis())
+
+      await {
+        runTestIndex(
+          CurrentIndex,
+          IndexType.Javascript)(
+            directory("examples/003_grouped"): _*)
+      }
+
+      // javascript::contains(FF, FINDCALL)?.
+      // javascript::type(ANYMODEL, ???).
+      // javascript::member(ANYMODEL, FINDMEM).
+      // javascript::call(FINDMEM, FINDCALL).
+
+      /**
+       * Final
+       *
+       */
+      await {
+        dataForQuery(IndexType.Javascript, QueryTargetingRequest.AllLatest(None)) {
+          """
+            javascript::require(NEST)[name="@nestjs/common"].
+            javascript::member(NEST, NESTCONTROLLER)[name="Controller"].
+
+            javascript::class_decorator(CONTROLLERCLASS, CLASSDECORATOR).
+            javascript::call(NESTCONTROLLER, CLASSDECORATOR).
+
+            javascript::call_arg(CLASSDECORATOR, CLASSPATH)[index=1]?.
+
+            javascript::class_method(CONTROLLERCLASS, CLASSMETHOD).
+
+            javascript::method_decorator(CLASSMETHOD, METHODDECORATOR).
+            javascript::member(NEST, NESTMETHOD)[names={"Get", "Post", "Delete", "Put"}].
+            javascript::call(NESTMETHOD, METHODDECORATOR).
+            javascript::call_arg(METHODDECORATOR, METHODPATH)[index=1]?.
+
+            javascript::all_called(CLASSMETHOD, FF).
+
+            javascript::contains(FF, THROW).
+            javascript::throw(THROW, EXP).
+
+            %SELECT(
+              NESTMETHOD.name,
+              CLASSPATH.name,
+              METHODPATH.name AS MethodName,
+              COLLECT(THROW) AS Throws
+            ).
+          """
+        }
+      }.foreach { d =>
+        val methodName = d.getOrElse("MethodName", throw new Exception("fail"))
+        val throws = d.getOrElse("Throws", throw new Exception("fail"))
+        println(methodName, throws.as[List[JsValue]].length)
+        // println(Json.prettyPrint((fZero \ "terminus" \ "node").as[JsValue]))
+        // val path = (classMethod \ "terminus" \ "node" \ "path").as[String]
+        // val startLine = (classMethod \ "terminus" \ "node" \ "range" \ "start" \ "line").as[Int]
+        // val endLine = (classMethod \ "terminus" \ "node" \ "range" \ "end" \ "line").as[Int]
+        // println("===================")
+        // println(s"${path}:${startLine}-${endLine}")
+        // println("===================")
+        // println((classMethod \ "terminus" \ "node" \ "extracted").as[String])
+        // d.map {
+        //   case (k, v) => {
+        //     val vPath = (v \ "terminus" \ "node" \ "path").as[String]
+        //     val vStr = (v \ "terminus" \ "node" \ "id").as[String]
+        //     println(s"${k} -> ${vPath}:${vStr}")
+        //   }
+        // }
+      }
+
+      // {
+      //   val (results, columns) = await {
+      //     dataForRelationalQuery(IndexType.Javascript, QueryTargetingRequest.AllLatest(None)) {
+      //       """
+      //         SELECT NESTCONTROLLER
+      //         FROM root{
+      //           type : ["member"],
+      //           name : ["Controller"]
+      //         } AS NESTCONTROLLER
+      //         TRACE join[NESTCONTROLLER]
+      //           .linear_traverse [
+      //             t[
+      //               {
+      //                 type : "javascript::member_of".reverse,
+      //                 name : ["Controller"]
+      //               }
+      //             ]
+      //           ]
+      //           .linear_traverse [
+      //             *["javascript::declared_as".reverse,"javascript::assigned_as".reverse,"javascript::reference_of".reverse]
+      //           ]
+      //           .node_check {
+      //             type : ["require"],
+      //             name : ["@nestjs/common"]
+      //           } AS NEST
+      //         TRACE join[NESTCONTROLLER]
+      //           .linear_traverse [
+      //             *["javascript::declared_as","javascript::assigned_as","javascript::reference_of"],
+      //             t["javascript::call_of"]
+      //           ]
+      //           .node_check {
+      //             type : ["call"]
+      //           } AS CLASSDECORATOR
+      //         TRACE join[CLASSDECORATOR]
+      //           .linear_traverse [
+      //             t["javascript::class_decorator".reverse]
+      //           ]
+      //           .node_check {
+      //             type : ["class"]
+      //           } AS CONTROLLERCLASS
+      //       """
+      //     }
+      //   }
+
+      //   results.foreach { d =>
+      //     println(d)
+      //   }
+      // }
+    }
   }
 }
 

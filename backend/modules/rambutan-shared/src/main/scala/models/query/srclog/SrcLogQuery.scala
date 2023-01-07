@@ -13,7 +13,7 @@ trait SrcLogQuery {
   val nodes: List[NodeClause]
   val edges: List[EdgeClause]
   val root: Option[String]
-  val selected: List[String]
+  val selected: List[RelationalSelect]
 
   lazy val vertexes: Set[String] = {
     (nodes.map(_.variable) ++ edges.flatMap {

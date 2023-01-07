@@ -60,7 +60,7 @@ class RelationalQueryService @Inject() (
 
     val cc = context.decoupledSpan("query.relational")
     // do validation
-    query.validate
+    query.validate()
 
     // run the root
     val rootQuery = query.root.query
@@ -148,11 +148,6 @@ class RelationalQueryService @Inject() (
     runQueryGeneric[GraphTrace[TraceUnit], TraceUnit, (String, GraphNode), QueryNode](query, progressUpdates)
   }
 
-  def runQueryGenericGraph(query: RelationalQuery, explain: Boolean, progressUpdates: Boolean)(implicit targeting: QueryTargeting[GenericGraphUnit], context: SpanContext, scroll: QueryScroll): Future[RelationalQueryResult] = {
-    implicit val tracing = QueryTracing.GenericGraph
-    runQueryGeneric[GraphTrace[GenericGraphUnit], GenericGraphUnit, GenericGraphNode, GenericGraphNode](query, progressUpdates)
-  }
-
   private def runQueryGeneric[T, TU, IN, NO](query: RelationalQuery, progressUpdates: Boolean)(
     implicit
     targeting:        QueryTargeting[TU],
@@ -162,7 +157,6 @@ class RelationalQueryService @Inject() (
     flattener:        HydrationFlattener[Map[String, T], TU],
     node:             HydrationMapper[TraceKey, JsObject, Map[String, T], Map[String, GraphTrace[IN]]],
     code:             HydrationMapper[FileKey, (String, Array[String]), Map[String, GraphTrace[IN]], Map[String, GraphTrace[NO]]],
-    groupable:        Groupable[IN],
     fileKeyExtractor: FileKeyExtractor[IN],
     writes:           Writes[NO],
     //
@@ -176,11 +170,10 @@ class RelationalQueryService @Inject() (
       // hydration
       (columns, hydrated) = relationalResultsService.hydrateResults[T, TU, IN, NO](source, query)
     } yield {
-      val columnKeys = columns.map(_.name).toSet
       RelationalQueryResult(
         size,
         progressSource,
-        query.isDiff,
+        isDiff = false,
         columns,
         hydrated,
         explain)
@@ -201,7 +194,6 @@ class RelationalQueryService @Inject() (
     flattener:        HydrationFlattener[Map[String, T], TU],
     node:             HydrationMapper[TraceKey, JsObject, Map[String, T], Map[String, GraphTrace[IN]]],
     code:             HydrationMapper[FileKey, (String, Array[String]), Map[String, GraphTrace[IN]], Map[String, GraphTrace[NO]]],
-    groupable:        Groupable[IN],
     fileKeyExtractor: FileKeyExtractor[IN],
     writes:           Writes[NO],
     //

@@ -24,12 +24,12 @@ trait QueryHelpers {
 
     val query = SrcLogCodeQuery.parseOrDie(q.mkString("\n"), indexType)
     for {
-      targeting <- queryTargetingService.resolveTargeting(-1, query.language, targetingRequest)
+      targeting <- queryTargetingService.resolveTargeting(-1, indexType, targetingRequest)
       builderQuery <- srcLogService.compileQuery(query)(targeting)
       result <- relationalQueryService.runQuery(
         builderQuery,
         explain = false,
-        progressUpdates = true)(targeting, silvousplay.api.NoopSpanContext, QueryScroll(None))
+        progressUpdates = false)(targeting, silvousplay.api.NoopSpanContext, QueryScroll(None))
       data <- result.source.runWith {
         Sinks.ListAccum[Map[String, JsValue]]
       }
@@ -58,25 +58,24 @@ trait QueryHelpers {
     }
   }
 
-  // protected def dataForQueryGeneric(targeting: QueryTargeting[GenericGraphUnit])(q: String*)(implicit ec: ExecutionContext, mat: akka.stream.Materializer) = {
-  //   val srcLogService = app.injector.instanceOf[SrcLogCompilerService]
-  //   val relationalQueryService = app.injector.instanceOf[RelationalQueryService]
+  protected def dataForRelationalQuery(indexType: IndexType, targetingRequest: QueryTargetingRequest)(q: String)(implicit ec: ExecutionContext) = {
+    val relationalQueryService = app.injector.instanceOf[RelationalQueryService]
+    val queryTargetingService = app.injector.instanceOf[QueryTargetingService]
 
-  //   val query = SrcLogGenericQuery.parseOrDie(q.mkString("\n"))
-  //   query.edges.foreach(println)
-  //   for {
-  //     builderQuery <- srcLogService.compileQuery(query)(targeting)
-  //     result <- relationalQueryService.runQueryGenericGraph(
-  //       builderQuery,
-  //       explain = false,
-  //       progressUpdates = false)(targeting, QueryScroll(None))
-  //     data <- result.source.runWith {
-  //       Sinks.ListAccum[Map[String, JsValue]]
-  //     }
-  //   } yield {
-  //     data
-  //   }
-  // }
+    val query = RelationalQuery.parseOrDie(q)
+
+    val queryTracing = QueryTracing.Basic
+
+    for {
+      targeting <- queryTargetingService.resolveTargeting(-1, indexType, targetingRequest)
+      result <- relationalQueryService.runQuery(query, explain = false, progressUpdates = false)(targeting, silvousplay.api.NoopSpanContext, QueryScroll(None))
+      data <- result.source.runWith {
+        Sinks.ListAccum[Map[String, JsValue]]
+      }
+    } yield {
+      (data, result.columns)
+    }
+  }
 
   // protected def rawESQuery(index: String, query: JsObject)(implicit ex: ExecutionContext) = {
   //   val elasticSearchService = app.injector.instanceOf[ElasticSearchService]
