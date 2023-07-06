@@ -113,7 +113,7 @@ abstract class ScanAndIndexSpec extends RambutanSpec {
 
         curl.graphql(graphql"""
           mutation addScan {
-            path1: createScan(path: "/Users/jierenchen/Projects") {
+            path1: createScan(path: "/Users/jieren/Projects") {
               id
               path
             }

@@ -4,7 +4,7 @@ object Dependencies {
   object Vsn {
     val Scala = "2.13.8"
 
-    val Play = "2.8.15"
+    val Play = "2.8.18"
 
     val PlaySlick = "5.0.2"
 
