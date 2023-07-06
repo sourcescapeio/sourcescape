@@ -17,7 +17,7 @@ export default class Stop extends Command {
       return remapYAMLTier(items);
     }));
 
-    await stopAll(flattened, this.log, true, false); // destroy = false
+    await stopAll(flattened, this.log.bind(this), true, false); // destroy = false
 
     this.exit(0)
   }

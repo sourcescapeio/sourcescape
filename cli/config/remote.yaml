@@ -22,7 +22,7 @@ services:
 ## Micros
 - sourcescape_prima:
     image: ghcr.io/sourcescapeio/primadonna
-    complete: "node ./bin/www" # Do better
+    complete: "Nest application" # Do better
   # Initializer (ensures DB and ES)
   sourcescape_initializer:
     image: ghcr.io/sourcescapeio/backend

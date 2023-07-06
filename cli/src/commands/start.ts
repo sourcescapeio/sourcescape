@@ -45,7 +45,7 @@ export default class Start extends Command {
     initializeDirectories.forEach((d) => this.log(`  - ${d}`));
 
     await ensureNetwork();
-    await ensureDataDir(this.log);
+    await ensureDataDir(this.log.bind(this));
 
     // TODO: ensure images
     const allImages: string[] = flatMap(config.services, (objs) => {
@@ -81,7 +81,7 @@ export default class Start extends Command {
 
       return prev.then(async () => {
         console.warn(`===== TIER ${idx} =====`);
-        await ensureTier(remapped, initializeDirectories, minorVersion, port, this.log)
+        await ensureTier(remapped, initializeDirectories, minorVersion, port, this.log.bind(this))
         return null;
       });
     }, Promise.resolve(null));

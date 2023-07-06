@@ -24,10 +24,10 @@ export default class Down extends Command {
       return remapYAMLTier(items);
     }));
 
-    await stopAll(flattened, this.log, flags.data, true); // destroy = true
+    await stopAll(flattened, this.log.bind(this), flags.data, true); // destroy = true
 
     if(flags.data) {
-      destroyBaseDir(this.log);
+      destroyBaseDir(this.log.bind(this));
     }
 
     if (flags.images) {

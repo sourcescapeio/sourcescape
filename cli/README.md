@@ -18,8 +18,8 @@ sourcescape
 $ npm install -g sourcescape
 $ sourcescape COMMAND
 running command...
-$ sourcescape (-v|--version|version)
-sourcescape/1.0.3 darwin-arm64 node-v17.6.0
+$ sourcescape (--version)
+sourcescape/1.0.4 darwin-arm64 node-v16.18.0
 $ sourcescape --help [COMMAND]
 USAGE
   $ sourcescape COMMAND
@@ -29,7 +29,8 @@ USAGE
 # Commands
 <!-- commands -->
 * [`sourcescape clean`](#sourcescape-clean)
-* [`sourcescape help [COMMAND]`](#sourcescape-help-command)
+* [`sourcescape delete:indexes REPO`](#sourcescape-deleteindexes-repo)
+* [`sourcescape help [COMMANDS]`](#sourcescape-help-commands)
 * [`sourcescape list:repos`](#sourcescape-listrepos)
 * [`sourcescape list:scans`](#sourcescape-listscans)
 * [`sourcescape run-index REPO`](#sourcescape-run-index-repo)
@@ -44,48 +45,70 @@ Cleans out existing SourceScape containers. Used for upgrading.
 
 ```
 USAGE
-  $ sourcescape clean
+  $ sourcescape clean [-h] [-d] [-i]
 
-OPTIONS
+FLAGS
   -d, --data    Wipe datastores.
-  -h, --help    show CLI help
+  -h, --help    Show CLI help.
   -i, --images  Delete images.
 
-EXAMPLE
+DESCRIPTION
+  Cleans out existing SourceScape containers. Used for upgrading.
+
+EXAMPLES
   $ sourcescape clean
 ```
 
-_See code: [src/commands/clean.ts](https://github.com/sourcescapeio/sourcescape/blob/v1.0.3/src/commands/clean.ts)_
+_See code: [src/commands/clean.ts](https://github.com/sourcescapeio/sourcescape/blob/v1.0.4/src/commands/clean.ts)_
 
-## `sourcescape help [COMMAND]`
-
-display help for sourcescape
+## `sourcescape delete:indexes REPO`
 
 ```
 USAGE
-  $ sourcescape help [COMMAND]
+  $ sourcescape delete:indexes REPO [-p <value>] [-d]
 
 ARGUMENTS
-  COMMAND  command to show help for
+  REPO  repo to delete
 
-OPTIONS
-  --all  see all commands in CLI
+FLAGS
+  -d, --debug         use debug mode
+  -p, --port=<value>  [default: 5001] Expose this port
 ```
 
-_See code: [@oclif/plugin-help](https://github.com/oclif/plugin-help/blob/v3.3.1/src/commands/help.ts)_
+_See code: [src/commands/delete/indexes.ts](https://github.com/sourcescapeio/sourcescape/blob/v1.0.4/src/commands/delete/indexes.ts)_
+
+## `sourcescape help [COMMANDS]`
+
+Display help for sourcescape.
+
+```
+USAGE
+  $ sourcescape help [COMMANDS] [-n]
+
+ARGUMENTS
+  COMMANDS  Command to show help for.
+
+FLAGS
+  -n, --nested-commands  Include all nested commands in the output.
+
+DESCRIPTION
+  Display help for sourcescape.
+```
+
+_See code: [@oclif/plugin-help](https://github.com/oclif/plugin-help/blob/v5.2.11/src/commands/help.ts)_
 
 ## `sourcescape list:repos`
 
 ```
 USAGE
-  $ sourcescape list:repos
+  $ sourcescape list:repos [-p <value>] [-d]
 
-OPTIONS
-  -d, --debug      use debug mode
-  -p, --port=port  [default: 5001] Expose this port
+FLAGS
+  -d, --debug         use debug mode
+  -p, --port=<value>  [default: 5001] Expose this port
 ```
 
-_See code: [src/commands/list/repos.ts](https://github.com/sourcescapeio/sourcescape/blob/v1.0.3/src/commands/list/repos.ts)_
+_See code: [src/commands/list/repos.ts](https://github.com/sourcescapeio/sourcescape/blob/v1.0.4/src/commands/list/repos.ts)_
 
 ## `sourcescape list:scans`
 
@@ -94,39 +117,40 @@ USAGE
   $ sourcescape list:scans
 ```
 
-_See code: [src/commands/list/scans.ts](https://github.com/sourcescapeio/sourcescape/blob/v1.0.3/src/commands/list/scans.ts)_
+_See code: [src/commands/list/scans.ts](https://github.com/sourcescapeio/sourcescape/blob/v1.0.4/src/commands/list/scans.ts)_
 
 ## `sourcescape run-index REPO`
 
 ```
 USAGE
-  $ sourcescape run-index REPO
+  $ sourcescape run-index REPO [-p <value>] [-d]
 
 ARGUMENTS
   REPO  repo to index
 
-OPTIONS
-  -d, --debug      use debug mode
-  -p, --port=port  [default: 5001] Expose this port
+FLAGS
+  -d, --debug         use debug mode
+  -p, --port=<value>  [default: 5001] Expose this port
 ```
 
-_See code: [src/commands/run-index.ts](https://github.com/sourcescapeio/sourcescape/blob/v1.0.3/src/commands/run-index.ts)_
+_See code: [src/commands/run-index.ts](https://github.com/sourcescapeio/sourcescape/blob/v1.0.4/src/commands/run-index.ts)_
 
 ## `sourcescape scan DIRECTORY`
 
 ```
 USAGE
-  $ sourcescape scan DIRECTORY
+  $ sourcescape scan DIRECTORY [-p <value>] [-d] [-v]
 
 ARGUMENTS
   DIRECTORY  directory
 
-OPTIONS
-  -d, --debug      use debug mode
-  -p, --port=port  [default: 5001] Expose this port
+FLAGS
+  -d, --debug           use debug mode
+  -p, --port=<value>    [default: 5001] Expose this port
+  -v, --debugDirectory  dont append docker volume prefix
 ```
 
-_See code: [src/commands/scan.ts](https://github.com/sourcescapeio/sourcescape/blob/v1.0.3/src/commands/scan.ts)_
+_See code: [src/commands/scan.ts](https://github.com/sourcescapeio/sourcescape/blob/v1.0.4/src/commands/scan.ts)_
 
 ## `sourcescape start`
 
@@ -134,18 +158,21 @@ Initialize SourceScape.
 
 ```
 USAGE
-  $ sourcescape start
+  $ sourcescape start [-h] [-f] [-p <value>]
 
-OPTIONS
-  -f, --force-pull  Force pull images
-  -h, --help        show CLI help
-  -p, --port=port   [default: 5001] Expose this port
+FLAGS
+  -f, --force-pull    Force pull images
+  -h, --help          Show CLI help.
+  -p, --port=<value>  [default: 5001] Expose this port
 
-EXAMPLE
+DESCRIPTION
+  Initialize SourceScape.
+
+EXAMPLES
   $ sourcescape start <YOUR_DIRECTORY>
 ```
 
-_See code: [src/commands/start.ts](https://github.com/sourcescapeio/sourcescape/blob/v1.0.3/src/commands/start.ts)_
+_See code: [src/commands/start.ts](https://github.com/sourcescapeio/sourcescape/blob/v1.0.4/src/commands/start.ts)_
 
 ## `sourcescape status`
 
@@ -153,16 +180,19 @@ Get which containers are running.
 
 ```
 USAGE
-  $ sourcescape status
+  $ sourcescape status [-h]
 
-OPTIONS
-  -h, --help  show CLI help
+FLAGS
+  -h, --help  Show CLI help.
 
-EXAMPLE
+DESCRIPTION
+  Get which containers are running.
+
+EXAMPLES
   $ sourcescape status
 ```
 
-_See code: [src/commands/status.ts](https://github.com/sourcescapeio/sourcescape/blob/v1.0.3/src/commands/status.ts)_
+_See code: [src/commands/status.ts](https://github.com/sourcescapeio/sourcescape/blob/v1.0.4/src/commands/status.ts)_
 
 ## `sourcescape stop`
 
@@ -172,9 +202,12 @@ Shuts down running SourceScape containers.
 USAGE
   $ sourcescape stop
 
-EXAMPLE
+DESCRIPTION
+  Shuts down running SourceScape containers.
+
+EXAMPLES
   $ sourcescape stop
 ```
 
-_See code: [src/commands/stop.ts](https://github.com/sourcescapeio/sourcescape/blob/v1.0.3/src/commands/stop.ts)_
+_See code: [src/commands/stop.ts](https://github.com/sourcescapeio/sourcescape/blob/v1.0.4/src/commands/stop.ts)_
 <!-- commandsstop -->

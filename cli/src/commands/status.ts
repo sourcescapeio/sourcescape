@@ -26,7 +26,7 @@ export default class Status extends Command {
 
       return prev.then(async () => {
         console.warn(`===== TIER ${idx} =====`);
-        await statusTier(remapped, this.log)
+        await statusTier(remapped, this.log.bind(this))
         return null;
       });
     }, Promise.resolve(null));
