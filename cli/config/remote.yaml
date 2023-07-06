@@ -23,6 +23,7 @@ services:
 - sourcescape_prima:
     image: ghcr.io/sourcescapeio/primadonna
     complete: "Nest application" # Do better
+    data_volume: /data
   # Initializer (ensures DB and ES)
   sourcescape_initializer:
     image: ghcr.io/sourcescapeio/backend

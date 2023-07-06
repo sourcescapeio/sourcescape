@@ -1,4 +1,4 @@
-FROM node:14.14-alpine3.11
+FROM node:16.18-alpine3.15
 
 ADD microservices/primadonna /usr/src/app
 

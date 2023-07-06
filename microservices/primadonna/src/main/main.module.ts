@@ -1,4 +1,5 @@
-import { CacheModule, Module } from '@nestjs/common';
+import { Module } from '@nestjs/common';
+import { CacheModule } from '@nestjs/cache-manager';
 import { MainController } from './main.controller';
 import { AnalyzerService } from './analyzer.service';
 import { SpawnerService } from './spawner.service';

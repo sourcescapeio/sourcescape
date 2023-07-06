@@ -1,10 +1,12 @@
 import {
   BadRequestException,
-  CACHE_MANAGER,
   Inject,
   Injectable,
   InternalServerErrorException,
 } from '@nestjs/common';
+import {
+  CACHE_MANAGER,
+} from '@nestjs/cache-manager';
 
 import { parse } from '@typescript-eslint/typescript-estree';
 import * as ts from '@ts-morph/bootstrap';

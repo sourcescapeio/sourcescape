@@ -23,6 +23,7 @@ services:
 - sourcescape_prima:
     image: sourcescape_primadonna
     complete: "Nest application" # Do better
+    data_volume: /data
   # Initializer (ensures DB and ES)
   sourcescape_initializer:
     image: sourcescape_backend
