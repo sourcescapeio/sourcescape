@@ -1,4 +1,4 @@
-import {Command, flags} from '@oclif/command'
+import {Command, Flags, Args} from '@oclif/core'
 import { flatMap, reduce } from 'lodash';
 import open from 'open';
 import { fork, spawn } from 'child_process';
@@ -11,19 +11,17 @@ import { runGraphQL } from '../lib/graphql';
 export default class Scan extends Command {
 
   static flags = {
-    port: flags.integer({char: 'p', description: 'Expose this port', default: 5001}),
-    debug: flags.boolean({char: 'd', description: 'use debug mode', default: false}),
-    debugDirectory: flags.boolean({char: 'v', description: 'dont append docker volume prefix', default: false}),
+    port: Flags.integer({char: 'p', description: 'Expose this port', default: 5001}),
+    debug: Flags.boolean({char: 'd', description: 'use debug mode', default: false}),
+    debugDirectory: Flags.boolean({char: 'v', description: 'dont append docker volume prefix', default: false}),
   }
 
-  static args = [{
-    name: 'directory',
-    required: true,
-    description: 'directory',
-  }];
+  static args = {
+    directory: Args.string({required: true, description: 'directory'}),
+  };
 
   async run() {  
-    const {args, flags} = this.parse(Scan);
+    const {args, flags} = await this.parse(Scan);
 
     const fullPath = flags.debugDirectory ? resolve(args.directory) : `/external/${resolve(args.directory)}`;
     console.warn(fullPath);

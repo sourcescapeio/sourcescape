@@ -1,4 +1,4 @@
-import {Command, flags} from '@oclif/command'
+import {Command } from '@oclif/core'
 import { flatMap, reduce } from 'lodash';
 import open from 'open';
 import { fork, spawn } from 'child_process';

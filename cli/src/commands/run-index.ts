@@ -1,4 +1,4 @@
-import {Command, flags} from '@oclif/command'
+import {Command, Flags, Args} from '@oclif/core'
 import { flatMap, reduce } from 'lodash';
 import open from 'open';
 import { fork, spawn } from 'child_process';
@@ -14,18 +14,16 @@ import { FetchResult, gql } from '@apollo/client/core';
 export default class RunIndex extends Command {
 
   static flags = {
-    port: flags.integer({char: 'p', description: 'Expose this port', default: 5001}),
-    debug: flags.boolean({char: 'd', description: 'use debug mode', default: false}),
+    port: Flags.integer({char: 'p', description: 'Expose this port', default: 5001}),
+    debug: Flags.boolean({char: 'd', description: 'use debug mode', default: false}),
   }
 
-  static args = [{
-    name: 'repo',
-    required: true,
-    description: 'repo to index',
-  }];
+  static args = {
+    repo: Args.string({required: true, description: 'repo to index'}) 
+  };
 
   async run() {  
-    const {args, flags} = this.parse(RunIndex);
+    const {args, flags} = await this.parse(RunIndex);
     const client = graphQLClient(flags.port, flags.debug);
     const chosen = await getRepo2(args.repo, client);
     console.warn(chosen.path)

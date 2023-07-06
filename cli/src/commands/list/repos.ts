@@ -1,4 +1,4 @@
-import {Command, flags} from '@oclif/command'
+import {Command, Flags } from '@oclif/core'
 import { flatMap, reduce } from 'lodash';
 import open from 'open';
 import { fork, spawn } from 'child_process';
@@ -13,12 +13,12 @@ import { gql } from '@apollo/client/core';
 export default class ListRepos extends Command {
 
   static flags = {
-    port: flags.integer({char: 'p', description: 'Expose this port', default: 5001}),
-    debug: flags.boolean({char: 'd', description: 'use debug mode', default: false}),
+    port: Flags.integer({char: 'p', description: 'Expose this port', default: 5001}),
+    debug: Flags.boolean({char: 'd', description: 'use debug mode', default: false}),
   }  
 
   async run() {  
-    const {flags} = this.parse(ListRepos);
+    const {flags} = await this.parse(ListRepos);
   
     const client = graphQLClient(flags.port, flags.debug);
 
