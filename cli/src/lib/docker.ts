@@ -48,6 +48,7 @@ export async function pullImage(image: string, tag: string) {
 
 async function getContainers(args: string): Promise<ContainerState[]> {
   const ret = await docker.command(`ps ${args}`);
+
   return ret.containerList.map((c: any) => ({
     name: c.names,
     id: c['container id'],
@@ -93,11 +94,12 @@ export async function ensureNetwork() {
 
 export async function statusTier(items: ServiceConfig[], log: Function) {
   const runningContainers = await getContainers('');
-  const stoppedContainers = await getContainers('-a');  
+  const stoppedContainers = await getContainers('-a');
 
   items.map((item) => {
     const { name } = item;
     const maybeRunning = find(runningContainers, (c) => (c.name === name));
+
     if (maybeRunning) {
       log(`RUNNING: ${maybeRunning.id} ${name}`);
       return null;

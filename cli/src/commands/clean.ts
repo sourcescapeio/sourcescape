@@ -1,4 +1,4 @@
-import {Command, flags} from '@oclif/command'
+import {Command, Flags} from '@oclif/core'
 import { flatMap, flatten } from 'lodash';
 import config from '../config';
 import { destroyBaseDir } from '../lib/data';
@@ -12,22 +12,22 @@ export default class Down extends Command {
   ]
 
   static flags = {
-    help: flags.help({char: 'h'}),
-    data: flags.boolean({char: 'd', description: 'Wipe datastores.'}),
-    images: flags.boolean({char: 'i', description: 'Delete images.'}),
+    help: Flags.help({char: 'h'}),
+    data: Flags.boolean({char: 'd', description: 'Wipe datastores.'}),
+    images: Flags.boolean({char: 'i', description: 'Delete images.'}),
   }
 
   async run() {
-    const {flags} = this.parse(Down)
+    const {flags} = await this.parse(Down)
 
     const flattened = flatten((config.services as any[]).map((items: any) => {
       return remapYAMLTier(items);
     }));
 
-    await stopAll(flattened, this.log, flags.data, true); // destroy = true
+    await stopAll(flattened, this.log.bind(this), flags.data, true); // destroy = true
 
     if(flags.data) {
-      destroyBaseDir(this.log);
+      destroyBaseDir(this.log.bind(this));
     }
 
     if (flags.images) {

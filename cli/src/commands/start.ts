@@ -1,4 +1,4 @@
-import {Command, flags} from '@oclif/command'
+import {Command, Flags} from '@oclif/core'
 import { flatMap, reduce } from 'lodash';
 
 import config from '../config';
@@ -19,15 +19,15 @@ export default class Start extends Command {
   ]
 
   static flags = {
-    help: flags.help({char: 'h'}),
-    "force-pull": flags.boolean({char: 'f', description: 'Force pull images'}),
-    port: flags.integer({char: 'p', description: 'Expose this port', default: 5001})
+    help: Flags.help({char: 'h'}),
+    "force-pull": Flags.boolean({char: 'f', description: 'Force pull images'}),
+    port: Flags.integer({char: 'p', description: 'Expose this port', default: 5001})
   }
 
   static strict = false
 
   async run() {
-    const {argv, flags} = this.parse(Start);
+    const {argv, flags} = await this.parse(Start);
 
     const { port } = flags;
 
@@ -40,12 +40,12 @@ export default class Start extends Command {
       }
     }
 
-    const initializeDirectories = argv.map(resolveDirectory);
+    const initializeDirectories = (argv as string[]).map(resolveDirectory);
     this.log('INITIALIZING SOURCESCAPE FOR DIRECTORIES:');
     initializeDirectories.forEach((d) => this.log(`  - ${d}`));
 
     await ensureNetwork();
-    await ensureDataDir(this.log);
+    await ensureDataDir(this.log.bind(this));
 
     // TODO: ensure images
     const allImages: string[] = flatMap(config.services, (objs) => {
@@ -81,7 +81,7 @@ export default class Start extends Command {
 
       return prev.then(async () => {
         console.warn(`===== TIER ${idx} =====`);
-        await ensureTier(remapped, initializeDirectories, minorVersion, port, this.log)
+        await ensureTier(remapped, initializeDirectories, minorVersion, port, this.log.bind(this))
         return null;
       });
     }, Promise.resolve(null));

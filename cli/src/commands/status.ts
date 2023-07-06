@@ -1,4 +1,4 @@
-import {Command, flags} from '@oclif/command'
+import {Command, Flags} from '@oclif/core'
 import { flatMap, flatten, reduce } from 'lodash';
 import localConfig from '../config/local';
 import { getMinorVersion } from '../lib/data';
@@ -14,13 +14,11 @@ export default class Status extends Command {
   ]
 
   static flags = {
-    help: flags.help({char: 'h'})
+    help: Flags.help({char: 'h'})
   }
 
-  static args = []
-
   async run() {
-    const {args, flags} = this.parse(Status);
+    const {args, flags} = await this.parse(Status);
     this.log(`VERSION: ${getMinorVersion()}`);
     
     await reduce(localConfig.services, async (prev, items, idx) => {
@@ -28,7 +26,7 @@ export default class Status extends Command {
 
       return prev.then(async () => {
         console.warn(`===== TIER ${idx} =====`);
-        await statusTier(remapped, this.log)
+        await statusTier(remapped, this.log.bind(this))
         return null;
       });
     }, Promise.resolve(null));
