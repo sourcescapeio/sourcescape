@@ -32,7 +32,7 @@ jobs:
           push: true
           tags: |
             ghcr.io/sourcescapeio/backend:latest
-            ghcr.io/sourcescapeio/backend:1.0
+            ghcr.io/sourcescapeio/backend:1.1
 
   build-frontend:
     runs-on: ubuntu-latest
@@ -62,7 +62,7 @@ jobs:
           push: true
           tags: |
             ghcr.io/sourcescapeio/primadonna:latest
-            ghcr.io/sourcescapeio/primadonna:1.0
+            ghcr.io/sourcescapeio/primadonna:1.1
 
       - name: Build and Publish Proxy
         uses: docker/build-push-action@v3
@@ -73,7 +73,7 @@ jobs:
           push: true
           tags: |
             ghcr.io/sourcescapeio/proxy:latest
-            ghcr.io/sourcescapeio/proxy:1.0
+            ghcr.io/sourcescapeio/proxy:1.1
 
       - name: Build and Publish Frontend
         uses: docker/build-push-action@v3
@@ -84,4 +84,4 @@ jobs:
           push: true
           tags: |
             ghcr.io/sourcescapeio/frontend:latest
-            ghcr.io/sourcescapeio/frontend:1.0
+            ghcr.io/sourcescapeio/frontend:1.1

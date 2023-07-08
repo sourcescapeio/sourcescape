@@ -498,6 +498,19 @@ object JavascriptEdgePredicate extends Plenumeration[JavascriptEdgePredicate] {
     }
   }
 
+  case object CallLink extends JavascriptEdgePredicate("call_link", forwardCost = 1, reverseCost = 10) {
+    override def fromImplicit = Some(JavascriptNodePredicate.Call)
+
+    override def toImplicit = Some(NodePredicate.or(
+      JavascriptNodePredicate.ClassMethod,
+      JavascriptNodePredicate.Function))
+
+    def queryTraverse(name: Option[String], index: Option[Int], props: List[GenericGraphProperty]): SrcLogTraverse = {
+      lin(
+        t(basic(JavascriptGraphEdgeType.CallLink)))
+    }
+  }
+
   case object AllCalled extends JavascriptEdgePredicate("all_called", forwardCost = 100000, reverseCost = 1) {
     override def fromImplicit = Some(NodePredicate.or(
       JavascriptNodePredicate.ClassMethod,
