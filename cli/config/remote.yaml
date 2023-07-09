@@ -21,7 +21,7 @@ services:
     # complete: "???"
 ## Micros
 - sourcescape_prima:
-    image: ghcr.io/sourcescapeio/primadonna:1.1
+    image: ghcr.io/sourcescapeio/primadonna
     complete: "Nest application" # Do better
     data_volume: /data
   # Initializer (ensures DB and ES)
@@ -34,7 +34,7 @@ services:
     command: /opt/initializer/stage/bin/rambutaninitializer
 # EDGE
 - sourcescape_api:
-    image: ghcr.io/sourcescapeio/backend:1.1
+    image: ghcr.io/sourcescapeio/backend
     environment:
       - DATA_DIR=/data/data
       - EXTERNAL_DIR=/external
@@ -48,7 +48,7 @@ services:
     command: bash -c "rm -f RUNNING_PID && /opt/api/stage/bin/rambutan-local -Dconfig.file=/opt/conf/rambutan.conf"
     complete: "Listening for HTTP on /0.0.0.0:9000"
   sourcescape_indexer:
-    image: ghcr.io/sourcescapeio/backend:1.1
+    image: ghcr.io/sourcescapeio/backend
     environment:
       - DATA_DIR=/data/data
       - EXTERNAL_DIR=/external
@@ -62,10 +62,10 @@ services:
     data_volume: /data
     external_volume: /external
   sourcescape_front:
-    image: ghcr.io/sourcescapeio/frontend:1.1
+    image: ghcr.io/sourcescapeio/frontend
     command: "serve -s build -l 3000"
     complete: "Accepting connections at http://localhost:3000"
 # LB
 - sourcescape_proxy:
-    image: ghcr.io/sourcescapeio/proxy:1.1
+    image: ghcr.io/sourcescapeio/proxy
     expose_port: "4003" # NOTE: no safety checks for this
